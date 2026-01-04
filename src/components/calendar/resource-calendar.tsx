@@ -9,11 +9,20 @@ import { AppointmentCard, calculateOverlapPositions } from "./appointment-card";
 import { TimeIndicator, getCurrentTimeScrollPosition } from "./time-indicator";
 
 // Types
+interface TechnicianSchedule {
+  id: string;
+  dayOfWeek: number;
+  startTime: string; // "09:00"
+  endTime: string;   // "19:00"
+  isWorking: boolean;
+}
+
 interface Technician {
   id: string;
   firstName: string;
   lastName: string;
   color: string;
+  schedules?: TechnicianSchedule[];
 }
 
 interface Location {
@@ -43,6 +52,9 @@ interface ResourceCalendarProps {
   onDateChange: (date: Date) => void;
   onAppointmentClick?: (appointment: Appointment) => void;
   onSlotClick?: (technicianId: string, time: Date) => void;
+  onScheduleClick?: () => void;
+  onSettingsClick?: () => void;
+  onMoreClick?: () => void;
 }
 
 // Calendar configuration
@@ -68,6 +80,55 @@ const formatTimeLabel = (hour: number) => {
   if (hour === 12) return "12 PM";
   if (hour < 12) return `${hour} AM`;
   return `${hour - 12} PM`;
+};
+
+// Parse time string "HH:MM" to hours as decimal
+const parseTimeToHours = (time: string): number => {
+  const [hours, minutes] = time.split(":").map(Number);
+  return hours + minutes / 60;
+};
+
+// Get off-hours blocks for a technician on a specific day
+const getOffHoursBlocks = (
+  tech: Technician,
+  dayOfWeek: number,
+  calendarStartHour: number,
+  calendarEndHour: number,
+  pixelsPerHour: number
+): { top: number; height: number }[] => {
+  const blocks: { top: number; height: number }[] = [];
+
+  // Find schedule for this day
+  const schedule = tech.schedules?.find(s => s.dayOfWeek === dayOfWeek);
+
+  if (!schedule || !schedule.isWorking) {
+    // Not working - entire day is off
+    return [{
+      top: 0,
+      height: (calendarEndHour - calendarStartHour) * pixelsPerHour
+    }];
+  }
+
+  const workStart = parseTimeToHours(schedule.startTime);
+  const workEnd = parseTimeToHours(schedule.endTime);
+
+  // Before work hours
+  if (workStart > calendarStartHour) {
+    blocks.push({
+      top: 0,
+      height: (workStart - calendarStartHour) * pixelsPerHour
+    });
+  }
+
+  // After work hours
+  if (workEnd < calendarEndHour) {
+    blocks.push({
+      top: (workEnd - calendarStartHour) * pixelsPerHour,
+      height: (calendarEndHour - workEnd) * pixelsPerHour
+    });
+  }
+
+  return blocks;
 };
 
 // Calculate appointment position and height
@@ -100,6 +161,9 @@ export function ResourceCalendar({
   onDateChange,
   onAppointmentClick,
   onSlotClick,
+  onScheduleClick,
+  onSettingsClick,
+  onMoreClick,
 }: ResourceCalendarProps) {
   const [selectedDate, setSelectedDate] = useState<Date>(initialDate || new Date());
   const [selectedTechIds, setSelectedTechIds] = useState<string[]>([]);
@@ -221,6 +285,9 @@ export function ResourceCalendar({
           onTechSelectionChange={setSelectedTechIds}
           autoSelectScheduled={autoSelectScheduled}
           onAutoSelectChange={setAutoSelectScheduled}
+          onScheduleClick={onScheduleClick}
+          onSettingsClick={onSettingsClick}
+          onMoreClick={onMoreClick}
         />
 
         {/* Calendar Grid */}
@@ -305,6 +372,40 @@ export function ResourceCalendar({
                   ))}
                 </div>
               ))}
+
+              {/* Off-hours overlay (darker gray zones) */}
+              <div
+                className="absolute top-0 bottom-0 pointer-events-none"
+                style={{ left: TIME_COLUMN_WIDTH, right: 0 }}
+              >
+                <div className="flex h-full">
+                  {visibleTechnicians.map((tech) => {
+                    const dayOfWeek = selectedDate.getDay();
+                    const offHoursBlocks = getOffHoursBlocks(
+                      tech,
+                      dayOfWeek,
+                      CALENDAR_START_HOUR,
+                      CALENDAR_END_HOUR,
+                      PIXELS_PER_HOUR
+                    );
+
+                    return (
+                      <div key={tech.id} className="relative min-w-0 flex-1">
+                        {offHoursBlocks.map((block, idx) => (
+                          <div
+                            key={idx}
+                            className="absolute left-0 right-0 bg-gray-200/50"
+                            style={{
+                              top: block.top,
+                              height: block.height,
+                            }}
+                          />
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
 
               {/* Current time indicator */}
               <TimeIndicator

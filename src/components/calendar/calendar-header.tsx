@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { ChevronLeft, ChevronRight, Plus, Settings, MoreHorizontal, ChevronDown, Check } from "lucide-react";
+import { ChevronLeft, ChevronRight, Settings, MoreHorizontal, ChevronDown, Check, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -43,7 +43,9 @@ interface CalendarHeaderProps {
   onTechSelectionChange: (techIds: string[]) => void;
   autoSelectScheduled: boolean;
   onAutoSelectChange: (value: boolean) => void;
-  onCreateClick?: () => void;
+  onScheduleClick?: () => void;
+  onSettingsClick?: () => void;
+  onMoreClick?: () => void;
   range?: RangeType;
   onRangeChange?: (range: RangeType) => void;
   view?: ViewType;
@@ -62,7 +64,9 @@ export function CalendarHeader({
   onTechSelectionChange,
   autoSelectScheduled,
   onAutoSelectChange,
-  onCreateClick,
+  onScheduleClick,
+  onSettingsClick,
+  onMoreClick,
   range = "day",
   onRangeChange,
   view = "side-by-side",
@@ -287,18 +291,29 @@ export function CalendarHeader({
 
       {/* Right side - Actions */}
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" className="h-8 w-8">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9 rounded-full bg-gray-100 hover:bg-gray-200"
+          onClick={onMoreClick}
+        >
           <MoreHorizontal className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="icon" className="h-8 w-8">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9 rounded-full bg-gray-100 hover:bg-gray-200"
+          onClick={onSettingsClick}
+        >
           <Settings className="h-4 w-4" />
         </Button>
         <Button
-          className="bg-gray-900 hover:bg-gray-800 text-white rounded-md px-4"
-          onClick={onCreateClick}
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9 rounded-full bg-gray-100 hover:bg-gray-200"
+          onClick={onScheduleClick}
         >
-          <Plus className="h-4 w-4 mr-1" />
-          Create
+          <Clock className="h-4 w-4" />
         </Button>
       </div>
     </div>

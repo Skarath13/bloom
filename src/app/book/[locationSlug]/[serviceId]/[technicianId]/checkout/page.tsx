@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { format, parse } from "date-fns";
-import { ArrowLeft, Calendar, Clock, MapPin, Scissors, User, Shield } from "lucide-react";
+import { ArrowLeft, Calendar, Clock, MapPin, EyeClosed, User, Shield } from "lucide-react";
 import { Elements } from "@stripe/react-stripe-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -248,7 +248,7 @@ export default function CheckoutPage({ params }: PageProps) {
             </div>
 
             <div className="flex items-start gap-3">
-              <Scissors className="h-5 w-5 text-muted-foreground mt-0.5" />
+              <EyeClosed className="h-5 w-5 text-muted-foreground mt-0.5" />
               <div>
                 <p className="font-medium">{displayData.service.name}</p>
                 <p className="text-sm text-muted-foreground">{displayData.service.durationMinutes} minutes</p>

@@ -7,7 +7,7 @@ import { useSession, signOut } from "next-auth/react";
 import {
   CalendarDays,
   Users,
-  Scissors,
+  EyeClosed,
   MapPin,
   LayoutDashboard,
   Settings,
@@ -37,7 +37,7 @@ const navigation = [
   { name: "Appointments", href: "/admin/appointments", icon: ClipboardList },
   { name: "Clients", href: "/admin/clients", icon: Users },
   { name: "Technicians", href: "/admin/technicians", icon: UserCircle },
-  { name: "Services", href: "/admin/services", icon: Scissors },
+  { name: "Services", href: "/admin/services", icon: EyeClosed },
   { name: "Locations", href: "/admin/locations", icon: MapPin },
 ];
 

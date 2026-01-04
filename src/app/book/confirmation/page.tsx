@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CheckCircle2, Calendar, Clock, MapPin, Scissors, MessageSquare, Home } from "lucide-react";
+import { CheckCircle2, Calendar, Clock, MapPin, EyeClosed, MessageSquare, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -53,7 +53,7 @@ export default function ConfirmationPage() {
           </div>
 
           <div className="flex items-start gap-3">
-            <Scissors className="h-5 w-5 text-primary mt-0.5" />
+            <EyeClosed className="h-5 w-5 text-primary mt-0.5" />
             <div>
               <p className="font-medium">Elegant Volume Set</p>
               <p className="text-sm text-muted-foreground">120 minutes with Angela L.</p>
