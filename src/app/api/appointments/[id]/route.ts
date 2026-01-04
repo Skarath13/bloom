@@ -14,7 +14,11 @@ export async function GET(
     const appointment = await prisma.appointment.findUnique({
       where: { id },
       include: {
-        client: true,
+        client: {
+          include: {
+            paymentMethods: true,
+          },
+        },
         service: true,
         technician: true,
         location: true,

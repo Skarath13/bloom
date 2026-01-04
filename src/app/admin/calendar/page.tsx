@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { format } from "date-fns";
 import { ResourceCalendar } from "@/components/calendar/resource-calendar";
 import { toast } from "sonner";
@@ -93,6 +94,11 @@ const STORAGE_KEYS = {
 };
 
 export default function CalendarPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const appointmentIdFromUrl = searchParams.get("apt");
+
   const [locations, setLocations] = useState<Location[]>([]);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -121,6 +127,18 @@ export default function CalendarPage() {
   } | null>(null);
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
 
+  // Update URL when appointment is selected/deselected
+  const updateAppointmentUrl = useCallback((appointmentId: string | null) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (appointmentId) {
+      params.set("apt", appointmentId);
+    } else {
+      params.delete("apt");
+    }
+    const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
+    router.replace(newUrl, { scroll: false });
+  }, [pathname, router, searchParams]);
+
   // Fetch locations on mount
   useEffect(() => {
     async function fetchLocations() {
@@ -144,6 +162,7 @@ export default function CalendarPage() {
       }
     }
     fetchLocations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Fetch technicians when location changes
@@ -222,6 +241,63 @@ export default function CalendarPage() {
     fetchAppointments();
   }, [fetchAppointments]);
 
+  // Fetch a specific appointment by ID (for deep linking)
+  const fetchAppointmentById = useCallback(async (appointmentId: string) => {
+    try {
+      const response = await fetch(`/api/appointments/${appointmentId}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.appointment) {
+          const apt = data.appointment;
+          setSelectedAppointment({
+            id: apt.id,
+            startTime: new Date(apt.startTime),
+            endTime: new Date(apt.endTime),
+            clientName: `${apt.client?.firstName || ""} ${apt.client?.lastName || ""}`,
+            serviceName: apt.service?.name || "",
+            technicianId: apt.technicianId,
+            status: apt.status,
+            notes: apt.notes,
+            noShowProtected: apt.noShowProtected,
+            noShowFeeCharged: apt.noShowFeeCharged,
+            noShowFeeAmount: apt.noShowFeeAmount,
+            noShowChargedAt: apt.noShowChargedAt ? new Date(apt.noShowChargedAt) : undefined,
+            createdAt: apt.createdAt ? new Date(apt.createdAt) : undefined,
+            bookedBy: apt.bookedBy,
+            client: {
+              ...apt.client,
+              paymentMethods: apt.client?.paymentMethods || [],
+            },
+            service: apt.service,
+            technician: apt.technician,
+            location: apt.location,
+          });
+        }
+      } else {
+        // Invalid appointment ID - clear it from URL
+        updateAppointmentUrl(null);
+        toast.error("Appointment not found");
+      }
+    } catch (error) {
+      console.error("Failed to fetch appointment:", error);
+      updateAppointmentUrl(null);
+    }
+  }, [updateAppointmentUrl]);
+
+  // Open appointment from URL if present
+  useEffect(() => {
+    if (appointmentIdFromUrl && appointments.length > 0) {
+      const appointmentFromUrl = appointments.find(apt => apt.id === appointmentIdFromUrl);
+      if (appointmentFromUrl) {
+        setSelectedAppointment(appointmentFromUrl);
+      } else if (!loading) {
+        // Appointment not found in current view - could be from different date/location
+        // Fetch it directly
+        fetchAppointmentById(appointmentIdFromUrl);
+      }
+    }
+  }, [appointmentIdFromUrl, appointments, loading, fetchAppointmentById]);
+
   // Subscribe to realtime updates for live calendar sync
   useRealtimeAppointments({
     locationId: selectedLocationId,
@@ -248,6 +324,12 @@ export default function CalendarPage() {
 
   const handleAppointmentClick = (appointment: Appointment) => {
     setSelectedAppointment(appointment);
+    updateAppointmentUrl(appointment.id);
+  };
+
+  const handleCloseAppointment = () => {
+    setSelectedAppointment(null);
+    updateAppointmentUrl(null);
   };
 
   const handleSlotClick = (technicianId: string, time: Date) => {
@@ -282,7 +364,7 @@ export default function CalendarPage() {
       {/* Appointment details dialog - Square style */}
       <AppointmentDetailsDialog
         appointment={selectedAppointment}
-        onClose={() => setSelectedAppointment(null)}
+        onClose={handleCloseAppointment}
         onSave={async (data) => {
           if (!selectedAppointment) return;
           setSaving(true);
@@ -294,7 +376,7 @@ export default function CalendarPage() {
             });
             if (!response.ok) throw new Error("Failed to update appointment");
             toast.success("Appointment updated");
-            setSelectedAppointment(null);
+            handleCloseAppointment();
             fetchAppointments();
           } catch (error) {
             console.error("Failed to update appointment:", error);
@@ -305,7 +387,6 @@ export default function CalendarPage() {
         }}
         onCancel={async () => {
           if (!selectedAppointment) return;
-          if (!confirm("Are you sure you want to cancel this appointment?")) return;
           setSaving(true);
           try {
             const response = await fetch(`/api/appointments/${selectedAppointment.id}`, {
@@ -318,7 +399,7 @@ export default function CalendarPage() {
                 ? `Appointment cancelled. $${data.refundAmount} refunded.`
                 : "Appointment cancelled."
             );
-            setSelectedAppointment(null);
+            handleCloseAppointment();
             fetchAppointments();
           } catch (error) {
             console.error("Failed to cancel appointment:", error);
@@ -339,7 +420,7 @@ export default function CalendarPage() {
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || "Failed to charge");
             toast.success(data.message);
-            setSelectedAppointment(null);
+            handleCloseAppointment();
             fetchAppointments();
           } catch (error) {
             console.error("Failed to charge no-show fee:", error);

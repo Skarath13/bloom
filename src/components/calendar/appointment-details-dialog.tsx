@@ -10,20 +10,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  ChevronDown,
   Search,
   X,
   Check,
   Loader2,
   Sparkles,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -131,16 +125,28 @@ export function AppointmentDetailsDialog({
 }: AppointmentDetailsDialogProps) {
   const [editingNotes, setEditingNotes] = useState("");
   const [editingStatus, setEditingStatus] = useState("");
+  const [originalNotes, setOriginalNotes] = useState("");
+  const [originalStatus, setOriginalStatus] = useState("");
   const [appointmentHistory, setAppointmentHistory] = useState<AppointmentHistory[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showNoShowModal, setShowNoShowModal] = useState(false);
+  const [chargeFee, setChargeFee] = useState(false);
+  const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
     if (appointment) {
-      setEditingNotes(appointment.notes || "");
+      const notes = appointment.notes || "";
+      setEditingNotes(notes);
+      setOriginalNotes(notes);
       setEditingStatus(appointment.status);
+      setOriginalStatus(appointment.status);
       fetchAppointmentHistory();
     }
   }, [appointment?.id]);
+
+  // Check if there are unsaved changes
+  const hasChanges = editingNotes !== originalNotes || editingStatus !== originalStatus;
 
   const fetchAppointmentHistory = async () => {
     if (!appointment?.client?.id) return;
@@ -162,6 +168,41 @@ export function AppointmentDetailsDialog({
     await onSave({ status: editingStatus, notes: editingNotes });
   };
 
+  const handleCancelConfirm = async () => {
+    setProcessing(true);
+    try {
+      if (chargeFee && hasCard) {
+        await onChargeNoShow(25, "Late cancellation fee");
+      }
+      await onCancel();
+      setShowCancelModal(false);
+    } catch (error) {
+      console.error("Failed to cancel:", error);
+    } finally {
+      setProcessing(false);
+      setChargeFee(false);
+    }
+  };
+
+  const handleNoShowConfirm = async () => {
+    setProcessing(true);
+    try {
+      if (chargeFee && hasCard) {
+        await onChargeNoShow(25, "No-show fee");
+      }
+      await onSave({ status: "NO_SHOW", notes: editingNotes });
+      setShowNoShowModal(false);
+    } catch (error) {
+      console.error("Failed to mark no-show:", error);
+    } finally {
+      setProcessing(false);
+      setChargeFee(false);
+    }
+  };
+
+  const hasCard = appointment?.client?.paymentMethods && appointment.client.paymentMethods.length > 0;
+  const defaultCard = appointment?.client?.paymentMethods?.[0];
+
   if (!appointment) return null;
 
   const formatPhone = (phone: string) => {
@@ -172,9 +213,6 @@ export function AppointmentDetailsDialog({
     return phone;
   };
 
-  const hasCard = appointment.client?.paymentMethods && appointment.client.paymentMethods.length > 0;
-  const defaultCard = appointment.client?.paymentMethods?.[0];
-
   return (
     <div className="fixed inset-0 z-50 bg-white flex flex-col">
       {/* Header */}
@@ -182,41 +220,36 @@ export function AppointmentDetailsDialog({
         {/* Left: Close button */}
         <button
           onClick={onClose}
-          className="w-10 h-10 flex items-center justify-center rounded-full border border-gray-300 hover:bg-gray-50 transition-colors"
+          className="w-10 h-10 flex items-center justify-center rounded-full border border-gray-300 hover:bg-gray-50 transition-colors cursor-pointer"
         >
           <X className="h-5 w-5 text-gray-600" />
         </button>
 
         {/* Center: Title */}
         <h2 className="absolute left-1/2 -translate-x-1/2 text-xl font-bold text-gray-900">
-          Appointment details
+          Appointment Details
         </h2>
 
         {/* Right: Action buttons */}
         <div className="flex items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="h-9 px-4 flex items-center gap-1.5 rounded-full border border-gray-300 hover:bg-gray-50 text-sm font-medium text-gray-700 transition-colors">
-                More
-                <ChevronDown className="h-4 w-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={onCancel} className="text-red-600 cursor-pointer">
-                Cancel appointment
-              </DropdownMenuItem>
-              {hasCard && !appointment.noShowFeeCharged && (
-                <DropdownMenuItem onClick={() => onChargeNoShow(25, "No-show fee")} className="cursor-pointer">
-                  Charge no-show fee
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <button
+            onClick={() => setShowCancelModal(true)}
+            className="h-9 px-4 rounded-full border border-red-300 hover:bg-red-50 text-sm font-medium text-red-600 transition-colors cursor-pointer"
+          >
+            Cancel Appointment
+          </button>
+
+          <button
+            onClick={() => setShowNoShowModal(true)}
+            className="h-9 px-4 rounded-full border border-gray-300 hover:bg-gray-50 text-sm font-medium text-gray-700 transition-colors cursor-pointer"
+          >
+            Mark No-Show
+          </button>
 
           {onTakePayment && (
             <button
               onClick={onTakePayment}
-              className="h-9 px-4 rounded-full border border-gray-300 hover:bg-gray-50 text-sm font-medium text-gray-700 transition-colors"
+              className="h-9 px-4 rounded-full border border-gray-300 hover:bg-gray-50 text-sm font-medium text-gray-700 transition-colors cursor-pointer"
             >
               Take payment
             </button>
@@ -224,8 +257,13 @@ export function AppointmentDetailsDialog({
 
           <button
             onClick={handleSave}
-            disabled={saving}
-            className="h-9 px-6 rounded-full bg-gray-900 hover:bg-gray-800 text-sm font-medium text-white transition-colors disabled:opacity-50"
+            disabled={saving || !hasChanges}
+            className={cn(
+              "h-9 px-6 rounded-full text-sm font-medium transition-colors cursor-pointer",
+              hasChanges
+                ? "bg-gray-900 hover:bg-gray-800 text-white"
+                : "bg-gray-200 text-gray-400 cursor-not-allowed"
+            )}
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
           </button>
@@ -240,7 +278,7 @@ export function AppointmentDetailsDialog({
             {/* Client Information */}
             <div className="mb-10">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-normal text-gray-900">Client information</h3>
+                <h3 className="text-lg font-normal text-gray-900">Client Information</h3>
                 <span className={cn("text-sm font-medium", statusColors[appointment.status])}>
                   {statusLabels[appointment.status]}
                 </span>
@@ -277,13 +315,13 @@ export function AppointmentDetailsDialog({
             {/* Appointment Details */}
             <div className="mb-10">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-normal text-gray-900">Appointment details</h3>
+                <h3 className="text-lg font-normal text-gray-900">Appointment Details</h3>
                 <div className="flex items-center gap-6">
-                  <label className="flex items-center gap-2 text-sm text-gray-700">
-                    <Checkbox className="border-gray-400 data-[state=checked]:bg-gray-900" />
+                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <Checkbox className="border-gray-400 data-[state=checked]:bg-gray-900 cursor-pointer" />
                     <span>All day</span>
                   </label>
-                  <label className="flex items-center gap-2 text-sm text-gray-400">
+                  <label className="flex items-center gap-2 text-sm text-gray-400 cursor-not-allowed">
                     <Checkbox disabled className="opacity-50" />
                     <span>Repeat</span>
                   </label>
@@ -302,7 +340,7 @@ export function AppointmentDetailsDialog({
                       <span className="text-gray-400">at</span>
                       <span>{format(appointment.startTime, "h:mm a").toLowerCase()}</span>
                     </div>
-                    <button className="flex items-center gap-2 text-gray-600 hover:text-gray-900">
+                    <button className="flex items-center gap-2 text-gray-600 hover:text-gray-900 cursor-pointer">
                       <Search className="h-4 w-4" />
                       <span className="text-sm">Find availability</span>
                     </button>
@@ -320,7 +358,7 @@ export function AppointmentDetailsDialog({
                 {/* Appointment notes */}
                 <div className="grid grid-cols-[200px_1fr]">
                   <div className="px-4 py-3 bg-gray-100 text-sm font-medium text-gray-700">
-                    Appointment notes
+                    Appointment Notes
                   </div>
                   <div className="px-2 py-1">
                     <Input
@@ -338,14 +376,14 @@ export function AppointmentDetailsDialog({
                 <p>
                   Booked by {appointment.bookedBy || appointment.client?.firstName} on{" "}
                   {appointment.createdAt
-                    ? format(new Date(appointment.createdAt), "MMMM d, yyyy 'at' h:mm a").toLowerCase()
+                    ? format(new Date(appointment.createdAt), "MMMM d, yyyy 'at' h:mm a")
                     : "—"}
                 </p>
                 {hasCard && (
                   <p className="flex items-center justify-center gap-1">
                     <Check className="h-4 w-4" />
                     <span>No-show protected with card ending in {defaultCard?.last4}</span>
-                    <button className="ml-1 text-gray-400 hover:text-gray-600">
+                    <button className="ml-1 text-gray-400 hover:text-gray-600 cursor-pointer">
                       <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                       </svg>
@@ -379,17 +417,38 @@ export function AppointmentDetailsDialog({
                   </div>
                   <div className="px-4 py-4 border-l border-gray-300">
                     <Select defaultValue={String(appointment.service?.durationMinutes || 60)}>
-                      <SelectTrigger className="w-20 h-9 text-sm border-gray-300">
+                      <SelectTrigger className="w-28 h-10 text-sm border-gray-300 bg-white">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-[300px]">
+                        <SelectItem value="5">5m</SelectItem>
+                        <SelectItem value="10">10m</SelectItem>
+                        <SelectItem value="15">15m</SelectItem>
                         <SelectItem value="30">30m</SelectItem>
                         <SelectItem value="45">45m</SelectItem>
                         <SelectItem value="60">1h</SelectItem>
+                        <SelectItem value="75">1h 15m</SelectItem>
                         <SelectItem value="90">1h 30m</SelectItem>
+                        <SelectItem value="105">1h 45m</SelectItem>
                         <SelectItem value="120">2h</SelectItem>
+                        <SelectItem value="135">2h 15m</SelectItem>
                         <SelectItem value="150">2h 30m</SelectItem>
+                        <SelectItem value="165">2h 45m</SelectItem>
                         <SelectItem value="180">3h</SelectItem>
+                        <SelectItem value="195">3h 15m</SelectItem>
+                        <SelectItem value="210">3h 30m</SelectItem>
+                        <SelectItem value="225">3h 45m</SelectItem>
+                        <SelectItem value="240">4h</SelectItem>
+                        <SelectItem value="270">4h 30m</SelectItem>
+                        <SelectItem value="300">5h</SelectItem>
+                        <SelectItem value="330">5h 30m</SelectItem>
+                        <SelectItem value="360">6h</SelectItem>
+                        <SelectItem value="420">7h</SelectItem>
+                        <SelectItem value="480">8h</SelectItem>
+                        <SelectItem value="540">9h</SelectItem>
+                        <SelectItem value="600">10h</SelectItem>
+                        <SelectItem value="660">11h</SelectItem>
+                        <SelectItem value="720">12h</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -400,13 +459,13 @@ export function AppointmentDetailsDialog({
 
                 {/* Add a service row */}
                 <div className="px-4 py-3">
-                  <button className="text-sm text-gray-700 hover:text-gray-900">
+                  <button className="text-sm text-gray-700 hover:text-gray-900 cursor-pointer">
                     Add a service
                   </button>
                 </div>
               </div>
               {/* X button outside table - absolutely positioned */}
-              <button className="absolute -right-8 top-14 text-gray-400 hover:text-gray-600">
+              <button className="absolute -right-8 top-14 text-gray-400 hover:text-gray-600 cursor-pointer">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -423,7 +482,7 @@ export function AppointmentDetailsDialog({
 
               {/* Add an item row */}
               <div className="px-4 py-3">
-                <button className="text-sm text-gray-700 hover:text-gray-900">
+                <button className="text-sm text-gray-700 hover:text-gray-900 cursor-pointer">
                   Add an item
                 </button>
               </div>
@@ -435,7 +494,7 @@ export function AppointmentDetailsDialog({
               <div className="grid grid-cols-[1fr_1fr]">
                 <div className="bg-gray-100 border-r border-gray-300 min-h-[44px]"></div>
                 <div className="px-4 py-3 border-b border-gray-300">
-                  <button className="text-sm text-gray-900 underline hover:no-underline font-medium">
+                  <button className="text-sm text-gray-900 underline hover:no-underline font-medium cursor-pointer">
                     Add discount
                   </button>
                 </div>
@@ -465,8 +524,8 @@ export function AppointmentDetailsDialog({
             {/* Client Notes */}
             <div className="mb-2">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-900">Client notes</span>
-                <button className="text-sm text-blue-600 hover:text-blue-700">Add a note</button>
+                <span className="text-sm font-medium text-gray-900">Client Notes</span>
+                <button className="text-sm text-blue-600 hover:text-blue-700 cursor-pointer">Add a note</button>
               </div>
               <p className="text-sm text-gray-400 italic">
                 {appointment.client?.notes || "No notes for this client"}
@@ -478,8 +537,8 @@ export function AppointmentDetailsDialog({
             {/* Cards on File */}
             <div className="mb-2">
               <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-medium text-gray-900">Cards on file</span>
-                <button className="text-sm text-blue-600 hover:text-blue-700">Add card</button>
+                <span className="text-sm font-medium text-gray-900">Cards on File</span>
+                <button className="text-sm text-blue-600 hover:text-blue-700 cursor-pointer">Add card</button>
               </div>
               {hasCard ? (
                 <div className="flex items-center justify-between">
@@ -489,7 +548,7 @@ export function AppointmentDetailsDialog({
                     </span>
                     <span className="text-sm text-gray-700">ending in {defaultCard?.last4}</span>
                   </div>
-                  <button className="p-1 text-gray-400 hover:text-gray-600">
+                  <button className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer">
                     <X className="h-4 w-4" />
                   </button>
                 </div>
@@ -502,7 +561,7 @@ export function AppointmentDetailsDialog({
 
             {/* Appointment History */}
             <div>
-              <h4 className="text-sm font-medium text-gray-900 mb-4">Appointment history</h4>
+              <h4 className="text-sm font-medium text-gray-900 mb-4">Appointment History</h4>
               {loadingHistory ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
@@ -512,7 +571,7 @@ export function AppointmentDetailsDialog({
                   {appointmentHistory.map((historyItem, index) => (
                     <div key={historyItem.id}>
                       <div className="text-sm">
-                        <p className="text-blue-600 hover:underline cursor-pointer leading-snug">
+                        <p className="text-blue-600 hover:underline cursor-pointer leading-snug select-none">
                           {historyItem.serviceName}
                         </p>
                         <p className="text-gray-500 flex items-center gap-1 mt-1">
@@ -521,7 +580,7 @@ export function AppointmentDetailsDialog({
                           <span>{historyItem.locationName}</span>
                         </p>
                         <p className="text-gray-500 underline mt-0.5">
-                          {format(new Date(historyItem.startTime), "EEE, MMM d, yyyy, h:mm a").toLowerCase()}
+                          {format(new Date(historyItem.startTime), "EEE, MMM d, yyyy, h:mm a")}
                         </p>
                         {historyItem.noShowProtected && (
                           <p className="text-gray-500 flex items-center gap-1 mt-1">
@@ -543,6 +602,123 @@ export function AppointmentDetailsDialog({
           </div>
         </div>
       </div>
+
+      {/* Cancel Appointment Confirmation Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                  <AlertTriangle className="h-5 w-5 text-red-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">Cancel Appointment</h3>
+              </div>
+              <p className="text-gray-600 mb-4">
+                Are you sure you want to cancel this appointment for{" "}
+                <span className="font-medium">{appointment.client?.firstName} {appointment.client?.lastName}</span>?
+              </p>
+              <p className="text-sm text-gray-500 mb-4">
+                {appointment.serviceName} on {format(appointment.startTime, "EEEE, MMMM d, yyyy")} at {format(appointment.startTime, "h:mm a")}
+              </p>
+
+              {hasCard && !appointment.noShowFeeCharged && (
+                <label className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg mb-4 cursor-pointer">
+                  <Checkbox
+                    checked={chargeFee}
+                    onCheckedChange={(checked) => setChargeFee(checked === true)}
+                    className="border-amber-400 data-[state=checked]:bg-amber-600"
+                  />
+                  <div>
+                    <p className="text-sm font-medium text-amber-900">Charge $25 late cancellation fee</p>
+                    <p className="text-xs text-amber-700">
+                      Card ending in {defaultCard?.last4} will be charged
+                    </p>
+                  </div>
+                </label>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-lg">
+              <button
+                onClick={() => {
+                  setShowCancelModal(false);
+                  setChargeFee(false);
+                }}
+                disabled={processing}
+                className="h-9 px-4 rounded-full border border-gray-300 hover:bg-gray-100 text-sm font-medium text-gray-700 transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                Keep Appointment
+              </button>
+              <button
+                onClick={handleCancelConfirm}
+                disabled={processing}
+                className="h-9 px-4 rounded-full bg-red-600 hover:bg-red-700 text-sm font-medium text-white transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Cancel Appointment"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mark No-Show Confirmation Modal */}
+      {showNoShowModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                  <AlertTriangle className="h-5 w-5 text-amber-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">Mark as No-Show</h3>
+              </div>
+              <p className="text-gray-600 mb-4">
+                Mark{" "}
+                <span className="font-medium">{appointment.client?.firstName} {appointment.client?.lastName}</span>{" "}
+                as a no-show for this appointment?
+              </p>
+              <p className="text-sm text-gray-500 mb-4">
+                {appointment.serviceName} on {format(appointment.startTime, "EEEE, MMMM d, yyyy")} at {format(appointment.startTime, "h:mm a")}
+              </p>
+
+              {hasCard && !appointment.noShowFeeCharged && (
+                <label className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg mb-4 cursor-pointer">
+                  <Checkbox
+                    checked={chargeFee}
+                    onCheckedChange={(checked) => setChargeFee(checked === true)}
+                    className="border-amber-400 data-[state=checked]:bg-amber-600"
+                  />
+                  <div>
+                    <p className="text-sm font-medium text-amber-900">Charge $25 no-show fee</p>
+                    <p className="text-xs text-amber-700">
+                      Card ending in {defaultCard?.last4} will be charged
+                    </p>
+                  </div>
+                </label>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-lg">
+              <button
+                onClick={() => {
+                  setShowNoShowModal(false);
+                  setChargeFee(false);
+                }}
+                disabled={processing}
+                className="h-9 px-4 rounded-full border border-gray-300 hover:bg-gray-100 text-sm font-medium text-gray-700 transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                Go Back
+              </button>
+              <button
+                onClick={handleNoShowConfirm}
+                disabled={processing}
+                className="h-9 px-4 rounded-full bg-amber-600 hover:bg-amber-700 text-sm font-medium text-white transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Mark No-Show"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
