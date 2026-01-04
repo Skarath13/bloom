@@ -52,14 +52,14 @@
   --calendar-grid-light: #F5F5F5;
   --calendar-grid-dark: #E0E0E0;
 
-  /* Sidebar */
-  --sidebar: #1E1B4B;
-  --sidebar-foreground: #FFFFFF;
+  /* Sidebar - Light grayish white */
+  --sidebar: #F7F7F8;
+  --sidebar-foreground: #374151;
   --sidebar-primary: #8B687A;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #2D2A5D;
-  --sidebar-accent-foreground: #FFFFFF;
-  --sidebar-border: #2D2A5D;
+  --sidebar-accent: #EAEAEC;
+  --sidebar-accent-foreground: #1E1B4B;
+  --sidebar-border: #E5E5E7;
   --sidebar-ring: #8B687A;
 }
 

@@ -368,14 +368,14 @@ export default function CalendarPage() {
 
   if (loading && locations.length === 0) {
     return (
-      <div className="h-[calc(100vh-6.5rem)] flex items-center justify-center -m-6">
+      <div className="h-full flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className="absolute inset-0">
+    <div className="h-full">
       <ResourceCalendar
         locations={locations}
         technicians={technicians}

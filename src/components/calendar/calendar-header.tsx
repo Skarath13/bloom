@@ -114,7 +114,7 @@ export function CalendarHeader({
   const dateDisplay = mounted ? format(selectedDate, "MMM d") : "...";
 
   return (
-    <div className="flex items-center justify-between gap-2 px-4 py-2 border-b bg-white">
+    <div className="flex items-center justify-between gap-2 px-4 py-2 border-b border-gray-200 bg-white">
       {/* Left side - Date navigation and filters */}
       <div className="flex items-center gap-2 flex-wrap">
         {/* Date navigation */}
@@ -143,7 +143,7 @@ export function CalendarHeader({
         {/* Range selector (pill style with dropdown) */}
         <Popover open={rangeOpen} onOpenChange={setRangeOpen}>
           <PopoverTrigger asChild>
-            <button className="px-3 py-1.5 rounded-full border bg-white text-sm cursor-pointer hover:bg-gray-50 flex items-center gap-1">
+            <button className="px-3 py-1.5 rounded-full border border-gray-300 bg-white text-sm cursor-pointer hover:bg-gray-50 flex items-center gap-1">
               Range <span className="font-medium">{rangeLabels[range]}</span>
               <ChevronDown className="h-3 w-3 text-gray-400" />
             </button>
@@ -171,7 +171,7 @@ export function CalendarHeader({
         {/* Location selector (pill style with dropdown) */}
         <Popover open={locationOpen} onOpenChange={setLocationOpen}>
           <PopoverTrigger asChild>
-            <button className="px-3 py-1.5 rounded-full border bg-white text-sm cursor-pointer hover:bg-gray-50 flex items-center gap-1">
+            <button className="px-3 py-1.5 rounded-full border border-gray-300 bg-white text-sm cursor-pointer hover:bg-gray-50 flex items-center gap-1">
               Location <span className="font-medium">{selectedLocation?.name || "Select"}</span>
               <ChevronDown className="h-3 w-3 text-gray-400" />
             </button>
@@ -199,7 +199,7 @@ export function CalendarHeader({
         {/* View selector (pill style with dropdown) */}
         <Popover open={viewOpen} onOpenChange={setViewOpen}>
           <PopoverTrigger asChild>
-            <button className="px-3 py-1.5 rounded-full border bg-white text-sm cursor-pointer hover:bg-gray-50 flex items-center gap-1">
+            <button className="px-3 py-1.5 rounded-full border border-gray-300 bg-white text-sm cursor-pointer hover:bg-gray-50 flex items-center gap-1">
               View <span className="font-medium">{viewLabels[view]}</span>
               <ChevronDown className="h-3 w-3 text-gray-400" />
             </button>
@@ -227,14 +227,14 @@ export function CalendarHeader({
         {/* Staff selector (pill style with dropdown) */}
         <Popover>
           <PopoverTrigger asChild>
-            <button className="px-3 py-1.5 rounded-full border bg-white text-sm cursor-pointer hover:bg-gray-50 flex items-center gap-1">
+            <button className="px-3 py-1.5 rounded-full border border-gray-300 bg-white text-sm cursor-pointer hover:bg-gray-50 flex items-center gap-1">
               Staff <span className="font-medium">{selectedTechIds.length} selected</span>
               <ChevronDown className="h-3 w-3 text-gray-400" />
             </button>
           </PopoverTrigger>
           <PopoverContent className="w-80 p-0" align="start">
             {/* Auto-select toggle */}
-            <div className="flex items-center justify-between p-3 border-b">
+            <div className="flex items-center justify-between p-3 border-b border-gray-200">
               <span className="text-sm">Automatically select scheduled staff</span>
               <Switch
                 checked={autoSelectScheduled}
@@ -244,7 +244,7 @@ export function CalendarHeader({
 
             {/* Select all */}
             <div
-              className="flex items-center justify-between px-3 py-2 border-b cursor-pointer hover:bg-gray-50"
+              className="flex items-center justify-between px-3 py-2 border-b border-gray-200 cursor-pointer hover:bg-gray-50"
               onClick={handleSelectAll}
             >
               <span className="text-sm font-medium">Select All</span>

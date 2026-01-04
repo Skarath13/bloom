@@ -199,7 +199,7 @@ export function ResourceCalendar({
   return (
     <div className="flex h-full bg-white">
       {/* Left Sidebar - Mini Calendar */}
-      <div className="w-64 border-r flex-shrink-0 hidden md:block">
+      <div className="w-64 border-r border-gray-200 flex-shrink-0 hidden md:block">
         <MiniCalendar
           selectedDate={selectedDate}
           onDateSelect={handleDateChange}
@@ -227,10 +227,10 @@ export function ResourceCalendar({
         <div className="flex-1 overflow-auto custom-scrollbar" ref={gridRef}>
           <div>
             {/* Sticky header row - Tech names */}
-            <div className="sticky top-0 z-10 flex bg-white border-b">
+            <div className="sticky top-0 z-10 flex bg-white border-b border-gray-200">
               {/* Empty spacer for time column */}
               <div
-                className="flex-shrink-0 border-r"
+                className="flex-shrink-0 border-r border-gray-200"
                 style={{ width: TIME_COLUMN_WIDTH }}
               />
 
@@ -238,7 +238,7 @@ export function ResourceCalendar({
               {visibleTechnicians.map((tech) => (
                 <div
                   key={tech.id}
-                  className="border-r flex items-center justify-center gap-1 py-2 min-w-0 flex-1 overflow-hidden"
+                  className="border-r border-gray-200 flex items-center justify-center gap-1 py-2 min-w-0 flex-1 overflow-hidden"
                 >
                   <span className="font-medium text-sm text-gray-700 truncate">
                     {tech.firstName}
