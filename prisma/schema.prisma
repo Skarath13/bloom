@@ -1,0 +1,443 @@
+// Elegant Lashes Booking System - Database Schema
+// https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+  schemas   = ["appointments"]
+}
+
+// ==================== AUTHENTICATION ====================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  password      String    // hashed
+  role          UserRole  @default(MANAGER)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("bloom_users")
+  @@schema("appointments")
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MANAGER
+
+  @@schema("appointments")
+}
+
+// ==================== LOCATIONS ====================
+
+model Location {
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique
+  address         String
+  city            String
+  state           String   @default("CA")
+  zipCode         String
+  phone           String
+  timezone        String   @default("America/Los_Angeles")
+
+  // Operating hours stored as JSON: { "monday": { "open": "09:00", "close": "19:00", "lastAppointment": "18:00" }, ... }
+  operatingHours  Json     @default("{}")
+
+  isActive        Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  technicians     Technician[]
+  appointments    Appointment[]
+  services        ServiceLocation[]
+  waitlistEntries WaitlistEntry[]
+
+  @@map("bloom_locations")
+  @@schema("appointments")
+}
+
+// ==================== TECHNICIANS ====================
+
+model Technician {
+  id                  String   @id @default(cuid())
+  firstName           String
+  lastName            String
+  email               String?
+  phone               String?
+
+  // Calendar display
+  color               String   @default("#8B687A") // dusty rose default
+  avatarUrl           String?
+
+  // Default buffer time between appointments (minutes)
+  defaultBufferMinutes Int     @default(0)
+
+  isActive            Boolean  @default(true)
+  sortOrder           Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  // Primary location (techs generally fixed to one location)
+  locationId          String
+  location            Location @relation(fields: [locationId], references: [id])
+
+  // Relations
+  schedules           TechnicianSchedule[]
+  blocks              TechnicianBlock[]
+  appointments        Appointment[]
+  recurringAppointments RecurringAppointment[]
+  waitlistEntries     WaitlistEntry[]
+
+  @@map("bloom_technicians")
+  @@schema("appointments")
+}
+
+// Weekly schedule for a technician
+model TechnicianSchedule {
+  id            String   @id @default(cuid())
+  dayOfWeek     Int      // 0 = Sunday, 1 = Monday, etc.
+  startTime     String   // "09:00"
+  endTime       String   // "19:00"
+  isWorking     Boolean  @default(true)
+
+  technicianId  String
+  technician    Technician @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+
+  @@unique([technicianId, dayOfWeek])
+  @@map("bloom_technician_schedules")
+  @@schema("appointments")
+}
+
+// Time blocks (lunch, personal time, vacation, etc.)
+model TechnicianBlock {
+  id              String    @id @default(cuid())
+  title           String    @default("Blocked")
+  blockType       BlockType
+
+  // For one-time blocks
+  startTime       DateTime?
+  endTime         DateTime?
+
+  // For recurring blocks (e.g., daily lunch)
+  // Uses RRULE format: "FREQ=DAILY;BYHOUR=12;BYMINUTE=0"
+  recurrenceRule  String?
+  recurringStart  String?   // "12:00" - time of day for recurring
+  recurringEnd    String?   // "13:00"
+
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  technicianId    String
+  technician      Technician @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+
+  @@map("bloom_technician_blocks")
+  @@schema("appointments")
+}
+
+enum BlockType {
+  LUNCH
+  BREAK
+  PERSONAL
+  VACATION
+  SICK
+  TRAINING
+  OTHER
+
+  @@schema("appointments")
+}
+
+// ==================== SERVICES ====================
+
+model Service {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  category        ServiceCategory
+
+  // Duration in minutes (guideline, can be flexible)
+  durationMinutes Int
+
+  // Pricing
+  price           Decimal  @db.Decimal(10, 2)
+  depositAmount   Decimal  @default(25.00) @db.Decimal(10, 2)
+
+  // Display
+  color           String?  // Optional color coding
+  isActive        Boolean  @default(true)
+  sortOrder       Int      @default(0)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  locations       ServiceLocation[]
+  appointments    Appointment[]
+  recurringAppointments RecurringAppointment[]
+  waitlistEntries WaitlistEntry[]
+
+  @@map("bloom_services")
+  @@schema("appointments")
+}
+
+// Junction table for services available at specific locations
+model ServiceLocation {
+  serviceId   String
+  locationId  String
+
+  service     Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  location    Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@id([serviceId, locationId])
+  @@map("bloom_service_locations")
+  @@schema("appointments")
+}
+
+enum ServiceCategory {
+  LASH_EXTENSION
+  LASH_FILL
+  LASH_LIFT
+  BROW
+  PERMANENT_MAKEUP
+  OTHER
+
+  @@schema("appointments")
+}
+
+// ==================== CLIENTS ====================
+
+model Client {
+  id              String   @id @default(cuid())
+  firstName       String
+  lastName        String
+  phone           String   @unique
+  phoneVerified   Boolean  @default(false)
+  email           String?
+
+  // Stripe integration for card-on-file
+  stripeCustomerId String?  @unique
+
+  // Notes and status
+  notes           String?
+  isBlocked       Boolean  @default(false)
+  blockReason     String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  lastVisitAt     DateTime?
+
+  // Relations
+  appointments    Appointment[]
+  recurringAppointments RecurringAppointment[]
+  waitlistEntries WaitlistEntry[]
+  verificationCodes PhoneVerification[]
+  paymentMethods  PaymentMethod[]
+
+  @@map("bloom_clients")
+  @@schema("appointments")
+}
+
+// Saved payment methods (cards on file)
+model PaymentMethod {
+  id                    String   @id @default(cuid())
+  stripePaymentMethodId String   @unique
+
+  // Card details (from Stripe, for display)
+  brand                 String   // visa, mastercard, amex, etc.
+  last4                 String   // Last 4 digits
+  expiryMonth           Int
+  expiryYear            Int
+
+  isDefault             Boolean  @default(false)
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  // Relations
+  clientId              String
+  client                Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("bloom_payment_methods")
+  @@schema("appointments")
+}
+
+// Phone verification codes
+model PhoneVerification {
+  id        String   @id @default(cuid())
+  phone     String   // Phone number being verified
+  code      String   // 6-digit code
+  expiresAt DateTime
+  verified  Boolean  @default(false)
+
+  // Optional client relation (may not exist yet for new clients)
+  clientId  String?
+  client    Client?   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([phone])
+  @@map("bloom_phone_verifications")
+  @@schema("appointments")
+}
+
+// ==================== APPOINTMENTS ====================
+
+model Appointment {
+  id              String            @id @default(cuid())
+
+  // Timing
+  startTime       DateTime
+  endTime         DateTime
+
+  // Status
+  status          AppointmentStatus @default(CONFIRMED)
+
+  // No-show protection (card on file)
+  noShowProtected Boolean           @default(false)  // Card on file for this appointment
+
+  // Charges (only when no-show/late cancel)
+  noShowFeeCharged    Boolean       @default(false)
+  noShowFeeAmount     Decimal?      @db.Decimal(10, 2)
+  noShowChargedAt     DateTime?
+  stripePaymentIntentId String?     // Payment intent when we charge the fee
+
+  // Reminders
+  reminder24hSent Boolean           @default(false)
+  reminder2hSent  Boolean           @default(false)
+  confirmedAt     DateTime?
+
+  // Notes and metadata
+  notes           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  cancelledAt     DateTime?
+  cancellationReason String?
+
+  // Relations
+  clientId        String
+  client          Client            @relation(fields: [clientId], references: [id])
+
+  technicianId    String
+  technician      Technician        @relation(fields: [technicianId], references: [id])
+
+  locationId      String
+  location        Location          @relation(fields: [locationId], references: [id])
+
+  serviceId       String
+  service         Service           @relation(fields: [serviceId], references: [id])
+
+  // If part of a recurring series
+  recurringAppointmentId String?
+  recurringAppointment   RecurringAppointment? @relation(fields: [recurringAppointmentId], references: [id])
+
+  @@index([startTime])
+  @@index([technicianId, startTime])
+  @@index([locationId, startTime])
+  @@map("bloom_appointments")
+  @@schema("appointments")
+}
+
+enum AppointmentStatus {
+  CONFIRMED    // Appointment booked and confirmed
+  PENDING      // Awaiting confirmation (rare - manual bookings without card)
+  CHECKED_IN   // Client has arrived
+  IN_PROGRESS  // Service being performed
+  COMPLETED    // Service completed
+  CANCELLED    // Cancelled by client or admin
+  NO_SHOW      // Client didn't show up
+
+  @@schema("appointments")
+}
+
+// ==================== RECURRING APPOINTMENTS ====================
+
+model RecurringAppointment {
+  id              String   @id @default(cuid())
+
+  // Recurrence pattern (RRULE format)
+  // e.g., "FREQ=WEEKLY;INTERVAL=3" for every 3 weeks
+  recurrenceRule  String
+
+  // Preferred scheduling
+  preferredDay    Int?     // 0-6 for day of week
+  preferredTime   String?  // "14:00"
+
+  isActive        Boolean  @default(true)
+  nextOccurrence  DateTime?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  clientId        String
+  client          Client   @relation(fields: [clientId], references: [id])
+
+  technicianId    String
+  technician      Technician @relation(fields: [technicianId], references: [id])
+
+  serviceId       String
+  service         Service  @relation(fields: [serviceId], references: [id])
+
+  // Generated appointments from this recurring series
+  appointments    Appointment[]
+
+  @@map("bloom_recurring_appointments")
+  @@schema("appointments")
+}
+
+// ==================== WAITLIST ====================
+
+model WaitlistEntry {
+  id              String         @id @default(cuid())
+
+  // Preferences (JSON array of date strings or ranges)
+  preferredDates  Json           @default("[]")
+  preferredTimeStart String?     // "09:00"
+  preferredTimeEnd   String?     // "17:00"
+
+  status          WaitlistStatus @default(WAITING)
+  notifiedAt      DateTime?
+  expiresAt       DateTime?      // When the waitlist offer expires
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  // Relations
+  clientId        String
+  client          Client         @relation(fields: [clientId], references: [id])
+
+  locationId      String
+  location        Location       @relation(fields: [locationId], references: [id])
+
+  serviceId       String
+  service         Service        @relation(fields: [serviceId], references: [id])
+
+  // Optional: specific tech preference
+  technicianId    String?
+  technician      Technician?    @relation(fields: [technicianId], references: [id])
+
+  @@map("bloom_waitlist_entries")
+  @@schema("appointments")
+}
+
+enum WaitlistStatus {
+  WAITING   // Waiting for an opening
+  NOTIFIED  // Notified of availability
+  BOOKED    // Successfully booked
+  EXPIRED   // Offer expired
+  CANCELLED // Client cancelled
+
+  @@schema("appointments")
+}

@@ -1,0 +1,84 @@
+"use client";
+
+import { useEffect } from "react";
+import { supabase, tables } from "@/lib/supabase";
+import { RealtimeChannel } from "@supabase/supabase-js";
+
+interface UseRealtimeAppointmentsOptions {
+  locationId: string;
+  onInsert?: () => void;
+  onUpdate?: () => void;
+  onDelete?: () => void;
+  onChange?: () => void;
+}
+
+export function useRealtimeAppointments({
+  locationId,
+  onInsert,
+  onUpdate,
+  onDelete,
+  onChange,
+}: UseRealtimeAppointmentsOptions) {
+  useEffect(() => {
+    if (!locationId) return;
+
+    let channel: RealtimeChannel;
+
+    const setupSubscription = async () => {
+      channel = supabase
+        .channel(`appointments-${locationId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "appointments",
+            table: tables.appointments,
+            filter: `locationId=eq.${locationId}`,
+          },
+          () => {
+            console.log("Appointment inserted");
+            onInsert?.();
+            onChange?.();
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "appointments",
+            table: tables.appointments,
+            filter: `locationId=eq.${locationId}`,
+          },
+          () => {
+            console.log("Appointment updated");
+            onUpdate?.();
+            onChange?.();
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "DELETE",
+            schema: "appointments",
+            table: tables.appointments,
+          },
+          () => {
+            console.log("Appointment deleted");
+            onDelete?.();
+            onChange?.();
+          }
+        )
+        .subscribe((status) => {
+          console.log("Realtime subscription status:", status);
+        });
+    };
+
+    setupSubscription();
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [locationId, onInsert, onUpdate, onDelete, onChange]);
+}
