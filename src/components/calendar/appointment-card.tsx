@@ -1,7 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
-import { Check, Sparkles } from "lucide-react";
+import { Check, Sparkles, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // Square-style appointment colors
@@ -90,10 +90,23 @@ export function AppointmentCard({
       }}
       onClick={onClick}
     >
-      {/* Checkbox indicator for confirmed appointments */}
+      {/* Checkbox indicator for confirmed appointments - white box with colored check */}
       {showCheckbox && (
-        <div className="absolute top-1 right-1 w-4 h-4 rounded border border-white/50 flex items-center justify-center">
-          <Check className="h-3 w-3 text-white" />
+        <div className="absolute top-1 right-1 w-4 h-4 rounded bg-white flex items-center justify-center">
+          <Check className="h-3 w-3" style={{ color: bgColor }} strokeWidth={6} />
+        </div>
+      )}
+
+      {/* Question mark indicator for pending appointments - white box with colored ? */}
+      {isPending && (
+        <div className="absolute top-1 right-1 w-4 h-4 rounded bg-white flex items-center justify-center">
+          <span
+            className="text-[12px] font-black leading-none"
+            style={{
+              color: bgColor,
+              WebkitTextStroke: `0.5px ${bgColor}`,
+            }}
+          >?</span>
         </div>
       )}
 

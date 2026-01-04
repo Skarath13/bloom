@@ -38,6 +38,7 @@ interface ResourceCalendarProps {
   technicians: Technician[];
   appointments: Appointment[];
   selectedLocationId: string;
+  selectedDate?: Date; // Initial date from parent (e.g., from localStorage)
   onLocationChange: (locationId: string) => void;
   onDateChange: (date: Date) => void;
   onAppointmentClick?: (appointment: Appointment) => void;
@@ -50,7 +51,6 @@ const CALENDAR_END_HOUR = 24; // Midnight next day
 const PIXELS_PER_HOUR = 80; // 80px per hour for better visibility
 const PIXELS_PER_15_MIN = 20; // 20px per 15 minutes (snap increment)
 const TIME_COLUMN_WIDTH = 56; // Width of time column in pixels
-const TECH_COLUMN_MIN_WIDTH = 160; // Minimum width of each tech column
 
 // Generate time slots for the full day
 const generateTimeSlots = (date: Date) => {
@@ -95,15 +95,23 @@ export function ResourceCalendar({
   technicians,
   appointments,
   selectedLocationId,
+  selectedDate: initialDate,
   onLocationChange,
   onDateChange,
   onAppointmentClick,
   onSlotClick,
 }: ResourceCalendarProps) {
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date>(initialDate || new Date());
   const [selectedTechIds, setSelectedTechIds] = useState<string[]>([]);
   const [autoSelectScheduled, setAutoSelectScheduled] = useState(true);
   const gridRef = useRef<HTMLDivElement>(null);
+
+  // Sync internal date state with prop (for when parent restores from localStorage)
+  useEffect(() => {
+    if (initialDate && initialDate.getTime() !== selectedDate.getTime()) {
+      setSelectedDate(initialDate);
+    }
+  }, [initialDate]);
 
   // Auto-select all technicians when they load or when location changes
   useEffect(() => {
@@ -217,7 +225,7 @@ export function ResourceCalendar({
 
         {/* Calendar Grid */}
         <div className="flex-1 overflow-auto custom-scrollbar" ref={gridRef}>
-          <div className="min-w-max">
+          <div>
             {/* Sticky header row - Tech names */}
             <div className="sticky top-0 z-10 flex bg-white border-b">
               {/* Empty spacer for time column */}
@@ -230,24 +238,53 @@ export function ResourceCalendar({
               {visibleTechnicians.map((tech) => (
                 <div
                   key={tech.id}
-                  className="border-r flex items-center justify-center gap-1.5 py-2"
-                  style={{ minWidth: TECH_COLUMN_MIN_WIDTH, flex: 1 }}
+                  className="border-r flex items-center justify-center gap-1 py-2 min-w-0 flex-1 overflow-hidden"
                 >
-                  <span className="font-medium text-sm text-gray-700">
+                  <span className="font-medium text-sm text-gray-700 truncate">
                     {tech.firstName}
                   </span>
-                  <Sparkles className="h-4 w-4" style={{ color: tech.color }} />
+                  <Sparkles className="h-4 w-4 flex-shrink-0" style={{ color: tech.color }} />
                 </div>
               ))}
             </div>
 
             {/* Time grid with appointments */}
             <div className="relative" style={{ height: totalGridHeight }}>
-              {/* Time rows (hour lines) */}
+              {/* Hour lines that extend full width (including time axis) */}
+              {timeSlots.map((slot, index) => (
+                <div
+                  key={`hour-line-${index}`}
+                  className="absolute left-0 right-0 border-b border-gray-300"
+                  style={{ top: index * PIXELS_PER_HOUR }}
+                />
+              ))}
+
+              {/* 15-min and 30-min lines that extend full width */}
+              {timeSlots.map((slot, index) => (
+                <div key={`sub-lines-${index}`}>
+                  {/* :15 line */}
+                  <div
+                    className="absolute left-0 right-0 border-b border-gray-200/60"
+                    style={{ top: index * PIXELS_PER_HOUR + PIXELS_PER_15_MIN }}
+                  />
+                  {/* :30 line (slightly darker) */}
+                  <div
+                    className="absolute left-0 right-0 border-b border-gray-300/70"
+                    style={{ top: index * PIXELS_PER_HOUR + PIXELS_PER_15_MIN * 2 }}
+                  />
+                  {/* :45 line */}
+                  <div
+                    className="absolute left-0 right-0 border-b border-gray-200/60"
+                    style={{ top: index * PIXELS_PER_HOUR + PIXELS_PER_15_MIN * 3 }}
+                  />
+                </div>
+              ))}
+
+              {/* Time labels and clickable columns */}
               {timeSlots.map((slot, index) => (
                 <div
                   key={index}
-                  className="absolute left-0 right-0 flex border-b border-gray-300"
+                  className="absolute left-0 right-0 flex"
                   style={{ top: index * PIXELS_PER_HOUR, height: PIXELS_PER_HOUR }}
                 >
                   {/* Time label */}
@@ -258,30 +295,13 @@ export function ResourceCalendar({
                     {formatTimeLabel(slot.getHours())}
                   </div>
 
-                  {/* Technician columns */}
+                  {/* Technician columns (clickable) */}
                   {visibleTechnicians.map((tech) => (
                     <div
                       key={tech.id}
-                      className="border-r border-gray-200 hover:bg-gray-50/50 cursor-pointer transition-colors relative"
-                      style={{ minWidth: TECH_COLUMN_MIN_WIDTH, flex: 1 }}
+                      className="border-r border-gray-200 hover:bg-gray-50/50 cursor-pointer transition-colors relative min-w-0 flex-1"
                       onClick={() => onSlotClick?.(tech.id, slot)}
-                    >
-                      {/* 15-minute increment lines - :15 (lightest) */}
-                      <div
-                        className="absolute left-0 right-0 border-b border-gray-200/60"
-                        style={{ top: PIXELS_PER_15_MIN }}
-                      />
-                      {/* 30-minute line - :30 (medium) */}
-                      <div
-                        className="absolute left-0 right-0 border-b border-gray-300/70"
-                        style={{ top: PIXELS_PER_15_MIN * 2 }}
-                      />
-                      {/* 15-minute increment lines - :45 (lightest) */}
-                      <div
-                        className="absolute left-0 right-0 border-b border-gray-200/60"
-                        style={{ top: PIXELS_PER_15_MIN * 3 }}
-                      />
-                    </div>
+                    />
                   ))}
                 </div>
               ))}
@@ -299,11 +319,10 @@ export function ResourceCalendar({
                 style={{ left: TIME_COLUMN_WIDTH, right: 0 }}
               >
                 <div className="flex h-full">
-                  {visibleTechnicians.map((tech, techIndex) => (
+                  {visibleTechnicians.map((tech) => (
                     <div
                       key={tech.id}
-                      className="relative"
-                      style={{ minWidth: TECH_COLUMN_MIN_WIDTH, flex: 1 }}
+                      className="relative min-w-0 flex-1"
                     >
                       {appointmentsByTech[tech.id]?.map((apt) => {
                         const { top, height } = getAppointmentStyle(apt);

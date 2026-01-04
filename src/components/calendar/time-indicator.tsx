@@ -56,47 +56,39 @@ export function TimeIndicator({
 
   return (
     <div
-      className="absolute z-20 pointer-events-none"
+      className="absolute pointer-events-none"
       style={{
         top: `${topPosition}px`,
         left: 0,
         right: 0,
+        zIndex: 50,
       }}
     >
-      {/* Time badge in the time column */}
+      {/* Red line extending across tech columns (rendered first, below pill) */}
       <div
-        className="absolute bg-red-500 text-white text-[10px] font-semibold px-1 py-0.5 rounded-sm whitespace-nowrap shadow-sm"
+        className="absolute h-[2px] bg-red-500 -translate-y-1/2"
         style={{
-          left: "2px",
-          top: "-8px",
+          left: `${leftOffset - 8}px`,
+          right: 0,
+          top: 0,
+          zIndex: 1,
+        }}
+      />
+
+      {/* Time badge - contained within time column, centered on line (above the line) */}
+      <div
+        className="absolute flex items-center justify-center -translate-y-1/2 overflow-hidden"
+        style={{
+          left: 2,
+          width: `${leftOffset - 4}px`,
+          top: 0,
+          zIndex: 2,
         }}
       >
-        {formatCurrentTime(currentTime)}
+        <div className="bg-red-500 text-white text-[9px] font-semibold px-1 py-0.5 rounded whitespace-nowrap shadow-sm">
+          {formatCurrentTime(currentTime)}
+        </div>
       </div>
-
-      {/* Red triangle marker pointing right */}
-      <div
-        className="absolute"
-        style={{
-          left: `${leftOffset - 6}px`,
-          top: "-4px",
-          width: 0,
-          height: 0,
-          borderTop: "4px solid transparent",
-          borderBottom: "4px solid transparent",
-          borderLeft: "6px solid #EF4444",
-        }}
-      />
-
-      {/* Red line - slightly overlaps triangle for seamless connection */}
-      <div
-        className="absolute h-[2px] bg-red-500"
-        style={{
-          left: `${leftOffset - 1}px`,
-          right: 0,
-          top: "-1px",
-        }}
-      />
     </div>
   );
 }

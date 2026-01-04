@@ -31,6 +31,14 @@ export function MiniCalendar({ selectedDate, onDateSelect }: MiniCalendarProps) 
     setMounted(true);
   }, []);
 
+  // Sync currentMonth when selectedDate changes (e.g., from localStorage)
+  useEffect(() => {
+    const selectedMonth = startOfMonth(selectedDate);
+    if (!isSameMonth(selectedMonth, currentMonth)) {
+      setCurrentMonth(selectedMonth);
+    }
+  }, [selectedDate]);
+
   const handlePrevMonth = () => {
     setCurrentMonth(subMonths(currentMonth, 1));
   };

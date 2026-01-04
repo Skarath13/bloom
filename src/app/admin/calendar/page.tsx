@@ -89,13 +89,32 @@ const statusOptions = [
   { value: "NO_SHOW", label: "No Show" },
 ];
 
+// localStorage keys for persisting calendar state
+const STORAGE_KEYS = {
+  locationId: "bloom_calendar_locationId",
+  date: "bloom_calendar_date",
+};
+
 export default function CalendarPage() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedLocationId, setSelectedLocationId] = useState<string>("");
-  const [selectedDate, setSelectedDate] = useState(new Date());
+
+  // Initialize from localStorage (client-side only)
+  const [selectedLocationId, setSelectedLocationId] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    return localStorage.getItem(STORAGE_KEYS.locationId) || "";
+  });
+  const [selectedDate, setSelectedDate] = useState<Date>(() => {
+    if (typeof window === "undefined") return new Date();
+    const saved = localStorage.getItem(STORAGE_KEYS.date);
+    if (saved) {
+      const parsed = new Date(saved);
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+    return new Date();
+  });
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [editingStatus, setEditingStatus] = useState<string>("");
   const [editingNotes, setEditingNotes] = useState<string>("");
@@ -115,10 +134,15 @@ export default function CalendarPage() {
       try {
         const response = await fetch("/api/locations");
         const data = await response.json();
-        if (data.locations) {
+        if (data.locations && data.locations.length > 0) {
           setLocations(data.locations);
-          if (data.locations.length > 0 && !selectedLocationId) {
-            setSelectedLocationId(data.locations[0].id);
+          // Check if saved location is valid, otherwise default to first
+          const savedIsValid = selectedLocationId &&
+            data.locations.some((loc: Location) => loc.id === selectedLocationId);
+          if (!savedIsValid) {
+            const defaultLoc = data.locations[0].id;
+            setSelectedLocationId(defaultLoc);
+            localStorage.setItem(STORAGE_KEYS.locationId, defaultLoc);
           }
         }
       } catch (error) {
@@ -208,10 +232,14 @@ export default function CalendarPage() {
 
   const handleLocationChange = (locationId: string) => {
     setSelectedLocationId(locationId);
+    // Persist to localStorage
+    localStorage.setItem(STORAGE_KEYS.locationId, locationId);
   };
 
   const handleDateChange = (date: Date) => {
     setSelectedDate(date);
+    // Persist to localStorage
+    localStorage.setItem(STORAGE_KEYS.date, date.toISOString());
   };
 
   const handleAppointmentClick = (appointment: Appointment) => {
@@ -353,6 +381,7 @@ export default function CalendarPage() {
         technicians={technicians}
         appointments={appointments}
         selectedLocationId={selectedLocationId}
+        selectedDate={selectedDate}
         onLocationChange={handleLocationChange}
         onDateChange={handleDateChange}
         onAppointmentClick={handleAppointmentClick}
