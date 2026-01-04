@@ -4,17 +4,27 @@ import { format } from "date-fns";
 import { Check, Sparkles, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// Square-style appointment colors
-export const APPOINTMENT_COLORS = {
-  CONFIRMED: "#7CB342", // Lime green
-  PENDING: "#7CB342", // Same green but with opacity
-  CHECKED_IN: "#26A69A", // Teal
-  IN_PROGRESS: "#42A5F5", // Blue
-  COMPLETED: "#9E9E9E", // Gray
-  CANCELLED: "#E0E0E0", // Light gray
-  NO_SHOW: "#EF5350", // Red
-  PERSONAL: "#FFC107", // Amber/Yellow for blocks
-} as const;
+// Default color palette for technicians (15 distinct earth tones/pastels)
+export const TECH_COLOR_PALETTE = [
+  "#7CB342", // Sage Green
+  "#E07A5F", // Terracotta
+  "#5B8FA8", // Dusty Blue
+  "#9B72AA", // Lavender Purple
+  "#E9967A", // Coral/Salmon
+  "#2A9D8F", // Teal
+  "#C48B9F", // Dusty Rose
+  "#6B8E4E", // Olive
+  "#C9A66B", // Sand/Tan
+  "#6B7A8F", // Slate Blue
+  "#B4838D", // Mauve
+  "#4A7C59", // Forest Green
+  "#8B8589", // Warm Gray
+  "#BC6C49", // Burnt Sienna
+  "#7B8DC1", // Periwinkle
+] as const;
+
+// Color for personal events
+const PERSONAL_EVENT_COLOR = "#9E9E9E"; // Gray
 
 interface AppointmentCardProps {
   id: string;
@@ -24,7 +34,8 @@ interface AppointmentCardProps {
   serviceName: string;
   serviceCategory?: string;
   status: string;
-  isPersonalBlock?: boolean;
+  techColor?: string; // Technician's assigned color
+  isPersonalEvent?: boolean;
   height: number; // Height in pixels
   onClick?: () => void;
   style?: React.CSSProperties;
@@ -37,40 +48,22 @@ export function AppointmentCard({
   serviceName,
   serviceCategory,
   status,
-  isPersonalBlock = false,
+  techColor,
+  isPersonalEvent = false,
   height,
   onClick,
   style,
   className,
 }: AppointmentCardProps) {
-  // Determine background color based on status
-  const getBackgroundColor = () => {
-    if (isPersonalBlock) return APPOINTMENT_COLORS.PERSONAL;
+  // Determine background color - personal events are gray, appointments use tech color
+  const bgColor = isPersonalEvent ? PERSONAL_EVENT_COLOR : (techColor || TECH_COLOR_PALETTE[0]);
 
-    switch (status) {
-      case "CONFIRMED":
-        return APPOINTMENT_COLORS.CONFIRMED;
-      case "PENDING":
-        return APPOINTMENT_COLORS.PENDING;
-      case "CHECKED_IN":
-        return APPOINTMENT_COLORS.CHECKED_IN;
-      case "IN_PROGRESS":
-        return APPOINTMENT_COLORS.IN_PROGRESS;
-      case "COMPLETED":
-        return APPOINTMENT_COLORS.COMPLETED;
-      case "CANCELLED":
-        return APPOINTMENT_COLORS.CANCELLED;
-      case "NO_SHOW":
-        return APPOINTMENT_COLORS.NO_SHOW;
-      default:
-        return APPOINTMENT_COLORS.CONFIRMED;
-    }
-  };
+  // Ghost appearance for cancelled/no-show (reduced opacity)
+  const isGhost = status === "CANCELLED" || status === "NO_SHOW";
 
-  const bgColor = getBackgroundColor();
   const isPending = status === "PENDING";
   const isConfirmed = status === "CONFIRMED";
-  const showCheckbox = isConfirmed || status === "CHECKED_IN";
+  const showCheckbox = isConfirmed;
 
   // Determine what content to show based on card height
   const showServiceName = height > 40;
@@ -85,7 +78,7 @@ export function AppointmentCard({
       )}
       style={{
         backgroundColor: bgColor,
-        opacity: isPending ? 0.7 : 1,
+        opacity: isGhost ? 0.5 : 1,
         ...style,
       }}
       onClick={onClick}
@@ -117,18 +110,18 @@ export function AppointmentCard({
 
       {/* Client name */}
       <div className="text-xs text-white font-medium truncate">
-        {isPersonalBlock ? "Personal Event" : clientName}
+        {isPersonalEvent ? "Personal Event" : clientName}
       </div>
 
       {/* Service name (if height allows) */}
-      {showServiceName && !isPersonalBlock && (
+      {showServiceName && !isPersonalEvent && (
         <div className="text-xs text-white/90 truncate">
           {serviceName}
         </div>
       )}
 
       {/* Service category with sparkle (if height allows) */}
-      {showCategory && serviceCategory && !isPersonalBlock && (
+      {showCategory && serviceCategory && !isPersonalEvent && (
         <div className="text-xs text-white/80 flex items-center gap-0.5 truncate">
           ({serviceCategory})
           <Sparkles className="h-2.5 w-2.5 flex-shrink-0" />

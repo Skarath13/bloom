@@ -338,6 +338,7 @@ export function ResourceCalendar({
                             serviceName={apt.serviceName}
                             serviceCategory={apt.serviceCategory}
                             status={apt.status}
+                            techColor={tech.color}
                             height={height}
                             className="pointer-events-auto"
                             style={{

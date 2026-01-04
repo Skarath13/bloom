@@ -49,18 +49,23 @@ const locations = [
   { id: "loc-5", name: "Newport Beach", city: "Newport Beach" },
 ];
 
-// Calendar colors
+// Calendar colors (earth tones / pastels for professional calendar appearance)
 const calendarColors = [
-  { value: "#8B687A", label: "Dusty Rose" },
-  { value: "#6B5B95", label: "Purple" },
-  { value: "#88B04B", label: "Green" },
-  { value: "#F7CAC9", label: "Rose Quartz" },
-  { value: "#92A8D1", label: "Serenity" },
-  { value: "#955251", label: "Marsala" },
-  { value: "#DD4124", label: "Tangerine" },
-  { value: "#009B77", label: "Emerald" },
-  { value: "#B565A7", label: "Orchid" },
-  { value: "#5B5EA6", label: "Royal Blue" },
+  { value: "#7CB342", label: "Sage Green" },
+  { value: "#E07A5F", label: "Terracotta" },
+  { value: "#5B8FA8", label: "Dusty Blue" },
+  { value: "#9B72AA", label: "Lavender" },
+  { value: "#E9967A", label: "Coral" },
+  { value: "#2A9D8F", label: "Teal" },
+  { value: "#C48B9F", label: "Dusty Rose" },
+  { value: "#6B8E4E", label: "Olive" },
+  { value: "#C9A66B", label: "Sand" },
+  { value: "#6B7A8F", label: "Slate Blue" },
+  { value: "#B4838D", label: "Mauve" },
+  { value: "#4A7C59", label: "Forest Green" },
+  { value: "#8B8589", label: "Warm Gray" },
+  { value: "#BC6C49", label: "Burnt Sienna" },
+  { value: "#7B8DC1", label: "Periwinkle" },
 ];
 
 // Days of week
@@ -74,15 +79,15 @@ const daysOfWeek = [
   { value: 6, label: "Saturday" },
 ];
 
-// Mock technicians
+// Mock technicians (using new earth tone palette)
 const initialTechnicians = [
-  { id: "tech-1", firstName: "Katie", lastName: "Martinez", locationId: "loc-1", color: "#8B687A", email: "katie@elegantlashes.com", phone: "9495551001", isActive: true, bufferMinutes: 15 },
-  { id: "tech-2", firstName: "Sarah", lastName: "Johnson", locationId: "loc-1", color: "#6B5B95", email: "sarah@elegantlashes.com", phone: "9495551002", isActive: true, bufferMinutes: 10 },
-  { id: "tech-3", firstName: "Emily", lastName: "Chen", locationId: "loc-2", color: "#88B04B", email: "emily@elegantlashes.com", phone: "9495551003", isActive: true, bufferMinutes: 15 },
-  { id: "tech-4", firstName: "Jessica", lastName: "Nguyen", locationId: "loc-2", color: "#F7CAC9", email: "jessica@elegantlashes.com", phone: "9495551004", isActive: true, bufferMinutes: 10 },
-  { id: "tech-5", firstName: "Ashley", lastName: "Kim", locationId: "loc-3", color: "#92A8D1", email: "ashley@elegantlashes.com", phone: "9495551005", isActive: true, bufferMinutes: 15 },
-  { id: "tech-6", firstName: "Michelle", lastName: "Tran", locationId: "loc-4", color: "#955251", email: "michelle@elegantlashes.com", phone: "9495551006", isActive: true, bufferMinutes: 10 },
-  { id: "tech-7", firstName: "Amanda", lastName: "Lopez", locationId: "loc-5", color: "#DD4124", email: "amanda@elegantlashes.com", phone: "9495551007", isActive: true, bufferMinutes: 15 },
+  { id: "tech-1", firstName: "Katie", lastName: "Martinez", locationId: "loc-1", color: "#7CB342", email: "katie@elegantlashes.com", phone: "9495551001", isActive: true, bufferMinutes: 15 },
+  { id: "tech-2", firstName: "Sarah", lastName: "Johnson", locationId: "loc-1", color: "#E07A5F", email: "sarah@elegantlashes.com", phone: "9495551002", isActive: true, bufferMinutes: 10 },
+  { id: "tech-3", firstName: "Emily", lastName: "Chen", locationId: "loc-2", color: "#5B8FA8", email: "emily@elegantlashes.com", phone: "9495551003", isActive: true, bufferMinutes: 15 },
+  { id: "tech-4", firstName: "Jessica", lastName: "Nguyen", locationId: "loc-2", color: "#9B72AA", email: "jessica@elegantlashes.com", phone: "9495551004", isActive: true, bufferMinutes: 10 },
+  { id: "tech-5", firstName: "Ashley", lastName: "Kim", locationId: "loc-3", color: "#E9967A", email: "ashley@elegantlashes.com", phone: "9495551005", isActive: true, bufferMinutes: 15 },
+  { id: "tech-6", firstName: "Michelle", lastName: "Tran", locationId: "loc-4", color: "#2A9D8F", email: "michelle@elegantlashes.com", phone: "9495551006", isActive: true, bufferMinutes: 10 },
+  { id: "tech-7", firstName: "Amanda", lastName: "Lopez", locationId: "loc-5", color: "#C48B9F", email: "amanda@elegantlashes.com", phone: "9495551007", isActive: true, bufferMinutes: 15 },
 ];
 
 interface Technician {
@@ -123,7 +128,7 @@ export default function TechniciansPage() {
     firstName: "",
     lastName: "",
     locationId: "",
-    color: "#8B687A",
+    color: "#7CB342",
     email: "",
     phone: "",
     bufferMinutes: "15",
@@ -135,7 +140,7 @@ export default function TechniciansPage() {
       firstName: "",
       lastName: "",
       locationId: "",
-      color: "#8B687A",
+      color: "#7CB342",
       email: "",
       phone: "",
       bufferMinutes: "15",
@@ -511,45 +516,61 @@ export default function TechniciansPage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="color">Calendar Color</Label>
-                <Select
-                  value={formData.color}
-                  onValueChange={(value) =>
-                    setFormData((prev) => ({ ...prev, color: value }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {calendarColors.map((color) => (
-                      <SelectItem key={color.value} value={color.value}>
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="w-4 h-4 rounded-full border"
-                            style={{ backgroundColor: color.value }}
-                          />
-                          {color.label}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="space-y-2">
+              <Label>Calendar Color</Label>
+              <div className="flex items-center gap-3">
+                {/* Color picker input */}
+                <div className="relative">
+                  <input
+                    type="color"
+                    value={formData.color}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, color: e.target.value }))
+                    }
+                    className="w-10 h-10 rounded-lg border-2 border-gray-200 cursor-pointer overflow-hidden"
+                    style={{ padding: 0 }}
+                  />
+                </div>
+                {/* Current color display */}
+                <div className="flex items-center gap-2 flex-1">
+                  <span className="text-sm font-medium">
+                    {calendarColors.find((c) => c.value.toLowerCase() === formData.color.toLowerCase())?.label || "Custom"}
+                  </span>
+                  <span className="text-xs text-muted-foreground uppercase">
+                    {formData.color}
+                  </span>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="buffer">Buffer (min)</Label>
-                <Input
-                  id="buffer"
-                  type="number"
-                  value={formData.bufferMinutes}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, bufferMinutes: e.target.value }))
-                  }
-                  placeholder="15"
-                />
+              {/* Preset color swatches */}
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {calendarColors.map((color) => (
+                  <button
+                    key={color.value}
+                    type="button"
+                    className={`w-6 h-6 rounded-full border-2 transition-all hover:scale-110 ${
+                      formData.color.toLowerCase() === color.value.toLowerCase()
+                        ? "border-gray-900 ring-2 ring-gray-400"
+                        : "border-gray-200"
+                    }`}
+                    style={{ backgroundColor: color.value }}
+                    onClick={() => setFormData((prev) => ({ ...prev, color: color.value }))}
+                    title={color.label}
+                  />
+                ))}
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="buffer">Buffer (min)</Label>
+              <Input
+                id="buffer"
+                type="number"
+                value={formData.bufferMinutes}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, bufferMinutes: e.target.value }))
+                }
+                placeholder="15"
+              />
             </div>
 
             <div className="flex items-center gap-2">
