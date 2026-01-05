@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { format } from "date-fns";
 import { ResourceCalendar } from "@/components/calendar/resource-calendar";
@@ -93,7 +93,7 @@ const STORAGE_KEYS = {
   date: "bloom_calendar_date",
 };
 
-export default function CalendarPage() {
+function CalendarContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -502,5 +502,13 @@ export default function CalendarPage() {
         selectedDate={selectedDate}
       />
     </div>
+  );
+}
+
+export default function CalendarPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}>
+      <CalendarContent />
+    </Suspense>
   );
 }

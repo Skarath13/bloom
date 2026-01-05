@@ -75,6 +75,7 @@ export interface Database {
           id: string;
           firstName: string;
           lastName: string;
+          description: string | null;
           email: string | null;
           phone: string | null;
           color: string;
@@ -88,6 +89,16 @@ export interface Database {
         };
         Insert: Omit<Database["appointments"]["Tables"]["bloom_technicians"]["Row"], "id" | "createdAt" | "updatedAt">;
         Update: Partial<Database["appointments"]["Tables"]["bloom_technicians"]["Insert"]>;
+      };
+      bloom_technician_locations: {
+        Row: {
+          id: string;
+          technicianId: string;
+          locationId: string;
+          createdAt: string;
+        };
+        Insert: Omit<Database["appointments"]["Tables"]["bloom_technician_locations"]["Row"], "id" | "createdAt">;
+        Update: Partial<Database["appointments"]["Tables"]["bloom_technician_locations"]["Insert"]>;
       };
       bloom_services: {
         Row: {
@@ -235,6 +246,7 @@ export const tables = {
   appointmentLineItems: "bloom_appointment_line_items",
   paymentMethods: "bloom_payment_methods",
   technicians: "bloom_technicians",
+  technicianLocations: "bloom_technician_locations",
   services: "bloom_services",
   products: "bloom_products",
   locations: "bloom_locations",

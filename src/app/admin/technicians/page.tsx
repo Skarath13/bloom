@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Pencil, Trash2, Calendar, MapPin } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Plus, Pencil, Trash2, Calendar, MapPin, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardContent,
@@ -37,17 +38,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-
-// Mock locations
-const locations = [
-  { id: "loc-1", name: "Irvine", city: "Irvine" },
-  { id: "loc-2", name: "Tustin", city: "Tustin" },
-  { id: "loc-3", name: "Santa Ana", city: "Santa Ana" },
-  { id: "loc-4", name: "Costa Mesa", city: "Costa Mesa" },
-  { id: "loc-5", name: "Newport Beach", city: "Newport Beach" },
-];
 
 // Calendar colors (earth tones / pastels for professional calendar appearance)
 const calendarColors = [
@@ -79,34 +71,29 @@ const daysOfWeek = [
   { value: 6, label: "Saturday" },
 ];
 
-// Mock technicians (using new earth tone palette)
-const initialTechnicians = [
-  { id: "tech-1", firstName: "Katie", lastName: "Martinez", locationId: "loc-1", color: "#7CB342", email: "katie@elegantlashes.com", phone: "9495551001", isActive: true, bufferMinutes: 15 },
-  { id: "tech-2", firstName: "Sarah", lastName: "Johnson", locationId: "loc-1", color: "#E07A5F", email: "sarah@elegantlashes.com", phone: "9495551002", isActive: true, bufferMinutes: 10 },
-  { id: "tech-3", firstName: "Emily", lastName: "Chen", locationId: "loc-2", color: "#5B8FA8", email: "emily@elegantlashes.com", phone: "9495551003", isActive: true, bufferMinutes: 15 },
-  { id: "tech-4", firstName: "Jessica", lastName: "Nguyen", locationId: "loc-2", color: "#9B72AA", email: "jessica@elegantlashes.com", phone: "9495551004", isActive: true, bufferMinutes: 10 },
-  { id: "tech-5", firstName: "Ashley", lastName: "Kim", locationId: "loc-3", color: "#E9967A", email: "ashley@elegantlashes.com", phone: "9495551005", isActive: true, bufferMinutes: 15 },
-  { id: "tech-6", firstName: "Michelle", lastName: "Tran", locationId: "loc-4", color: "#2A9D8F", email: "michelle@elegantlashes.com", phone: "9495551006", isActive: true, bufferMinutes: 10 },
-  { id: "tech-7", firstName: "Amanda", lastName: "Lopez", locationId: "loc-5", color: "#C48B9F", email: "amanda@elegantlashes.com", phone: "9495551007", isActive: true, bufferMinutes: 15 },
-];
+interface Location {
+  id: string;
+  name: string;
+  city: string;
+}
+
+interface Schedule {
+  id?: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  isWorking: boolean;
+}
 
 interface Technician {
   id: string;
   firstName: string;
   lastName: string;
-  locationId: string;
+  description: string | null;
   color: string;
-  email?: string;
-  phone?: string;
   isActive: boolean;
-  bufferMinutes: number;
-}
-
-interface Schedule {
-  dayOfWeek: number;
-  startTime: string;
-  endTime: string;
-  isWorking: boolean;
+  locations: Location[];
+  schedules?: Schedule[];
 }
 
 const defaultSchedule: Schedule[] = daysOfWeek.map((day) => ({
@@ -117,7 +104,10 @@ const defaultSchedule: Schedule[] = daysOfWeek.map((day) => ({
 }));
 
 export default function TechniciansPage() {
-  const [technicians, setTechnicians] = useState<Technician[]>(initialTechnicians);
+  const [technicians, setTechnicians] = useState<Technician[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
   const [editingTech, setEditingTech] = useState<Technician | null>(null);
@@ -127,23 +117,54 @@ export default function TechniciansPage() {
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
-    locationId: "",
+    description: "",
+    locationIds: [] as string[],
     color: "#7CB342",
-    email: "",
-    phone: "",
-    bufferMinutes: "15",
     isActive: true,
   });
+
+  // Fetch locations
+  const fetchLocations = useCallback(async () => {
+    try {
+      const response = await fetch("/api/locations");
+      const data = await response.json();
+      if (data.locations) {
+        setLocations(data.locations);
+      }
+    } catch (error) {
+      console.error("Error fetching locations:", error);
+      toast.error("Failed to load locations");
+    }
+  }, []);
+
+  // Fetch technicians
+  const fetchTechnicians = useCallback(async () => {
+    try {
+      const response = await fetch("/api/technicians?activeOnly=false");
+      const data = await response.json();
+      if (data.technicians) {
+        setTechnicians(data.technicians);
+      }
+    } catch (error) {
+      console.error("Error fetching technicians:", error);
+      toast.error("Failed to load technicians");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchLocations();
+    fetchTechnicians();
+  }, [fetchLocations, fetchTechnicians]);
 
   const resetForm = () => {
     setFormData({
       firstName: "",
       lastName: "",
-      locationId: "",
+      description: "",
+      locationIds: [],
       color: "#7CB342",
-      email: "",
-      phone: "",
-      bufferMinutes: "15",
       isActive: true,
     });
     setEditingTech(null);
@@ -154,99 +175,194 @@ export default function TechniciansPage() {
     setFormData({
       firstName: tech.firstName,
       lastName: tech.lastName,
-      locationId: tech.locationId,
+      description: tech.description || "",
+      locationIds: tech.locations.map((l) => l.id),
       color: tech.color,
-      email: tech.email || "",
-      phone: tech.phone || "",
-      bufferMinutes: tech.bufferMinutes.toString(),
       isActive: tech.isActive,
     });
     setIsDialogOpen(true);
   };
 
-  const handleSchedule = (tech: Technician) => {
+  const handleSchedule = async (tech: Technician) => {
     setSelectedTech(tech);
-    // In real app, fetch schedule from database
-    setSchedule(defaultSchedule);
+    // Fetch schedule from API
+    try {
+      const response = await fetch(`/api/technicians/${tech.id}/schedule`);
+      const data = await response.json();
+      if (data.schedules && data.schedules.length > 0) {
+        setSchedule(data.schedules);
+      } else {
+        setSchedule(defaultSchedule);
+      }
+    } catch (error) {
+      console.error("Error fetching schedule:", error);
+      setSchedule(defaultSchedule);
+    }
     setIsScheduleDialogOpen(true);
   };
 
-  const handleSubmit = () => {
-    if (!formData.firstName || !formData.lastName || !formData.locationId) {
-      toast.error("Please fill in all required fields");
+  const handleSubmit = async () => {
+    if (!formData.firstName || !formData.lastName) {
+      toast.error("Please fill in first and last name");
       return;
     }
 
-    if (editingTech) {
-      setTechnicians((prev) =>
-        prev.map((t) =>
-          t.id === editingTech.id
-            ? {
-                ...t,
-                firstName: formData.firstName,
-                lastName: formData.lastName,
-                locationId: formData.locationId,
-                color: formData.color,
-                email: formData.email || undefined,
-                phone: formData.phone || undefined,
-                bufferMinutes: parseInt(formData.bufferMinutes),
-                isActive: formData.isActive,
-              }
-            : t
-        )
-      );
-      toast.success("Technician updated successfully");
-    } else {
-      const newTech: Technician = {
-        id: `tech-${Date.now()}`,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        locationId: formData.locationId,
-        color: formData.color,
-        email: formData.email || undefined,
-        phone: formData.phone || undefined,
-        bufferMinutes: parseInt(formData.bufferMinutes),
-        isActive: formData.isActive,
-      };
-      setTechnicians((prev) => [...prev, newTech]);
-      toast.success("Technician added successfully");
+    if (formData.locationIds.length === 0) {
+      toast.error("Please select at least one location");
+      return;
     }
 
-    setIsDialogOpen(false);
-    resetForm();
+    setIsSaving(true);
+
+    try {
+      if (editingTech) {
+        // Update existing technician
+        const response = await fetch(`/api/technicians/${editingTech.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            description: formData.description || null,
+            color: formData.color,
+            locationIds: formData.locationIds,
+            isActive: formData.isActive,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to update technician");
+        }
+
+        toast.success("Technician updated successfully");
+      } else {
+        // Create new technician
+        const response = await fetch("/api/technicians", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            description: formData.description || null,
+            color: formData.color,
+            locationIds: formData.locationIds,
+            isActive: formData.isActive,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to create technician");
+        }
+
+        toast.success("Technician added successfully");
+      }
+
+      await fetchTechnicians();
+      setIsDialogOpen(false);
+      resetForm();
+    } catch (error) {
+      console.error("Error saving technician:", error);
+      toast.error("Failed to save technician");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleSaveSchedule = () => {
-    // In real app, save to database
-    toast.success(`Schedule saved for ${selectedTech?.firstName}`);
-    setIsScheduleDialogOpen(false);
+  const handleSaveSchedule = async () => {
+    if (!selectedTech) return;
+
+    setIsSaving(true);
+
+    try {
+      const response = await fetch(`/api/technicians/${selectedTech.id}/schedule`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ schedules: schedule }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save schedule");
+      }
+
+      toast.success(`Schedule saved for ${selectedTech.firstName}`);
+      setIsScheduleDialogOpen(false);
+    } catch (error) {
+      console.error("Error saving schedule:", error);
+      toast.error("Failed to save schedule");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm("Are you sure you want to delete this technician?")) {
-      setTechnicians((prev) => prev.filter((t) => t.id !== id));
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this technician?")) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/technicians/${id}`, {
+        method: "DELETE",
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast.error(data.error || "Failed to delete technician");
+        return;
+      }
+
       toast.success("Technician deleted");
+      await fetchTechnicians();
+    } catch (error) {
+      console.error("Error deleting technician:", error);
+      toast.error("Failed to delete technician");
     }
   };
 
-  const toggleActive = (id: string) => {
-    setTechnicians((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, isActive: !t.isActive } : t))
-    );
+  const toggleActive = async (tech: Technician) => {
+    try {
+      const response = await fetch(`/api/technicians/${tech.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: !tech.isActive }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update status");
+      }
+
+      await fetchTechnicians();
+    } catch (error) {
+      console.error("Error toggling active:", error);
+      toast.error("Failed to update status");
+    }
   };
 
-  const getLocationName = (locationId: string) => {
-    return locations.find((l) => l.id === locationId)?.name || "Unknown";
+  const toggleLocationSelection = (locationId: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      locationIds: prev.locationIds.includes(locationId)
+        ? prev.locationIds.filter((id) => id !== locationId)
+        : [...prev.locationIds, locationId],
+    }));
   };
 
   const filteredTechnicians = selectedLocation === "all"
     ? technicians
-    : technicians.filter((t) => t.locationId === selectedLocation);
+    : technicians.filter((t) => t.locations.some((l) => l.id === selectedLocation));
 
   const techsByLocation = locations.map((loc) => ({
     ...loc,
-    count: technicians.filter((t) => t.locationId === loc.id).length,
+    count: technicians.filter((t) => t.locations.some((l) => l.id === loc.id)).length,
   }));
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -323,10 +439,9 @@ export default function TechniciansPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Contact</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Locations</TableHead>
                 <TableHead>Color</TableHead>
-                <TableHead>Buffer</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -338,19 +453,18 @@ export default function TechniciansPage() {
                     {tech.firstName} {tech.lastName}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className="gap-1">
-                      <MapPin className="h-3 w-3" />
-                      {getLocationName(tech.locationId)}
-                    </Badge>
+                    <span className="text-sm text-muted-foreground line-clamp-1">
+                      {tech.description || "—"}
+                    </span>
                   </TableCell>
                   <TableCell>
-                    <div className="text-sm">
-                      {tech.email && <div>{tech.email}</div>}
-                      {tech.phone && (
-                        <div className="text-muted-foreground">
-                          {tech.phone.replace(/(\d{3})(\d{3})(\d{4})/, "($1) $2-$3")}
-                        </div>
-                      )}
+                    <div className="flex flex-wrap gap-1">
+                      {tech.locations.map((loc) => (
+                        <Badge key={loc.id} variant="outline" className="gap-1">
+                          <MapPin className="h-3 w-3" />
+                          {loc.name}
+                        </Badge>
+                      ))}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -364,11 +478,10 @@ export default function TechniciansPage() {
                       </span>
                     </div>
                   </TableCell>
-                  <TableCell>{tech.bufferMinutes} min</TableCell>
                   <TableCell>
                     <Switch
                       checked={tech.isActive}
-                      onCheckedChange={() => toggleActive(tech.id)}
+                      onCheckedChange={() => toggleActive(tech)}
                     />
                   </TableCell>
                   <TableCell className="text-right">
@@ -399,6 +512,13 @@ export default function TechniciansPage() {
                   </TableCell>
                 </TableRow>
               ))}
+              {filteredTechnicians.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    No technicians found
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -465,55 +585,49 @@ export default function TechniciansPage() {
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, lastName: e.target.value }))
                   }
-                  placeholder="Martinez"
+                  placeholder="M"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="location">Location *</Label>
-              <Select
-                value={formData.locationId}
-                onValueChange={(value) =>
-                  setFormData((prev) => ({ ...prev, locationId: value }))
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                value={formData.description}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, description: e.target.value }))
                 }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select location" />
-                </SelectTrigger>
-                <SelectContent>
-                  {locations.map((loc) => (
-                    <SelectItem key={loc.id} value={loc.id}>
+                placeholder="Specializes in classic lashes and volume sets..."
+                rows={2}
+              />
+              <p className="text-xs text-muted-foreground">
+                This will be shown to clients during booking
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Locations *</Label>
+              <div className="border rounded-lg p-3 space-y-2 max-h-40 overflow-y-auto">
+                {locations.map((loc) => (
+                  <div key={loc.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`loc-${loc.id}`}
+                      checked={formData.locationIds.includes(loc.id)}
+                      onCheckedChange={() => toggleLocationSelection(loc.id)}
+                    />
+                    <label
+                      htmlFor={`loc-${loc.id}`}
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                    >
                       {loc.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={formData.email}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, email: e.target.value }))
-                }
-                placeholder="katie@elegantlashes.com"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone</Label>
-              <Input
-                id="phone"
-                value={formData.phone}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, phone: e.target.value }))
-                }
-                placeholder="(949) 555-1001"
-              />
+                    </label>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Select all locations where this technician works
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -560,19 +674,6 @@ export default function TechniciansPage() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="buffer">Buffer (min)</Label>
-              <Input
-                id="buffer"
-                type="number"
-                value={formData.bufferMinutes}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, bufferMinutes: e.target.value }))
-                }
-                placeholder="15"
-              />
-            </div>
-
             <div className="flex items-center gap-2">
               <Switch
                 id="isActive"
@@ -589,7 +690,8 @@ export default function TechniciansPage() {
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit}>
+            <Button onClick={handleSubmit} disabled={isSaving}>
+              {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {editingTech ? "Update" : "Add"} Technician
             </Button>
           </DialogFooter>
@@ -662,7 +764,10 @@ export default function TechniciansPage() {
             <Button variant="outline" onClick={() => setIsScheduleDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveSchedule}>Save Schedule</Button>
+            <Button onClick={handleSaveSchedule} disabled={isSaving}>
+              {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save Schedule
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
