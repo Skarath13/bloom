@@ -26,6 +26,7 @@ export async function PATCH(
 
     const { data: block, error } = await supabase
       .from(tables.technicianBlocks)
+      // @ts-expect-error - Supabase types don't resolve dynamic table names correctly
       .update(updateData)
       .eq("id", id)
       .select()
@@ -63,6 +64,7 @@ export async function DELETE(
     // Soft delete by setting isActive to false
     const { error } = await supabase
       .from(tables.technicianBlocks)
+      // @ts-expect-error - Supabase types don't resolve dynamic table names correctly
       .update({ isActive: false, updatedAt: new Date().toISOString() })
       .eq("id", id);
 

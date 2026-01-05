@@ -1,12 +1,23 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { addDays, subDays, startOfDay, setHours, setMinutes, isSameDay, format } from "date-fns";
 import { Sparkles } from "lucide-react";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
 import { MiniCalendar } from "./mini-calendar";
 import { CalendarHeader } from "./calendar-header";
 import { AppointmentCard, calculateOverlapPositions } from "./appointment-card";
 import { TimeIndicator, getCurrentTimeScrollPosition } from "./time-indicator";
+import { MoveConfirmationModal } from "./move-confirmation-modal";
+import { QuickBlockDialog } from "./quick-block-dialog";
+import { useCalendarDnd } from "@/hooks/use-calendar-dnd";
+import { cn } from "@/lib/utils";
 
 // Types
 interface TechnicianSchedule {
@@ -67,6 +78,19 @@ interface ResourceCalendarProps {
   onScheduleClick?: () => void;
   onSettingsClick?: () => void;
   onMoreClick?: () => void;
+  onMoveAppointment?: (
+    appointmentId: string,
+    newTechnicianId: string,
+    newStartTime: Date,
+    newEndTime: Date,
+    notifyClient: boolean
+  ) => Promise<void>;
+  onCreateBlock?: (
+    technicianId: string,
+    title: string,
+    startTime: Date,
+    endTime: Date
+  ) => Promise<void>;
 }
 
 // Calendar configuration
@@ -75,6 +99,7 @@ const CALENDAR_END_HOUR = 24; // Midnight next day
 const PIXELS_PER_HOUR = 80; // 80px per hour for better visibility
 const PIXELS_PER_15_MIN = 20; // 20px per 15 minutes (snap increment)
 const TIME_COLUMN_WIDTH = 56; // Width of time column in pixels
+const HEADER_HEIGHT = 37; // Height of sticky technician header row
 
 // Generate time slots for the full day
 const generateTimeSlots = (date: Date) => {
@@ -178,11 +203,28 @@ export function ResourceCalendar({
   onScheduleClick,
   onSettingsClick,
   onMoreClick,
+  onMoveAppointment,
+  onCreateBlock,
 }: ResourceCalendarProps) {
   const [selectedDate, setSelectedDate] = useState<Date>(initialDate || new Date());
   const [selectedTechIds, setSelectedTechIds] = useState<string[]>([]);
   const [autoSelectScheduled, setAutoSelectScheduled] = useState(true);
+  const [hoveredSlot, setHoveredSlot] = useState<{
+    technicianId: string;
+    minutesFromMidnight: number;
+  } | null>(null);
+  const [isMoving, setIsMoving] = useState(false);
+  const [isCreatingBlock, setIsCreatingBlock] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
+
+  // DnD sensors - require 5px movement to start drag (prevents accidental drags on click)
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    })
+  );
 
   // Sync internal date state with prop (for when parent restores from localStorage)
   useEffect(() => {
@@ -275,6 +317,85 @@ export function ResourceCalendar({
     return grouped;
   }, [dayBlocks, visibleTechnicians]);
 
+  // DnD hook for drag-and-drop functionality
+  const {
+    dragState,
+    isDragging,
+    handleDragStart,
+    handleDragMove,
+    handleDragEnd,
+    handleDragCancel,
+    selection,
+    isSelecting,
+    handleSelectionStart,
+    handleSelectionMove,
+    handleSelectionEnd,
+    getSelectionStyle,
+    pendingMove,
+    pendingBlock,
+    clearPendingMove,
+    clearPendingBlock,
+    getDragOverlayTechColor,
+    getLandingZoneStyle,
+  } = useCalendarDnd({
+    appointments: dayAppointments,
+    selectedDate,
+    visibleTechnicians,
+    gridRef,
+  });
+
+  // Handle move confirmation
+  const handleConfirmMove = useCallback(
+    async (notifyClient: boolean) => {
+      if (!pendingMove || !onMoveAppointment) return;
+
+      const { appointment, newTime, newTechId } = pendingMove;
+      const duration = appointment.endTime.getTime() - appointment.startTime.getTime();
+      const newEndTime = new Date(newTime.getTime() + duration);
+
+      setIsMoving(true);
+      try {
+        await onMoveAppointment(
+          appointment.id,
+          newTechId,
+          newTime,
+          newEndTime,
+          notifyClient
+        );
+        clearPendingMove();
+      } catch (error) {
+        console.error("Failed to move appointment:", error);
+        // Error is handled by parent, just clear the pending state
+      } finally {
+        setIsMoving(false);
+      }
+    },
+    [pendingMove, onMoveAppointment, clearPendingMove]
+  );
+
+  // Handle block creation
+  const handleConfirmBlock = useCallback(
+    async (title: string) => {
+      if (!pendingBlock || !onCreateBlock) return;
+
+      setIsCreatingBlock(true);
+      try {
+        await onCreateBlock(
+          pendingBlock.technicianId,
+          title,
+          pendingBlock.startTime,
+          pendingBlock.endTime
+        );
+        clearPendingBlock();
+      } catch (error) {
+        console.error("Failed to create block:", error);
+      } finally {
+        setIsCreatingBlock(false);
+      }
+    },
+    [pendingBlock, onCreateBlock, clearPendingBlock]
+  );
+
   // Calculate block position and height (similar to appointments)
   const getBlockStyle = (block: TechnicianBlock) => {
     const startHour = block.startTime.getHours();
@@ -310,6 +431,67 @@ export function ResourceCalendar({
     handleDateChange(newDate);
   };
 
+  // Handle mouse move for 15-minute hover highlights
+  const handleGridMouseMove = (e: React.MouseEvent) => {
+    const gridElement = gridRef.current;
+    if (!gridElement) return;
+
+    const rect = gridElement.getBoundingClientRect();
+    const scrollTop = gridElement.scrollTop;
+
+    // Calculate Y position relative to grid content
+    // Account for: scroll position and sticky header height
+    const relativeY = e.clientY - rect.top + scrollTop - HEADER_HEIGHT;
+    // Calculate X position relative to technician columns (excluding time column)
+    const relativeX = e.clientX - rect.left - TIME_COLUMN_WIDTH;
+
+    // If mouse is in header area or time column, clear hover
+    if (relativeX < 0 || relativeY < 0) {
+      setHoveredSlot(null);
+      return;
+    }
+
+    // Calculate which technician column
+    const contentWidth = rect.width - TIME_COLUMN_WIDTH;
+    const columnWidth = contentWidth / visibleTechnicians.length;
+    const techIndex = Math.floor(relativeX / columnWidth);
+    const tech = visibleTechnicians[techIndex];
+
+    if (!tech) {
+      setHoveredSlot(null);
+      return;
+    }
+
+    // Snap to 15-minute increments
+    const minutes = Math.floor(relativeY / PIXELS_PER_15_MIN) * 15;
+    // Clamp to valid range
+    const clampedMinutes = Math.max(0, Math.min(minutes, (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * 60 - 15));
+
+    setHoveredSlot({ technicianId: tech.id, minutesFromMidnight: clampedMinutes });
+  };
+
+  const handleGridMouseLeave = () => {
+    setHoveredSlot(null);
+  };
+
+  // Calculate hover highlight position
+  const getHoverHighlightStyle = () => {
+    if (!hoveredSlot) return null;
+
+    const techIndex = visibleTechnicians.findIndex(t => t.id === hoveredSlot.technicianId);
+    if (techIndex === -1) return null;
+
+    const columnWidth = 100 / visibleTechnicians.length;
+    const top = hoveredSlot.minutesFromMidnight * (PIXELS_PER_HOUR / 60);
+
+    return {
+      top: `${top}px`,
+      height: `${PIXELS_PER_15_MIN}px`,
+      left: `${techIndex * columnWidth}%`,
+      width: `${columnWidth}%`,
+    };
+  };
+
   const totalGridHeight = (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * PIXELS_PER_HOUR;
 
   return (
@@ -343,7 +525,25 @@ export function ResourceCalendar({
         />
 
         {/* Calendar Grid */}
-        <div className="flex-1 overflow-auto custom-scrollbar" ref={gridRef}>
+        <DndContext
+          sensors={sensors}
+          onDragStart={handleDragStart}
+          onDragMove={handleDragMove}
+          onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
+        >
+        <div
+          className="flex-1 overflow-auto custom-scrollbar"
+          ref={gridRef}
+          onMouseMove={(e) => {
+            handleGridMouseMove(e);
+            if (isSelecting) handleSelectionMove(e);
+          }}
+          onMouseLeave={handleGridMouseLeave}
+          onMouseUp={() => {
+            if (isSelecting) handleSelectionEnd();
+          }}
+        >
           <div>
             {/* Sticky header row - Tech names */}
             <div className="sticky top-0 z-10 flex bg-white border-b border-gray-200">
@@ -414,12 +614,18 @@ export function ResourceCalendar({
                     {formatTimeLabel(slot.getHours())}
                   </div>
 
-                  {/* Technician columns (clickable) */}
+                  {/* Technician columns (clickable + drag-to-select) */}
                   {visibleTechnicians.map((tech) => (
                     <div
                       key={tech.id}
-                      className="border-r border-gray-200 hover:bg-gray-50/50 cursor-pointer transition-colors relative min-w-0 flex-1"
+                      className="border-r border-gray-200 cursor-pointer relative min-w-0 flex-1"
                       onClick={() => onSlotClick?.(tech.id, slot)}
+                      onMouseDown={(e) => {
+                        // Only start selection on primary mouse button
+                        if (e.button === 0 && onCreateBlock) {
+                          handleSelectionStart(e, tech.id);
+                        }
+                      }}
                     />
                   ))}
                 </div>
@@ -458,6 +664,56 @@ export function ResourceCalendar({
                   })}
                 </div>
               </div>
+
+              {/* 15-minute hover highlight (hidden during drag/selection) */}
+              {hoveredSlot && !isDragging && !isSelecting && (
+                <div
+                  className="absolute top-0 bottom-0 pointer-events-none"
+                  style={{ left: TIME_COLUMN_WIDTH, right: 0 }}
+                >
+                  <div className="relative h-full">
+                    <div
+                      className="absolute bg-gray-100/80 border border-gray-300/60 rounded-sm transition-all duration-75"
+                      style={getHoverHighlightStyle() || undefined}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Selection overlay for drag-to-create blocks */}
+              {isSelecting && (
+                <div
+                  className="absolute top-0 bottom-0 pointer-events-none"
+                  style={{ left: TIME_COLUMN_WIDTH, right: 0 }}
+                >
+                  <div className="relative h-full">
+                    <div
+                      className="absolute bg-gray-300/50 border-2 border-dashed border-gray-400 rounded"
+                      style={getSelectionStyle() || undefined}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Landing zone indicator during drag */}
+              {isDragging && getLandingZoneStyle() && (
+                <div
+                  className="absolute top-0 bottom-0 pointer-events-none"
+                  style={{ left: TIME_COLUMN_WIDTH, right: 0 }}
+                >
+                  <div className="relative h-full">
+                    <div
+                      className={cn(
+                        "absolute border-2 border-dashed rounded transition-all duration-75",
+                        dragState.hasConflict
+                          ? "bg-red-100/50 border-red-400"
+                          : "bg-blue-100/50 border-blue-400"
+                      )}
+                      style={getLandingZoneStyle() || undefined}
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Current time indicator */}
               <TimeIndicator
@@ -533,7 +789,9 @@ export function ResourceCalendar({
                             serviceCategory={apt.serviceCategory}
                             status={apt.status}
                             techColor={tech.color}
+                            technicianId={tech.id}
                             height={height}
+                            draggable={!!onMoveAppointment}
                             className="pointer-events-auto"
                             style={{
                               top: `${top}px`,
@@ -552,7 +810,75 @@ export function ResourceCalendar({
             </div>
           </div>
         </div>
+
+        {/* Drag Overlay - Ghost preview */}
+        <DragOverlay>
+          {dragState.activeAppointment && (
+            <div
+              className={`rounded px-1.5 py-1 overflow-hidden pointer-events-none ${
+                dragState.hasConflict ? "border-2 border-red-500" : "border-2 border-blue-500"
+              }`}
+              style={{
+                backgroundColor: getDragOverlayTechColor(),
+                opacity: 0.75,
+                boxShadow: "0 8px 16px rgba(0,0,0,0.2)",
+                width: "150px",
+                minHeight: `${Math.max(
+                  ((dragState.activeAppointment.endTime.getTime() -
+                    dragState.activeAppointment.startTime.getTime()) /
+                    (1000 * 60)) *
+                    (PIXELS_PER_HOUR / 60),
+                  40
+                )}px`,
+              }}
+            >
+              <div className="text-xs font-medium text-white truncate">
+                {format(dragState.activeAppointment.startTime, "h:mm a")}
+              </div>
+              <div className="text-xs text-white/90 truncate">
+                {dragState.activeAppointment.clientName}
+              </div>
+              <div className="text-xs text-white/80 truncate">
+                {dragState.activeAppointment.serviceName}
+              </div>
+              {dragState.hasConflict && (
+                <div className="text-xs text-red-200 font-medium mt-1">
+                  Conflict!
+                </div>
+              )}
+            </div>
+          )}
+        </DragOverlay>
+        </DndContext>
       </div>
+
+      {/* Move Confirmation Modal */}
+      {pendingMove && (
+        <MoveConfirmationModal
+          appointment={pendingMove.appointment}
+          originalTime={pendingMove.originalTime}
+          newTime={pendingMove.newTime}
+          originalTechId={pendingMove.originalTechId}
+          newTechId={pendingMove.newTechId}
+          technicians={visibleTechnicians}
+          onConfirm={handleConfirmMove}
+          onCancel={clearPendingMove}
+          isLoading={isMoving}
+        />
+      )}
+
+      {/* Quick Block Dialog */}
+      {pendingBlock && (
+        <QuickBlockDialog
+          technicianId={pendingBlock.technicianId}
+          technicianName={pendingBlock.technicianName}
+          startTime={pendingBlock.startTime}
+          endTime={pendingBlock.endTime}
+          onSave={handleConfirmBlock}
+          onCancel={clearPendingBlock}
+          isLoading={isCreatingBlock}
+        />
+      )}
     </div>
   );
 }

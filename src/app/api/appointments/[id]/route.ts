@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase, tables } from "@/lib/supabase";
 import { createRefund } from "@/lib/stripe";
-import { sendCancellationNotification } from "@/lib/twilio";
+import { sendCancellationNotification, sendAppointmentMovedNotification } from "@/lib/twilio";
 import { differenceInHours } from "date-fns";
 import {
   updateAppointmentWithCheck,
@@ -127,6 +127,23 @@ export async function PATCH(
     const { id } = await context.params;
     const body = await request.json();
 
+    // Get original appointment data before update (for SMS notification)
+    let originalAppointment: AppointmentWithRelations | null = null;
+    if (body.notifyClient && (body.startTime || body.technicianId)) {
+      const { data } = await supabase
+        .from(tables.appointments)
+        .select(`
+          *,
+          bloom_clients (*),
+          bloom_services (*),
+          bloom_technicians (*),
+          bloom_locations (*)
+        `)
+        .eq("id", id)
+        .single() as { data: AppointmentWithRelations | null; error: unknown };
+      originalAppointment = data;
+    }
+
     // Use the safe update function with conflict checking
     const appointment = await updateAppointmentWithCheck({
       appointmentId: id,
@@ -139,6 +156,24 @@ export async function PATCH(
         notes: body.notes,
       },
     });
+
+    // Send SMS notification if requested and appointment was moved
+    if (body.notifyClient && originalAppointment && appointment.client?.phone) {
+      const timeOrTechChanged =
+        body.startTime || body.technicianId;
+
+      if (timeOrTechChanged) {
+        await sendAppointmentMovedNotification({
+          phone: appointment.client.phone,
+          clientName: appointment.client.firstName || "there",
+          serviceName: appointment.service?.name || "your appointment",
+          oldDateTime: new Date(originalAppointment.startTime),
+          newDateTime: new Date(appointment.startTime),
+          technicianName: appointment.technician?.firstName || "your technician",
+          locationName: appointment.location?.name || "our location",
+        });
+      }
+    }
 
     return NextResponse.json({ appointment });
   } catch (error) {

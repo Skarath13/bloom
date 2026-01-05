@@ -1,7 +1,8 @@
 "use client";
 
 import { format } from "date-fns";
-import { Check, Sparkles, HelpCircle } from "lucide-react";
+import { Check, Sparkles } from "lucide-react";
+import { useDraggable } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
 
 // Default color palette for technicians (15 distinct earth tones/pastels)
@@ -40,10 +41,14 @@ interface AppointmentCardProps {
   onClick?: () => void;
   style?: React.CSSProperties;
   className?: string;
+  draggable?: boolean; // Enable drag and drop
+  technicianId?: string; // Required for drag data
 }
 
 export function AppointmentCard({
+  id,
   startTime,
+  endTime,
   clientName,
   serviceName,
   serviceCategory,
@@ -54,7 +59,28 @@ export function AppointmentCard({
   onClick,
   style,
   className,
+  draggable = false,
+  technicianId,
 }: AppointmentCardProps) {
+  // Drag and drop hook
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id,
+    data: {
+      type: "appointment",
+      appointment: {
+        id,
+        startTime,
+        endTime,
+        clientName,
+        serviceName,
+        serviceCategory,
+        technicianId,
+        status,
+      },
+    },
+    disabled: !draggable || isPersonalEvent,
+  });
+
   // Determine background color - personal events are gray, appointments use tech color
   const bgColor = isPersonalEvent ? PERSONAL_EVENT_COLOR : (techColor || TECH_COLOR_PALETTE[0]);
 
@@ -71,14 +97,19 @@ export function AppointmentCard({
 
   return (
     <div
+      ref={setNodeRef}
+      {...(draggable ? listeners : {})}
+      {...(draggable ? attributes : {})}
       className={cn(
         "absolute rounded px-1.5 py-1 overflow-hidden cursor-pointer",
         "transition-all hover:brightness-110",
+        isDragging && "opacity-40",
+        draggable && "touch-none",
         className
       )}
       style={{
         backgroundColor: bgColor,
-        opacity: isGhost ? 0.5 : 1,
+        opacity: isGhost ? 0.5 : isDragging ? 0.4 : 1,
         ...style,
       }}
       onClick={onClick}

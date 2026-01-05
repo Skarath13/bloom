@@ -106,6 +106,7 @@ export async function POST(request: NextRequest) {
 
     const { data: block, error } = await supabase
       .from(tables.technicianBlocks)
+      // @ts-expect-error - Supabase types don't resolve dynamic table names correctly
       .insert(newBlock)
       .select()
       .single() as { data: BlockData | null; error: { message: string } | null };

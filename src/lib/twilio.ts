@@ -186,6 +186,55 @@ See you soon!`;
   }
 }
 
+// Send appointment moved/rescheduled notification SMS
+export async function sendAppointmentMovedNotification({
+  phone,
+  clientName,
+  serviceName,
+  oldDateTime,
+  newDateTime,
+  technicianName,
+  locationName,
+}: {
+  phone: string;
+  clientName: string;
+  serviceName: string;
+  oldDateTime: Date;
+  newDateTime: Date;
+  technicianName: string;
+  locationName: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const formattedPhone = formatPhoneE164(phone);
+    const oldFormatted = formatDateTime(oldDateTime);
+    const newFormatted = formatDateTime(newDateTime);
+
+    const message = `Hi ${clientName}! Your ${serviceName} appointment has been rescheduled.
+
+Old: ${oldFormatted}
+New: ${newFormatted}
+
+with ${technicianName}
+${locationName}
+
+Questions? Reply to this message or call us.`;
+
+    await client.messages.create({
+      body: message,
+      from: fromNumber,
+      to: formattedPhone,
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to send moved notification SMS:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to send SMS",
+    };
+  }
+}
+
 // Send cancellation notification SMS
 export async function sendCancellationNotification({
   phone,

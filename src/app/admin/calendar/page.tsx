@@ -393,6 +393,84 @@ function CalendarContent() {
     setSelectedBlock(block);
   };
 
+  // Handle drag-and-drop appointment move
+  const handleMoveAppointment = useCallback(
+    async (
+      appointmentId: string,
+      newTechnicianId: string,
+      newStartTime: Date,
+      newEndTime: Date,
+      notifyClient: boolean
+    ) => {
+      try {
+        const response = await fetch(`/api/appointments/${appointmentId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            technicianId: newTechnicianId,
+            startTime: newStartTime.toISOString(),
+            endTime: newEndTime.toISOString(),
+            notifyClient,
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          if (error.code === "CONFLICT") {
+            toast.error(`Cannot move: conflicts with ${error.conflict?.clientName || "another appointment"}`);
+          } else {
+            toast.error(error.error || "Failed to move appointment");
+          }
+          throw new Error(error.error || "Failed to move appointment");
+        }
+
+        toast.success(notifyClient ? "Appointment moved. Client notified." : "Appointment moved.");
+        fetchAppointments();
+      } catch (error) {
+        console.error("Failed to move appointment:", error);
+        throw error;
+      }
+    },
+    [fetchAppointments]
+  );
+
+  // Handle drag-to-create personal event block
+  const handleCreateBlock = useCallback(
+    async (
+      technicianId: string,
+      title: string,
+      startTime: Date,
+      endTime: Date
+    ) => {
+      try {
+        const response = await fetch("/api/technician-blocks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            technicianId,
+            title,
+            blockType: "PERSONAL",
+            startTime: startTime.toISOString(),
+            endTime: endTime.toISOString(),
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          toast.error(error.error || "Failed to create event");
+          throw new Error(error.error || "Failed to create event");
+        }
+
+        toast.success("Personal event created");
+        fetchBlocks();
+      } catch (error) {
+        console.error("Failed to create block:", error);
+        throw error;
+      }
+    },
+    [fetchBlocks]
+  );
+
   const newTech = technicians.find((t) => t.id === newAppointmentSlot?.technicianId);
 
   if (loading && locations.length === 0) {
@@ -418,6 +496,8 @@ function CalendarContent() {
         onBlockClick={handleBlockClick}
         onSlotClick={handleSlotClick}
         onScheduleClick={() => setScheduleDialogOpen(true)}
+        onMoveAppointment={handleMoveAppointment}
+        onCreateBlock={handleCreateBlock}
       />
 
       {/* Appointment details dialog - Square style */}
