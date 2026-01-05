@@ -138,8 +138,6 @@ async function main() {
           startTime,
           endTime,
           status,
-          depositAmount: service.depositAmount,
-          depositPaidAt: status !== "PENDING" ? new Date() : null,
         },
       });
 

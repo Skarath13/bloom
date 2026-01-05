@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { createId } from "@paralleldrive/cuid2";
 
 // Types for our database tables (in appointments schema)
 export interface Database {
@@ -144,6 +145,60 @@ export interface Database {
         Insert: Omit<Database["appointments"]["Tables"]["bloom_technician_blocks"]["Row"], "id" | "createdAt" | "updatedAt">;
         Update: Partial<Database["appointments"]["Tables"]["bloom_technician_blocks"]["Insert"]>;
       };
+      bloom_appointment_line_items: {
+        Row: {
+          id: string;
+          appointmentId: string;
+          itemType: string;
+          serviceId: string | null;
+          productId: string | null;
+          name: string;
+          quantity: number;
+          unitPrice: number;
+          discountAmount: number;
+          totalAmount: number;
+          notes: string | null;
+          createdAt: string;
+          updatedAt: string;
+        };
+        Insert: Omit<Database["appointments"]["Tables"]["bloom_appointment_line_items"]["Row"], "id" | "createdAt" | "updatedAt">;
+        Update: Partial<Database["appointments"]["Tables"]["bloom_appointment_line_items"]["Insert"]>;
+      };
+      bloom_recurring_appointments: {
+        Row: {
+          id: string;
+          appointmentId: string;
+          clientId: string;
+          technicianId: string;
+          locationId: string;
+          serviceId: string;
+          recurrencePattern: string;
+          dayOfWeek: number;
+          preferredTime: string;
+          startDate: string;
+          endDate: string | null;
+          occurrences: number | null;
+          isActive: boolean;
+          createdAt: string;
+          updatedAt: string;
+        };
+        Insert: Omit<Database["appointments"]["Tables"]["bloom_recurring_appointments"]["Row"], "id" | "createdAt" | "updatedAt">;
+        Update: Partial<Database["appointments"]["Tables"]["bloom_recurring_appointments"]["Insert"]>;
+      };
+      bloom_products: {
+        Row: {
+          id: string;
+          name: string;
+          description: string | null;
+          price: number;
+          sku: string | null;
+          isActive: boolean;
+          createdAt: string;
+          updatedAt: string;
+        };
+        Insert: Omit<Database["appointments"]["Tables"]["bloom_products"]["Row"], "id" | "createdAt" | "updatedAt">;
+        Update: Partial<Database["appointments"]["Tables"]["bloom_products"]["Insert"]>;
+      };
     };
   };
 }
@@ -167,20 +222,21 @@ export const supabase = createClient<Database>(
   }
 );
 
-// Helper to generate CUID-like IDs (Prisma-compatible)
+// Generate cryptographically secure unique IDs using cuid2
+// These are collision-resistant, URL-safe, and sortable
 export function generateId(): string {
-  const timestamp = Date.now().toString(36);
-  const randomPart = Math.random().toString(36).substring(2, 15);
-  return `c${timestamp}${randomPart}`;
+  return createId();
 }
 
 // Table name helpers for the appointments schema
 export const tables = {
   clients: "bloom_clients",
   appointments: "bloom_appointments",
+  appointmentLineItems: "bloom_appointment_line_items",
   paymentMethods: "bloom_payment_methods",
   technicians: "bloom_technicians",
   services: "bloom_services",
+  products: "bloom_products",
   locations: "bloom_locations",
   technicianBlocks: "bloom_technician_blocks",
   technicianSchedules: "bloom_technician_schedules",

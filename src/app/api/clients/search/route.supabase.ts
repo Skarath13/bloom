@@ -5,6 +5,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase, tables } from "@/lib/supabase";
 
+interface PaymentMethod {
+  id: string;
+  brand: string;
+  last4: string;
+  isDefault: boolean;
+}
+
+interface ClientWithPayments {
+  id: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email: string | null;
+  bloom_payment_methods: PaymentMethod[];
+}
+
 /**
  * GET /api/clients/search
  * Search clients by name or phone (Supabase version)
@@ -44,7 +60,7 @@ export async function GET(request: NextRequest) {
       dbQuery = dbQuery.or(`firstName.ilike.%${query}%,lastName.ilike.%${query}%`);
     }
 
-    const { data: clients, error } = await dbQuery;
+    const { data: clients, error } = await dbQuery as { data: ClientWithPayments[] | null; error: unknown };
 
     if (error) {
       console.error("Search clients error:", error);

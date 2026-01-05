@@ -1,5 +1,61 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase, tables, generateId } from "@/lib/supabase";
+import { supabase, tables } from "@/lib/supabase";
+import {
+  createAppointmentWithCheck,
+  AppointmentConflictError,
+} from "@/lib/appointments";
+
+interface PaymentMethod {
+  id: string;
+  brand: string;
+  last4: string;
+  isDefault: boolean;
+}
+
+interface ClientData {
+  id: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email: string | null;
+  phoneVerified: boolean;
+  isBlocked: boolean;
+  stripeCustomerId: string | null;
+  bloom_payment_methods: PaymentMethod[];
+}
+
+interface ServiceData {
+  id: string;
+  name: string;
+  category: string;
+  durationMinutes: number;
+  price: number;
+  depositAmount: number;
+}
+
+interface TechnicianData {
+  id: string;
+  firstName: string;
+  lastName: string;
+  color: string;
+}
+
+interface LocationData {
+  id: string;
+  name: string;
+  city: string;
+}
+
+interface AppointmentWithRelations {
+  id: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+  bloom_clients: ClientData | null;
+  bloom_services: ServiceData | null;
+  bloom_technicians: TechnicianData | null;
+  bloom_locations: LocationData | null;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -83,7 +139,7 @@ export async function GET(request: NextRequest) {
         .lte("startTime", rangeEnd.toISOString());
     }
 
-    const { data: appointments, error } = await query;
+    const { data: appointments, error } = await query as { data: AppointmentWithRelations[] | null; error: { message: string } | null };
 
     if (error) {
       console.error("Fetch appointments error:", error);
@@ -126,6 +182,7 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/appointments
  * Create a new appointment (admin manual booking)
+ * Uses conflict checking to prevent double-booking
  */
 export async function POST(request: NextRequest) {
   try {
@@ -140,6 +197,7 @@ export async function POST(request: NextRequest) {
       status = "CONFIRMED",
       notes,
       noShowProtected = false,
+      bookedBy,
     } = body;
 
     // Validate required fields
@@ -155,7 +213,7 @@ export async function POST(request: NextRequest) {
       .from(tables.services)
       .select("*")
       .eq("id", serviceId)
-      .single();
+      .single() as { data: ServiceData | null; error: unknown };
 
     if (serviceError || !service) {
       return NextResponse.json(
@@ -164,76 +222,42 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create appointment
-    const appointmentId = generateId();
-    const now = new Date().toISOString();
-
-    const { data: appointment, error: createError } = await supabase
-      .from(tables.appointments)
-      .insert({
-        id: appointmentId,
-        clientId,
-        technicianId,
-        locationId,
-        serviceId,
-        startTime: new Date(startTime).toISOString(),
-        endTime: new Date(endTime).toISOString(),
-        status,
-        notes: notes || null,
-        noShowProtected,
-        noShowFeeCharged: false,
-        noShowFeeAmount: null,
-        noShowChargedAt: null,
-        depositAmount: service.depositAmount,
-        depositPaidAt: null,
-        stripePaymentIntentId: null,
-        reminder24hSent: false,
-        reminder2hSent: false,
-        confirmedAt: status === "CONFIRMED" ? now : null,
-        cancelledAt: null,
-        cancellationReason: null,
-        recurringAppointmentId: null,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .select(`
-        *,
-        bloom_clients (*),
-        bloom_services (*),
-        bloom_technicians (*),
-        bloom_locations (*)
-      `)
-      .single();
-
-    if (createError) {
-      console.error("Create appointment error:", createError);
-      return NextResponse.json(
-        { error: "Failed to create appointment" },
-        { status: 500 }
-      );
-    }
-
-    // Transform response
-    const transformedAppointment = {
-      ...appointment,
-      client: appointment.bloom_clients || null,
-      service: appointment.bloom_services || null,
-      technician: appointment.bloom_technicians || null,
-      location: appointment.bloom_locations || null,
-      bloom_clients: undefined,
-      bloom_services: undefined,
-      bloom_technicians: undefined,
-      bloom_locations: undefined,
-    };
+    // Create appointment with conflict checking
+    const appointment = await createAppointmentWithCheck({
+      clientId,
+      technicianId,
+      locationId,
+      serviceId,
+      startTime: new Date(startTime),
+      endTime: new Date(endTime),
+      status: status as "PENDING" | "CONFIRMED",
+      notes: notes || null,
+      noShowProtected,
+      bookedBy: bookedBy || "Admin",
+      depositAmount: service.depositAmount,
+    });
 
     return NextResponse.json({
       success: true,
-      appointment: transformedAppointment,
+      appointment,
     });
   } catch (error) {
     console.error("Create appointment error:", error);
+
+    // Handle conflict error specifically
+    if (error instanceof AppointmentConflictError) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          conflict: error.conflict,
+          code: "CONFLICT",
+        },
+        { status: 409 }
+      );
+    }
+
     return NextResponse.json(
-      { error: "Failed to create appointment" },
+      { error: error instanceof Error ? error.message : "Failed to create appointment" },
       { status: 500 }
     );
   }

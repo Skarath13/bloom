@@ -429,6 +429,53 @@ export default function CalendarPage() {
             setCharging(false);
           }
         }}
+        onAddCard={async (clientId) => {
+          // Refresh the appointment to get updated payment methods
+          if (selectedAppointment) {
+            await fetchAppointmentById(selectedAppointment.id);
+          }
+          toast.success("Card setup initiated");
+        }}
+        onRemoveCard={async (paymentMethodId) => {
+          try {
+            const response = await fetch(`/api/payment-methods/${paymentMethodId}`, {
+              method: "DELETE",
+            });
+            if (!response.ok) throw new Error("Failed to remove card");
+            toast.success("Card removed");
+            // Refresh the appointment to get updated payment methods
+            if (selectedAppointment) {
+              await fetchAppointmentById(selectedAppointment.id);
+            }
+          } catch (error) {
+            console.error("Failed to remove card:", error);
+            toast.error("Failed to remove card");
+            throw error;
+          }
+        }}
+        onUpdateClientNotes={async (clientId, notes) => {
+          try {
+            const response = await fetch(`/api/clients/${clientId}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ notes }),
+            });
+            if (!response.ok) throw new Error("Failed to update client notes");
+            toast.success("Client notes updated");
+            // Refresh the appointment to get updated client data
+            if (selectedAppointment) {
+              await fetchAppointmentById(selectedAppointment.id);
+            }
+          } catch (error) {
+            console.error("Failed to update client notes:", error);
+            toast.error("Failed to update client notes");
+            throw error;
+          }
+        }}
+        onNavigateToAppointment={(appointmentId) => {
+          // Navigate to the appointment by fetching and displaying it
+          fetchAppointmentById(appointmentId);
+        }}
         saving={saving}
       />
 

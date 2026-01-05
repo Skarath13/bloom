@@ -1,8 +1,66 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import { supabase, tables } from "@/lib/supabase";
 import { createRefund } from "@/lib/stripe";
 import { sendCancellationNotification } from "@/lib/twilio";
 import { differenceInHours } from "date-fns";
+import {
+  updateAppointmentWithCheck,
+  AppointmentConflictError,
+  AppointmentNotFoundError,
+  AppointmentStaleError,
+} from "@/lib/appointments";
+
+interface PaymentMethod {
+  id: string;
+  stripePaymentMethodId: string;
+  brand: string;
+  last4: string;
+  isDefault: boolean;
+}
+
+interface ClientData {
+  id: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email: string | null;
+  stripeCustomerId: string | null;
+  bloom_payment_methods: PaymentMethod[];
+}
+
+interface ServiceData {
+  id: string;
+  name: string;
+  price: number;
+  durationMinutes: number;
+}
+
+interface TechnicianData {
+  id: string;
+  firstName: string;
+  lastName: string;
+  color: string;
+}
+
+interface LocationData {
+  id: string;
+  name: string;
+  city: string;
+}
+
+interface AppointmentWithRelations {
+  id: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+  stripePaymentIntentId: string | null;
+  depositAmount: number;
+  depositPaidAt: string | null;
+  bloom_clients: ClientData | null;
+  bloom_services: ServiceData | null;
+  bloom_technicians: TechnicianData | null;
+  bloom_locations: LocationData | null;
+}
 
 export async function GET(
   request: NextRequest,
@@ -11,28 +69,43 @@ export async function GET(
   try {
     const { id } = await context.params;
 
-    const appointment = await prisma.appointment.findUnique({
-      where: { id },
-      include: {
-        client: {
-          include: {
-            paymentMethods: true,
-          },
-        },
-        service: true,
-        technician: true,
-        location: true,
-      },
-    });
+    const { data: appointment, error } = await supabase
+      .from(tables.appointments)
+      .select(`
+        *,
+        bloom_clients (
+          *,
+          bloom_payment_methods (*)
+        ),
+        bloom_services (*),
+        bloom_technicians (*),
+        bloom_locations (*)
+      `)
+      .eq("id", id)
+      .single() as { data: AppointmentWithRelations | null; error: unknown };
 
-    if (!appointment) {
+    if (error || !appointment) {
       return NextResponse.json(
         { error: "Appointment not found" },
         { status: 404 }
       );
     }
 
-    return NextResponse.json({ appointment });
+    // Transform to expected format
+    const transformed = {
+      ...appointment,
+      client: appointment.bloom_clients
+        ? {
+            ...appointment.bloom_clients,
+            paymentMethods: appointment.bloom_clients.bloom_payment_methods || [],
+          }
+        : null,
+      service: appointment.bloom_services || null,
+      technician: appointment.bloom_technicians || null,
+      location: appointment.bloom_locations || null,
+    };
+
+    return NextResponse.json({ appointment: transformed });
   } catch (error) {
     console.error("Fetch appointment error:", error);
     return NextResponse.json(
@@ -42,6 +115,10 @@ export async function GET(
   }
 }
 
+/**
+ * PATCH /api/appointments/[id]
+ * Update an appointment with conflict checking and optimistic locking
+ */
 export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -50,55 +127,52 @@ export async function PATCH(
     const { id } = await context.params;
     const body = await request.json();
 
-    // Get current appointment
-    const currentAppointment = await prisma.appointment.findUnique({
-      where: { id },
-    });
-
-    if (!currentAppointment) {
-      return NextResponse.json(
-        { error: "Appointment not found" },
-        { status: 404 }
-      );
-    }
-
-    // Build update data
-    const updateData: Record<string, unknown> = {};
-
-    if (body.technicianId !== undefined) {
-      updateData.technicianId = body.technicianId;
-    }
-
-    if (body.startTime !== undefined) {
-      updateData.startTime = new Date(body.startTime);
-    }
-
-    if (body.endTime !== undefined) {
-      updateData.endTime = new Date(body.endTime);
-    }
-
-    if (body.status !== undefined) {
-      updateData.status = body.status;
-    }
-
-    if (body.notes !== undefined) {
-      updateData.notes = body.notes;
-    }
-
-    const appointment = await prisma.appointment.update({
-      where: { id },
-      data: updateData,
-      include: {
-        client: true,
-        service: true,
-        technician: true,
-        location: true,
+    // Use the safe update function with conflict checking
+    const appointment = await updateAppointmentWithCheck({
+      appointmentId: id,
+      expectedUpdatedAt: body.expectedUpdatedAt, // For optimistic locking
+      data: {
+        technicianId: body.technicianId,
+        startTime: body.startTime ? new Date(body.startTime) : undefined,
+        endTime: body.endTime ? new Date(body.endTime) : undefined,
+        status: body.status,
+        notes: body.notes,
       },
     });
 
     return NextResponse.json({ appointment });
   } catch (error) {
     console.error("Update appointment error:", error);
+
+    // Handle specific error types
+    if (error instanceof AppointmentConflictError) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          conflict: error.conflict,
+          code: "CONFLICT",
+        },
+        { status: 409 }
+      );
+    }
+
+    if (error instanceof AppointmentStaleError) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          code: "STALE",
+        },
+        { status: 409 }
+      );
+    }
+
+    if (error instanceof AppointmentNotFoundError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 404 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Failed to update appointment" },
       { status: 500 }
@@ -115,15 +189,18 @@ export async function DELETE(
     const searchParams = request.nextUrl.searchParams;
     const forceRefund = searchParams.get("forceRefund") === "true";
 
-    const appointment = await prisma.appointment.findUnique({
-      where: { id },
-      include: {
-        client: true,
-        service: true,
-      },
-    });
+    // Get appointment with client and service
+    const { data: appointment, error: fetchError } = await supabase
+      .from(tables.appointments)
+      .select(`
+        *,
+        bloom_clients (*),
+        bloom_services (*)
+      `)
+      .eq("id", id)
+      .single() as { data: AppointmentWithRelations | null; error: unknown };
 
-    if (!appointment) {
+    if (fetchError || !appointment) {
       return NextResponse.json(
         { error: "Appointment not found" },
         { status: 404 }
@@ -132,7 +209,7 @@ export async function DELETE(
 
     // Check cancellation policy (6 hours)
     const hoursUntilAppointment = differenceInHours(
-      appointment.startTime,
+      new Date(appointment.startTime),
       new Date()
     );
     const canRefund = hoursUntilAppointment >= 6 || forceRefund;
@@ -150,27 +227,44 @@ export async function DELETE(
     }
 
     // Update appointment status
-    await prisma.appointment.update({
-      where: { id },
-      data: {
+    const { error: updateError } = await supabase
+      .from(tables.appointments)
+      // @ts-expect-error - Supabase types don't resolve dynamic table names correctly
+      .update({
         status: "CANCELLED",
-        cancelledAt: new Date(),
+        cancelledAt: new Date().toISOString(),
         cancellationReason: forceRefund
           ? "Cancelled by admin with refund"
           : canRefund
           ? "Cancelled by client (more than 6 hours notice)"
           : "Cancelled by client (deposit forfeited)",
-      },
-    });
+        updatedAt: new Date().toISOString(),
+      })
+      .eq("id", id);
+
+    if (updateError) {
+      console.error("Cancel appointment error:", updateError);
+      return NextResponse.json(
+        { error: "Failed to cancel appointment" },
+        { status: 500 }
+      );
+    }
 
     // Send cancellation SMS
-    await sendCancellationNotification({
-      phone: appointment.client.phone,
-      clientName: appointment.client.firstName,
-      serviceName: appointment.service.name,
-      dateTime: appointment.startTime,
-      refundAmount: canRefund ? refundAmount : undefined,
-    });
+    if (appointment.bloom_clients && appointment.bloom_services) {
+      try {
+        await sendCancellationNotification({
+          phone: appointment.bloom_clients.phone,
+          clientName: appointment.bloom_clients.firstName,
+          serviceName: appointment.bloom_services.name,
+          dateTime: new Date(appointment.startTime),
+          refundAmount: canRefund ? refundAmount : undefined,
+        });
+      } catch (smsError) {
+        console.error("Failed to send cancellation SMS:", smsError);
+        // Don't fail the request if SMS fails
+      }
+    }
 
     return NextResponse.json({
       success: true,
