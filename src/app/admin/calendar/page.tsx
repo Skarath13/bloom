@@ -7,7 +7,7 @@ import { ResourceCalendar } from "@/components/calendar/resource-calendar";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { AppointmentDetailsDialog } from "@/components/calendar/appointment-details-dialog";
-import { ManualBookingDialog } from "@/components/admin/manual-booking-dialog";
+import { CreateEventDialog } from "@/components/calendar/create-event-dialog";
 import { StaffScheduleDialog } from "@/components/calendar/staff-schedule-dialog";
 import { useRealtimeAppointments } from "@/hooks/use-realtime-appointments";
 import { useRealtimeTechnicians } from "@/hooks/use-realtime-technicians";
@@ -479,15 +479,19 @@ function CalendarContent() {
         saving={saving}
       />
 
-      {/* New appointment dialog */}
+      {/* Create event dialog (appointments + personal events) */}
       {newAppointmentSlot && (
-        <ManualBookingDialog
+        <CreateEventDialog
           open={!!newAppointmentSlot}
           onClose={() => setNewAppointmentSlot(null)}
           technicianId={newAppointmentSlot.technicianId}
           technicianName={`${newTech?.firstName || ""} ${newTech?.lastName || ""}`}
+          technicianColor={newTech?.color || "#8B687A"}
           locationId={selectedLocationId}
+          locationName={locations.find(l => l.id === selectedLocationId)?.name || ""}
           time={newAppointmentSlot.time}
+          locations={locations}
+          technicians={technicians}
           onSuccess={fetchAppointments}
         />
       )}
