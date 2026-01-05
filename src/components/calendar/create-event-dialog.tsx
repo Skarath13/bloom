@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
+import { DatePicker } from "@/components/ui/date-picker";
+import { TimePicker } from "@/components/ui/time-picker";
 import {
   X,
   Loader2,
@@ -543,7 +545,7 @@ export function CreateEventDialog({
         </button>
 
         <h2 className="absolute left-1/2 -translate-x-1/2 text-xl font-bold text-gray-900">
-          {eventType === "appointment" ? "Create appointment" : "Create personal event"}
+          {eventType === "appointment" ? "Create Appointment" : "Create Personal Event"}
         </h2>
 
         <button
@@ -738,25 +740,15 @@ export function CreateEventDialog({
                   <div className="grid grid-cols-[200px_1fr] border-b border-gray-300">
                     <div className="px-4 py-3 bg-gray-50 text-sm font-medium text-gray-700">Date & time</div>
                     <div className="px-4 py-3 flex items-center gap-2">
-                      <input
-                        type="date"
-                        value={appointmentDate}
-                        onChange={(e) => setAppointmentDate(e.target.value)}
-                        className="text-sm border border-gray-300 rounded px-2 py-1"
+                      <DatePicker
+                        date={appointmentDate ? new Date(appointmentDate + "T00:00:00") : undefined}
+                        onDateChange={(date) => setAppointmentDate(date ? format(date, "yyyy-MM-dd") : "")}
                       />
                       <span className="text-gray-400">at</span>
-                      <Select value={appointmentTime} onValueChange={setAppointmentTime}>
-                        <SelectTrigger className="w-28 h-8 text-sm">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-60">
-                          {TIME_OPTIONS.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <TimePicker
+                        time={appointmentTime}
+                        onTimeChange={setAppointmentTime}
+                      />
                     </div>
                   </div>
                   {/* Repeat every - shown when repeat is checked */}
@@ -825,12 +817,10 @@ export function CreateEventDialog({
                         <div className="grid grid-cols-[200px_1fr] border-b border-gray-300">
                           <div className="px-4 py-3 bg-gray-50 text-sm font-medium text-gray-700">End date</div>
                           <div className="px-4 py-3">
-                            <input
-                              type="date"
-                              value={repeatEndDate}
-                              onChange={(e) => setRepeatEndDate(e.target.value)}
-                              min={appointmentDate}
-                              className="text-sm border border-gray-300 rounded px-2 py-1"
+                            <DatePicker
+                              date={repeatEndDate ? new Date(repeatEndDate + "T00:00:00") : undefined}
+                              onDateChange={(date) => setRepeatEndDate(date ? format(date, "yyyy-MM-dd") : "")}
+                              minDate={appointmentDate ? new Date(appointmentDate + "T00:00:00") : undefined}
                             />
                           </div>
                         </div>
@@ -1126,22 +1116,24 @@ export function CreateEventDialog({
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Start date</label>
-                    <input
-                      type="date"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="w-full h-10 px-3 border border-gray-300 rounded-lg text-sm"
-                    />
+                    <div className="w-full h-10 px-3 border border-gray-300 rounded-lg flex items-center">
+                      <DatePicker
+                        date={startDate ? new Date(startDate + "T00:00:00") : undefined}
+                        onDateChange={(date) => setStartDate(date ? format(date, "yyyy-MM-dd") : "")}
+                        formatStr="EEE, MMM d, yyyy"
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">End date</label>
-                    <input
-                      type="date"
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      min={startDate}
-                      className="w-full h-10 px-3 border border-gray-300 rounded-lg text-sm"
-                    />
+                    <div className="w-full h-10 px-3 border border-gray-300 rounded-lg flex items-center">
+                      <DatePicker
+                        date={endDate ? new Date(endDate + "T00:00:00") : undefined}
+                        onDateChange={(date) => setEndDate(date ? format(date, "yyyy-MM-dd") : "")}
+                        minDate={startDate ? new Date(startDate + "T00:00:00") : undefined}
+                        formatStr="EEE, MMM d, yyyy"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -1149,33 +1141,21 @@ export function CreateEventDialog({
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
                       <label className="block text-xs text-gray-500 mb-1">Start time</label>
-                      <Select value={startTime} onValueChange={setStartTime}>
-                        <SelectTrigger className="h-10 w-full justify-between">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-60">
-                          {TIME_OPTIONS.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="w-full h-10 px-3 border border-gray-300 rounded-lg flex items-center">
+                        <TimePicker
+                          time={startTime}
+                          onTimeChange={setStartTime}
+                        />
+                      </div>
                     </div>
                     <div>
                       <label className="block text-xs text-gray-500 mb-1">End time</label>
-                      <Select value={endTime} onValueChange={setEndTime}>
-                        <SelectTrigger className="h-10 w-full justify-between">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-60">
-                          {TIME_OPTIONS.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="w-full h-10 px-3 border border-gray-300 rounded-lg flex items-center">
+                        <TimePicker
+                          time={endTime}
+                          onTimeChange={setEndTime}
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1365,12 +1345,13 @@ export function CreateEventDialog({
 
                     {repetition.ends === "on_date" && (
                       <div className="mt-3">
-                        <input
-                          type="date"
-                          value={repetition.endDate || ""}
-                          onChange={(e) => setRepetition((p) => ({ ...p, endDate: e.target.value }))}
-                          className="w-full h-10 px-3 border border-gray-300 rounded-lg text-sm"
-                        />
+                        <div className="w-full h-10 px-3 border border-gray-300 rounded-lg flex items-center">
+                          <DatePicker
+                            date={repetition.endDate ? new Date(repetition.endDate + "T00:00:00") : undefined}
+                            onDateChange={(date) => setRepetition((p) => ({ ...p, endDate: date ? format(date, "yyyy-MM-dd") : "" }))}
+                            formatStr="EEE, MMM d, yyyy"
+                          />
+                        </div>
                       </div>
                     )}
                   </div>

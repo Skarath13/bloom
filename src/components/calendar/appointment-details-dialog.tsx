@@ -11,6 +11,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DatePicker } from "@/components/ui/date-picker";
+import { TimePicker } from "@/components/ui/time-picker";
 import {
   Search,
   X,
@@ -120,7 +122,7 @@ interface RecurringSettings {
 interface AppointmentDetailsDialogProps {
   appointment: Appointment | null;
   onClose: () => void;
-  onSave: (data: { status: string; notes: string; endTime?: Date }) => Promise<void>;
+  onSave: (data: { status: string; notes: string; startTime?: Date; endTime?: Date }) => Promise<void>;
   onCancel: () => Promise<void>;
   onChargeNoShow: (amount: number, reason: string) => Promise<void>;
   onTakePayment?: () => void;
@@ -167,9 +169,13 @@ export function AppointmentDetailsDialog({
   const [editingNotes, setEditingNotes] = useState("");
   const [editingStatus, setEditingStatus] = useState("");
   const [editingDuration, setEditingDuration] = useState(60);
+  const [editingTime, setEditingTime] = useState("");
+  const [editingDate, setEditingDate] = useState("");
   const [originalNotes, setOriginalNotes] = useState("");
   const [originalStatus, setOriginalStatus] = useState("");
   const [originalDuration, setOriginalDuration] = useState(60);
+  const [originalTime, setOriginalTime] = useState("");
+  const [originalDate, setOriginalDate] = useState("");
   const [appointmentHistory, setAppointmentHistory] = useState<AppointmentHistory[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -196,12 +202,18 @@ export function AppointmentDetailsDialog({
       const notes = appointment.notes || "";
       const duration = appointment.service?.durationMinutes ||
         Math.round((appointment.endTime.getTime() - appointment.startTime.getTime()) / 60000);
+      const timeStr = format(appointment.startTime, "HH:mm");
+      const dateStr = format(appointment.startTime, "yyyy-MM-dd");
       setEditingNotes(notes);
       setOriginalNotes(notes);
       setEditingStatus(appointment.status);
       setOriginalStatus(appointment.status);
       setEditingDuration(duration);
       setOriginalDuration(duration);
+      setEditingTime(timeStr);
+      setOriginalTime(timeStr);
+      setEditingDate(dateStr);
+      setOriginalDate(dateStr);
       fetchAppointmentHistory();
       fetchLineItems();
       fetchRecurringSettings();
@@ -237,7 +249,9 @@ export function AppointmentDetailsDialog({
   // Check if there are unsaved changes
   const hasChanges = editingNotes !== originalNotes ||
     editingStatus !== originalStatus ||
-    editingDuration !== originalDuration;
+    editingDuration !== originalDuration ||
+    editingTime !== originalTime ||
+    editingDate !== originalDate;
 
   const fetchAppointmentHistory = async () => {
     if (!appointment?.client?.id) return;
@@ -256,12 +270,24 @@ export function AppointmentDetailsDialog({
   };
 
   const handleSave = async () => {
-    // Calculate new end time if duration changed
-    let newEndTime: Date | undefined;
-    if (editingDuration !== originalDuration && appointment) {
-      newEndTime = new Date(appointment.startTime.getTime() + editingDuration * 60000);
+    if (!appointment) return;
+
+    // Calculate new start time if date or time changed
+    let newStartTime: Date | undefined;
+    if (editingDate !== originalDate || editingTime !== originalTime) {
+      const [hours, minutes] = editingTime.split(":").map(Number);
+      newStartTime = new Date(editingDate + "T00:00:00");
+      newStartTime.setHours(hours, minutes, 0, 0);
     }
-    await onSave({ status: editingStatus, notes: editingNotes, endTime: newEndTime });
+
+    // Calculate new end time based on duration and possibly new start time
+    let newEndTime: Date | undefined;
+    const baseStartTime = newStartTime || appointment.startTime;
+    if (editingDuration !== originalDuration || editingDate !== originalDate || editingTime !== originalTime) {
+      newEndTime = new Date(baseStartTime.getTime() + editingDuration * 60000);
+    }
+
+    await onSave({ status: editingStatus, notes: editingNotes, startTime: newStartTime, endTime: newEndTime });
   };
 
   const handleRemoveCard = async (paymentMethodId: string) => {
@@ -563,9 +589,15 @@ export function AppointmentDetailsDialog({
                   </div>
                   <div className="px-4 py-3 text-sm text-gray-900 flex items-center justify-between border-b border-gray-300">
                     <div className="flex items-center gap-4">
-                      <span>{format(appointment.startTime, "M/d/yy")}</span>
+                      <DatePicker
+                        date={editingDate ? new Date(editingDate + "T00:00:00") : undefined}
+                        onDateChange={(date) => setEditingDate(date ? format(date, "yyyy-MM-dd") : "")}
+                      />
                       <span className="text-gray-400">at</span>
-                      <span>{format(appointment.startTime, "h:mm a").toLowerCase()}</span>
+                      <TimePicker
+                        time={editingTime}
+                        onTimeChange={setEditingTime}
+                      />
                     </div>
                     <button
                       onClick={() => setShowRescheduleModal(true)}
@@ -1328,13 +1360,14 @@ function RescheduleModal({ appointment, onClose, onReschedule }: RescheduleModal
           {/* Date selector */}
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">Select Date</label>
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              min={format(new Date(), "yyyy-MM-dd")}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
+            <div className="w-full px-3 py-2 border border-gray-300 rounded-lg flex items-center">
+              <DatePicker
+                date={selectedDate ? new Date(selectedDate + "T00:00:00") : undefined}
+                onDateChange={(date) => setSelectedDate(date ? format(date, "yyyy-MM-dd") : "")}
+                minDate={new Date()}
+                formatStr="EEE, MMM d, yyyy"
+              />
+            </div>
           </div>
 
           {/* Time slots */}
