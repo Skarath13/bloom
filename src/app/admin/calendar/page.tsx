@@ -9,6 +9,7 @@ import { Loader2 } from "lucide-react";
 import { AppointmentDetailsDialog } from "@/components/calendar/appointment-details-dialog";
 import { CreateEventDialog } from "@/components/calendar/create-event-dialog";
 import { StaffScheduleDialog } from "@/components/calendar/staff-schedule-dialog";
+import { PersonalEventDialog } from "@/components/calendar/personal-event-dialog";
 import { useRealtimeAppointments } from "@/hooks/use-realtime-appointments";
 import { useRealtimeTechnicians } from "@/hooks/use-realtime-technicians";
 
@@ -87,6 +88,16 @@ interface Appointment {
   };
 }
 
+interface TechnicianBlock {
+  id: string;
+  technicianId: string;
+  title: string;
+  blockType: string;
+  startTime: Date;
+  endTime: Date;
+  isActive: boolean;
+}
+
 // localStorage keys for persisting calendar state
 const STORAGE_KEYS = {
   locationId: "bloom_calendar_locationId",
@@ -102,6 +113,8 @@ function CalendarContent() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [blocks, setBlocks] = useState<TechnicianBlock[]>([]);
+  const [selectedBlock, setSelectedBlock] = useState<TechnicianBlock | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Initialize from localStorage (client-side only)
@@ -241,6 +254,46 @@ function CalendarContent() {
     fetchAppointments();
   }, [fetchAppointments]);
 
+  // Fetch technician blocks when location or date changes
+  const fetchBlocks = useCallback(async () => {
+    if (!selectedLocationId) return;
+
+    try {
+      const dateStr = format(selectedDate, "yyyy-MM-dd");
+
+      // Fetch all blocks for the selected date
+      const response = await fetch(
+        `/api/technician-blocks?startDate=${dateStr}&endDate=${dateStr}`
+      );
+      const data = await response.json();
+      if (data.blocks) {
+        setBlocks(
+          data.blocks.map((block: Record<string, unknown>) => ({
+            id: block.id,
+            technicianId: block.technicianId,
+            title: block.title,
+            blockType: block.blockType,
+            startTime: new Date(block.startTime as string),
+            endTime: new Date(block.endTime as string),
+            isActive: block.isActive,
+          }))
+        );
+      }
+    } catch (error) {
+      console.error("Failed to fetch technician blocks:", error);
+    }
+  }, [selectedLocationId, selectedDate]);
+
+  useEffect(() => {
+    fetchBlocks();
+  }, [fetchBlocks]);
+
+  // Combined refresh function for after creating events
+  const refreshCalendarData = useCallback(() => {
+    fetchAppointments();
+    fetchBlocks();
+  }, [fetchAppointments, fetchBlocks]);
+
   // Fetch a specific appointment by ID (for deep linking)
   const fetchAppointmentById = useCallback(async (appointmentId: string) => {
     try {
@@ -336,6 +389,10 @@ function CalendarContent() {
     setNewAppointmentSlot({ technicianId, time });
   };
 
+  const handleBlockClick = (block: TechnicianBlock) => {
+    setSelectedBlock(block);
+  };
+
   const newTech = technicians.find((t) => t.id === newAppointmentSlot?.technicianId);
 
   if (loading && locations.length === 0) {
@@ -352,11 +409,13 @@ function CalendarContent() {
         locations={locations}
         technicians={technicians}
         appointments={appointments}
+        blocks={blocks}
         selectedLocationId={selectedLocationId}
         selectedDate={selectedDate}
         onLocationChange={handleLocationChange}
         onDateChange={handleDateChange}
         onAppointmentClick={handleAppointmentClick}
+        onBlockClick={handleBlockClick}
         onSlotClick={handleSlotClick}
         onScheduleClick={() => setScheduleDialogOpen(true)}
       />
@@ -492,7 +551,7 @@ function CalendarContent() {
           time={newAppointmentSlot.time}
           locations={locations}
           technicians={technicians}
-          onSuccess={fetchAppointments}
+          onSuccess={refreshCalendarData}
         />
       )}
 
@@ -504,6 +563,15 @@ function CalendarContent() {
         locations={locations}
         selectedLocationId={selectedLocationId}
         selectedDate={selectedDate}
+      />
+
+      {/* Personal event dialog */}
+      <PersonalEventDialog
+        block={selectedBlock}
+        technicians={technicians}
+        onClose={() => setSelectedBlock(null)}
+        onSave={refreshCalendarData}
+        onDelete={refreshCalendarData}
       />
     </div>
   );

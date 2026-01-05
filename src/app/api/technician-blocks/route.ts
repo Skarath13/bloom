@@ -38,9 +38,9 @@ export async function GET(request: NextRequest) {
     }
 
     if (startDate && endDate) {
-      // Filter blocks that overlap with the date range
+      // Filter blocks that start within the date range
       query = query
-        .or(`startTime.gte.${startDate}T00:00:00,endTime.gte.${startDate}T00:00:00`)
+        .gte("startTime", `${startDate}T00:00:00`)
         .lte("startTime", `${endDate}T23:59:59`);
     }
 

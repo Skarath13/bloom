@@ -483,7 +483,7 @@ export function AppointmentDetailsDialog({
         {/* Left: Close button */}
         <button
           onClick={onClose}
-          className="w-10 h-10 flex items-center justify-center rounded-full border border-gray-300 hover:bg-gray-50 transition-colors cursor-pointer"
+          className="w-10 h-10 flex items-center justify-center rounded-full border border-gray-300 hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer"
         >
           <X className="h-5 w-5 text-gray-600" />
         </button>
@@ -547,7 +547,7 @@ export function AppointmentDetailsDialog({
                 </span>
               </div>
 
-              <div className="border border-gray-300 rounded">
+              <div className="border border-gray-300 rounded-lg overflow-hidden">
                 {/* Name row */}
                 <div className="grid grid-cols-[200px_1fr]">
                   <div className="px-4 py-3 bg-gray-100 text-sm font-medium text-gray-700 border-b border-gray-300">
@@ -581,7 +581,7 @@ export function AppointmentDetailsDialog({
                 <h3 className="text-lg font-normal text-gray-900">Appointment Details</h3>
               </div>
 
-              <div className="border border-gray-300 rounded">
+              <div className="border border-gray-300 rounded-lg overflow-hidden">
                 {/* Date & time */}
                 <div className="grid grid-cols-[200px_1fr]">
                   <div className="px-4 py-3 bg-gray-100 text-sm font-medium text-gray-700 border-b border-gray-300">
@@ -644,7 +644,7 @@ export function AppointmentDetailsDialog({
                     )}
                     <button
                       onClick={() => setShowRecurringModal(true)}
-                      className="text-sm text-blue-600 hover:text-blue-700 cursor-pointer"
+                      className="text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 active:bg-blue-100 px-2 py-1 -mx-2 rounded transition-colors cursor-pointer"
                     >
                       {recurringSettings ? "Edit" : "Set up repeat"}
                     </button>
@@ -690,7 +690,7 @@ export function AppointmentDetailsDialog({
 
             {/* Services Table */}
             <div className="mb-6 relative">
-              <div className="border border-gray-300 rounded overflow-hidden">
+              <div className="border border-gray-300 rounded-lg overflow-hidden">
                 {/* Header row */}
                 <div className="grid grid-cols-[1fr_180px_100px] border-b-2 border-gray-300 bg-gray-50">
                   <div className="px-4 py-3 text-sm font-medium text-gray-900">Services</div>
@@ -699,7 +699,7 @@ export function AppointmentDetailsDialog({
                 </div>
 
                 {/* Primary Service row */}
-                <div className="grid grid-cols-[1fr_180px_100px] border-b border-gray-300 relative group">
+                <div className="grid grid-cols-[1fr_180px_100px] border-b border-gray-300 relative group hover:bg-gray-50 transition-colors">
                   <div className="px-4 py-4">
                     <div className="text-sm text-gray-900 leading-snug">
                       {appointment.serviceName}
@@ -759,7 +759,7 @@ export function AppointmentDetailsDialog({
                 {lineItems
                   .filter(item => item.itemType === "service")
                   .map((item) => (
-                    <div key={item.id} className="grid grid-cols-[1fr_180px_100px] border-b border-gray-300 relative group">
+                    <div key={item.id} className="grid grid-cols-[1fr_180px_100px] border-b border-gray-300 relative group hover:bg-gray-50 transition-colors">
                       <div className="px-4 py-4">
                         <div className="text-sm text-gray-900 leading-snug">
                           {item.name}
@@ -776,7 +776,7 @@ export function AppointmentDetailsDialog({
                         <button
                           onClick={() => handleRemoveLineItem(item.id)}
                           disabled={removingLineItem === item.id}
-                          className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-opacity cursor-pointer disabled:opacity-50"
+                          className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 active:text-red-600 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {removingLineItem === item.id ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
@@ -792,7 +792,7 @@ export function AppointmentDetailsDialog({
                 <div className="px-4 py-3">
                   <button
                     onClick={() => setShowAddServiceModal(true)}
-                    className="text-sm text-gray-700 hover:text-gray-900 cursor-pointer"
+                    className="text-sm text-gray-700 hover:text-gray-900 hover:bg-gray-50 active:bg-gray-100 px-2 py-1 -mx-2 rounded transition-colors cursor-pointer"
                   >
                     Add a service
                   </button>
@@ -801,7 +801,7 @@ export function AppointmentDetailsDialog({
             </div>
 
             {/* Items Table */}
-            <div className="mb-6 border border-gray-300 rounded overflow-hidden">
+            <div className="mb-6 border border-gray-300 rounded-lg overflow-hidden">
               {/* Header row */}
               <div className="grid grid-cols-[1fr_100px_100px_100px] border-b-2 border-gray-300 bg-gray-50">
                 <div className="px-4 py-3 text-sm font-medium text-gray-900">Items</div>
@@ -814,7 +814,7 @@ export function AppointmentDetailsDialog({
               {lineItems
                 .filter(item => item.itemType === "product")
                 .map((item) => (
-                  <div key={item.id} className="grid grid-cols-[1fr_100px_100px_100px] border-b border-gray-300 relative group">
+                  <div key={item.id} className="grid grid-cols-[1fr_100px_100px_100px] border-b border-gray-300 relative group hover:bg-gray-50 transition-colors">
                     <div className="px-4 py-3 text-sm text-gray-900">{item.name}</div>
                     <div className="px-4 py-3 text-sm text-gray-600 border-l border-gray-300">{item.quantity}</div>
                     <div className="px-4 py-3 text-sm text-gray-600 border-l border-gray-300">${item.unitPrice.toFixed(2)}</div>
@@ -823,7 +823,7 @@ export function AppointmentDetailsDialog({
                       <button
                         onClick={() => handleRemoveLineItem(item.id)}
                         disabled={removingLineItem === item.id}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-opacity cursor-pointer disabled:opacity-50"
+                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 active:text-red-600 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {removingLineItem === item.id ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -839,7 +839,7 @@ export function AppointmentDetailsDialog({
               <div className="px-4 py-3">
                 <button
                   onClick={() => setShowAddItemModal(true)}
-                  className="text-sm text-gray-700 hover:text-gray-900 cursor-pointer"
+                  className="text-sm text-gray-700 hover:text-gray-900 hover:bg-gray-50 active:bg-gray-100 px-2 py-1 -mx-2 rounded transition-colors cursor-pointer"
                 >
                   Add an item
                 </button>
@@ -847,12 +847,12 @@ export function AppointmentDetailsDialog({
             </div>
 
             {/* Totals */}
-            <div className="border border-gray-300 rounded overflow-hidden">
+            <div className="border border-gray-300 rounded-lg overflow-hidden">
               {/* Discount line items */}
               {lineItems
                 .filter(item => item.itemType === "discount")
                 .map((item) => (
-                  <div key={item.id} className="grid grid-cols-[1fr_1fr] border-b border-gray-300 relative group">
+                  <div key={item.id} className="grid grid-cols-[1fr_1fr] border-b border-gray-300 relative group hover:bg-gray-50 transition-colors">
                     <div className="bg-gray-100 border-r border-gray-300 min-h-[44px]"></div>
                     <div className="px-4 py-3 flex justify-between items-center">
                       <span className="text-sm text-gray-700">{item.name}</span>
@@ -861,7 +861,7 @@ export function AppointmentDetailsDialog({
                         <button
                           onClick={() => handleRemoveLineItem(item.id)}
                           disabled={removingLineItem === item.id}
-                          className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-opacity cursor-pointer disabled:opacity-50"
+                          className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 active:text-red-600 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {removingLineItem === item.id ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
@@ -915,7 +915,7 @@ export function AppointmentDetailsDialog({
                 {onUpdateClientNotes && !editingClientNotes && (
                   <button
                     onClick={handleEditClientNotes}
-                    className="text-sm text-blue-600 hover:text-blue-700 cursor-pointer"
+                    className="text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 active:bg-blue-100 px-2 py-1 -mx-2 rounded transition-colors cursor-pointer"
                   >
                     {appointment.client?.notes ? "Edit" : "Add a note"}
                   </button>
@@ -971,7 +971,7 @@ export function AppointmentDetailsDialog({
                 {onAddCard && (
                   <button
                     onClick={handleAddCard}
-                    className="text-sm text-blue-600 hover:text-blue-700 cursor-pointer"
+                    className="text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 active:bg-blue-100 px-2 py-1 -mx-2 rounded transition-colors cursor-pointer"
                   >
                     Add card
                   </button>
@@ -1127,7 +1127,7 @@ export function AppointmentDetailsDialog({
               <button
                 onClick={handleCancelConfirm}
                 disabled={processing}
-                className="h-9 px-4 rounded-full bg-red-600 hover:bg-red-700 text-sm font-medium text-white transition-colors disabled:opacity-50 cursor-pointer"
+                className="h-9 px-4 rounded-full bg-red-600 hover:bg-red-700 active:bg-red-800 text-sm font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Cancel Appointment"}
               </button>
@@ -1186,7 +1186,7 @@ export function AppointmentDetailsDialog({
               <button
                 onClick={handleNoShowConfirm}
                 disabled={processing}
-                className="h-9 px-4 rounded-full bg-amber-600 hover:bg-amber-700 text-sm font-medium text-white transition-colors disabled:opacity-50 cursor-pointer"
+                className="h-9 px-4 rounded-full bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-sm font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Mark No-Show"}
               </button>
@@ -1351,7 +1351,7 @@ function RescheduleModal({ appointment, onClose, onReschedule }: RescheduleModal
       <div className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4">
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900">Find Availability</h3>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer">
+          <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 active:bg-gray-200 rounded-full transition-colors cursor-pointer">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -1414,7 +1414,7 @@ function RescheduleModal({ appointment, onClose, onReschedule }: RescheduleModal
           <button
             onClick={handleReschedule}
             disabled={!selectedTime || saving}
-            className="h-9 px-4 rounded-full bg-blue-600 hover:bg-blue-700 text-sm font-medium text-white transition-colors disabled:opacity-50 cursor-pointer"
+            className="h-9 px-4 rounded-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-sm font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Reschedule"}
           </button>
@@ -1467,7 +1467,7 @@ function AddCardModal({ clientId, clientName, onClose, onSuccess }: AddCardModal
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900">Add Card for {clientName}</h3>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer">
+          <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 active:bg-gray-200 rounded-full transition-colors cursor-pointer">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -1482,7 +1482,7 @@ function AddCardModal({ clientId, clientName, onClose, onSuccess }: AddCardModal
               <p className="text-red-600 mb-4">{error}</p>
               <button
                 onClick={onClose}
-                className="text-sm text-blue-600 hover:text-blue-700 cursor-pointer"
+                className="text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 active:bg-blue-100 px-2 py-1 -mx-2 rounded transition-colors cursor-pointer"
               >
                 Close
               </button>
@@ -1576,7 +1576,7 @@ function AddServiceModal({ locationId, onClose, onAdd }: AddServiceModalProps) {
       <div className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900">Add Service</h3>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer">
+          <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 active:bg-gray-200 rounded-full transition-colors cursor-pointer">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -1678,7 +1678,7 @@ function AddItemModal({ onClose, onAdd }: AddItemModalProps) {
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900">Add Item</h3>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer">
+          <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 active:bg-gray-200 rounded-full transition-colors cursor-pointer">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -1729,7 +1729,7 @@ function AddItemModal({ onClose, onAdd }: AddItemModalProps) {
             <button
               type="submit"
               disabled={!name || !price || adding}
-              className="h-9 px-4 rounded-full bg-blue-600 hover:bg-blue-700 text-sm font-medium text-white transition-colors disabled:opacity-50 cursor-pointer"
+              className="h-9 px-4 rounded-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-sm font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add Item"}
             </button>
@@ -1783,7 +1783,7 @@ function AddDiscountModal({ subtotal, onClose, onAdd }: AddDiscountModalProps) {
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900">Add Discount</h3>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer">
+          <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 active:bg-gray-200 rounded-full transition-colors cursor-pointer">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -1860,7 +1860,7 @@ function AddDiscountModal({ subtotal, onClose, onAdd }: AddDiscountModalProps) {
             <button
               type="submit"
               disabled={!value || adding}
-              className="h-9 px-4 rounded-full bg-blue-600 hover:bg-blue-700 text-sm font-medium text-white transition-colors disabled:opacity-50 cursor-pointer"
+              className="h-9 px-4 rounded-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-sm font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply Discount"}
             </button>
@@ -1907,7 +1907,7 @@ function RecurringModal({ currentSettings, onClose, onSetup, onCancel, saving }:
         <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
           <div className="flex items-center justify-between p-4 border-b border-gray-200">
             <h3 className="text-lg font-semibold text-gray-900">Cancel Recurring</h3>
-            <button onClick={() => setShowCancelConfirm(false)} className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer">
+            <button onClick={() => setShowCancelConfirm(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 active:bg-gray-200 rounded-full transition-colors cursor-pointer">
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -1966,7 +1966,7 @@ function RecurringModal({ currentSettings, onClose, onSetup, onCancel, saving }:
           <h3 className="text-lg font-semibold text-gray-900">
             {currentSettings ? "Edit Recurring" : "Set Up Recurring"}
           </h3>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer">
+          <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 active:bg-gray-200 rounded-full transition-colors cursor-pointer">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -2036,7 +2036,7 @@ function RecurringModal({ currentSettings, onClose, onSetup, onCancel, saving }:
               <button
                 type="submit"
                 disabled={saving}
-                className="h-9 px-4 rounded-full bg-blue-600 hover:bg-blue-700 text-sm font-medium text-white transition-colors disabled:opacity-50 cursor-pointer"
+                className="h-9 px-4 rounded-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-sm font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : currentSettings ? "Update" : "Set Up Recurring"}
               </button>

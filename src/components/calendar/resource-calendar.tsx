@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
-import { addDays, subDays, startOfDay, setHours, setMinutes, isSameDay } from "date-fns";
+import { addDays, subDays, startOfDay, setHours, setMinutes, isSameDay, format } from "date-fns";
 import { Sparkles } from "lucide-react";
 import { MiniCalendar } from "./mini-calendar";
 import { CalendarHeader } from "./calendar-header";
@@ -42,15 +42,27 @@ interface Appointment {
   status: string;
 }
 
+interface TechnicianBlock {
+  id: string;
+  technicianId: string;
+  title: string;
+  blockType: string;
+  startTime: Date;
+  endTime: Date;
+  isActive: boolean;
+}
+
 interface ResourceCalendarProps {
   locations: Location[];
   technicians: Technician[];
   appointments: Appointment[];
+  blocks?: TechnicianBlock[];
   selectedLocationId: string;
   selectedDate?: Date; // Initial date from parent (e.g., from localStorage)
   onLocationChange: (locationId: string) => void;
   onDateChange: (date: Date) => void;
   onAppointmentClick?: (appointment: Appointment) => void;
+  onBlockClick?: (block: TechnicianBlock) => void;
   onSlotClick?: (technicianId: string, time: Date) => void;
   onScheduleClick?: () => void;
   onSettingsClick?: () => void;
@@ -155,11 +167,13 @@ export function ResourceCalendar({
   locations,
   technicians,
   appointments,
+  blocks = [],
   selectedLocationId,
   selectedDate: initialDate,
   onLocationChange,
   onDateChange,
   onAppointmentClick,
+  onBlockClick,
   onSlotClick,
   onScheduleClick,
   onSettingsClick,
@@ -240,6 +254,44 @@ export function ResourceCalendar({
 
     return grouped;
   }, [dayAppointments, visibleTechnicians]);
+
+  // Filter blocks for selected date
+  const dayBlocks = useMemo(() => {
+    return blocks.filter((block) =>
+      isSameDay(new Date(block.startTime), selectedDate)
+    );
+  }, [blocks, selectedDate]);
+
+  // Group blocks by technician
+  const blocksByTech = useMemo(() => {
+    const grouped: Record<string, TechnicianBlock[]> = {};
+
+    visibleTechnicians.forEach((tech) => {
+      grouped[tech.id] = dayBlocks.filter(
+        (block) => block.technicianId === tech.id
+      );
+    });
+
+    return grouped;
+  }, [dayBlocks, visibleTechnicians]);
+
+  // Calculate block position and height (similar to appointments)
+  const getBlockStyle = (block: TechnicianBlock) => {
+    const startHour = block.startTime.getHours();
+    const startMinute = block.startTime.getMinutes();
+    const endHour = block.endTime.getHours();
+    const endMinute = block.endTime.getMinutes();
+
+    const startMinutesFromMidnight = (startHour - CALENDAR_START_HOUR) * 60 + startMinute;
+    const endMinutesFromMidnight = (endHour - CALENDAR_START_HOUR) * 60 + endMinute;
+    const durationMinutes = endMinutesFromMidnight - startMinutesFromMidnight;
+
+    const pixelsPerMinute = PIXELS_PER_HOUR / 60;
+    const top = startMinutesFromMidnight * pixelsPerMinute;
+    const height = Math.max(durationMinutes * pixelsPerMinute, 20);
+
+    return { top, height };
+  };
 
   const timeSlots = useMemo(() => generateTimeSlots(selectedDate), [selectedDate]);
 
@@ -413,6 +465,47 @@ export function ResourceCalendar({
                 pixelsPerHour={PIXELS_PER_HOUR}
                 leftOffset={TIME_COLUMN_WIDTH}
               />
+
+              {/* Personal events/blocks overlay */}
+              <div
+                className="absolute top-0 bottom-0 pointer-events-none"
+                style={{ left: TIME_COLUMN_WIDTH, right: 0 }}
+              >
+                <div className="flex h-full">
+                  {visibleTechnicians.map((tech) => (
+                    <div
+                      key={tech.id}
+                      className="relative min-w-0 flex-1"
+                    >
+                      {blocksByTech[tech.id]?.map((block) => {
+                        const { top, height } = getBlockStyle(block);
+
+                        return (
+                          <div
+                            key={block.id}
+                            className="absolute rounded px-1.5 py-1 overflow-hidden cursor-pointer transition-all hover:brightness-110 pointer-events-auto"
+                            style={{
+                              top: `${top}px`,
+                              height: `${height}px`,
+                              left: "2px",
+                              right: "2px",
+                              backgroundColor: "#9E9E9E",
+                            }}
+                            onClick={() => onBlockClick?.(block)}
+                          >
+                            <div className="text-xs font-medium text-white truncate">
+                              {format(block.startTime, "h:mm a")}
+                            </div>
+                            <div className="text-xs text-white font-medium truncate">
+                              {block.title}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </div>
 
               {/* Appointments overlay */}
               <div

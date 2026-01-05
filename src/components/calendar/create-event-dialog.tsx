@@ -203,6 +203,11 @@ export function CreateEventDialog({
   // Submission state
   const [saving, setSaving] = useState(false);
 
+  // Validation - check if form can be saved
+  const canSave = eventType === "appointment"
+    ? selectedClient !== null && selectedServices.length > 0
+    : eventTitle.trim().length > 0;
+
   // Reset form when dialog opens/closes
   useEffect(() => {
     if (open) {
@@ -489,6 +494,17 @@ export function CreateEventDialog({
         }
       }
 
+      // Format as local time string (YYYY-MM-DDTHH:mm:ss) to avoid timezone conversion
+      const formatLocalDateTime = (date: Date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        const hours = String(date.getHours()).padStart(2, "0");
+        const minutes = String(date.getMinutes()).padStart(2, "0");
+        const seconds = String(date.getSeconds()).padStart(2, "0");
+        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+      };
+
       const response = await fetch("/api/technician-blocks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -496,8 +512,8 @@ export function CreateEventDialog({
           technicianId: selectedTechnicianId,
           title: eventTitle,
           blockType: "PERSONAL",
-          startTime: startDateTime.toISOString(),
-          endTime: endDateTime.toISOString(),
+          startTime: formatLocalDateTime(startDateTime),
+          endTime: formatLocalDateTime(endDateTime),
           recurrenceRule,
           isActive: true,
         }),
@@ -539,7 +555,7 @@ export function CreateEventDialog({
       <div className="flex items-center justify-between h-14 px-4 border-b border-gray-200 flex-shrink-0">
         <button
           onClick={onClose}
-          className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors cursor-pointer"
+          className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 active:bg-gray-300 transition-colors cursor-pointer"
         >
           <X className="h-5 w-5 text-gray-600" />
         </button>
@@ -550,8 +566,8 @@ export function CreateEventDialog({
 
         <button
           onClick={handleSave}
-          disabled={saving}
-          className="h-9 px-6 rounded-full bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium transition-colors cursor-pointer disabled:opacity-50"
+          disabled={saving || !canSave}
+          className="h-9 px-6 rounded-full bg-gray-900 hover:bg-gray-800 active:bg-gray-700 text-white text-sm font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
         </button>
@@ -561,9 +577,9 @@ export function CreateEventDialog({
       <div className="flex-1 overflow-y-auto">
         <div className={`mx-auto py-8 px-6 ${eventType === "appointment" ? "max-w-4xl" : "max-w-lg"}`}>
           {/* Event Type Selector */}
-          <div className="border border-gray-300 rounded-lg mb-8">
+          <div className="border border-gray-300 rounded-lg mb-8 overflow-hidden">
             <div className={`grid ${eventType === "appointment" ? "grid-cols-[200px_1fr]" : ""}`}>
-              <div className={`px-4 py-3 bg-gray-50 text-sm font-medium text-gray-700 ${eventType === "personal_event" ? "rounded-l-lg" : ""}`}>
+              <div className="px-4 py-3 bg-gray-50 text-sm font-medium text-gray-700">
                 Event type
               </div>
               <div className="px-2 py-1">
@@ -586,7 +602,7 @@ export function CreateEventDialog({
               {/* Client Information */}
               <div className="mb-6">
                 <h3 className="text-base font-medium text-gray-900 mb-3">Client information</h3>
-                <div className="border border-gray-300 rounded-lg">
+                <div className="border border-gray-300 rounded-lg overflow-hidden">
                   {/* Name row */}
                   <div className="grid grid-cols-[200px_1fr] border-b border-gray-300">
                     <div className="px-4 py-3 bg-gray-50 text-sm font-medium text-gray-700">Name</div>
@@ -601,7 +617,7 @@ export function CreateEventDialog({
                               setSelectedClient(null);
                               setShowClientSearch(true);
                             }}
-                            className="text-sm text-blue-600 hover:text-blue-700 cursor-pointer"
+                            className="text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 active:bg-blue-100 px-2 py-1 -mx-2 rounded transition-colors cursor-pointer"
                           >
                             Change
                           </button>
@@ -616,7 +632,7 @@ export function CreateEventDialog({
                                     setShowNewClientForm(false);
                                     setShowClientSearch(true);
                                   }}
-                                  className="text-sm text-blue-600 hover:text-blue-700 cursor-pointer"
+                                  className="text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 active:bg-blue-100 px-2 py-1 -mx-2 rounded transition-colors cursor-pointer"
                                 >
                                   Back to search
                                 </button>
@@ -679,7 +695,7 @@ export function CreateEventDialog({
                                         setShowClientSearch(false);
                                         setClientSearchResults([]);
                                       }}
-                                      className="w-full px-3 py-2 text-left hover:bg-gray-50 text-sm border-b border-gray-100 last:border-b-0 cursor-pointer"
+                                      className="w-full px-3 py-2 text-left hover:bg-gray-100 active:bg-gray-200 text-sm border-b border-gray-100 last:border-b-0 transition-colors cursor-pointer"
                                     >
                                       <div className="font-medium">{client.firstName} {client.lastName}</div>
                                       <div className="text-gray-500">{formatPhone(client.phone)}</div>
@@ -735,7 +751,7 @@ export function CreateEventDialog({
                     <span className="text-sm text-gray-700">Repeat</span>
                   </label>
                 </div>
-                <div className="border border-gray-300 rounded-lg">
+                <div className="border border-gray-300 rounded-lg overflow-hidden">
                   {/* Date & time */}
                   <div className="grid grid-cols-[200px_1fr] border-b border-gray-300">
                     <div className="px-4 py-3 bg-gray-50 text-sm font-medium text-gray-700">Date & time</div>
@@ -899,7 +915,7 @@ export function CreateEventDialog({
                     <div className="px-4 py-3 text-sm font-medium text-gray-900 text-right">Amount</div>
                   </div>
                   {selectedServices.map((item) => (
-                    <div key={item.id} className="grid grid-cols-[1fr_120px_100px] border-b border-gray-300 group">
+                    <div key={item.id} className="grid grid-cols-[1fr_120px_100px] border-b border-gray-300 group hover:bg-gray-50 transition-colors">
                       <div className="px-4 py-3 flex items-center justify-between">
                         <div>
                           <div className="text-sm text-gray-900">{item.service.name}</div>
@@ -910,7 +926,7 @@ export function CreateEventDialog({
                         </div>
                         <button
                           onClick={() => handleRemoveService(item.id)}
-                          className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 cursor-pointer"
+                          className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 active:text-red-600 transition-all cursor-pointer"
                         >
                           <X className="h-4 w-4" />
                         </button>
@@ -926,7 +942,7 @@ export function CreateEventDialog({
                   <div className="px-4 py-3">
                     <button
                       onClick={() => setShowServicePicker(true)}
-                      className="text-sm text-gray-700 hover:text-gray-900 cursor-pointer"
+                      className="text-sm text-gray-700 hover:text-gray-900 hover:bg-gray-50 active:bg-gray-100 px-2 py-1 -mx-2 rounded transition-colors cursor-pointer"
                     >
                       Add a service
                     </button>
@@ -944,12 +960,12 @@ export function CreateEventDialog({
                     <div className="px-4 py-3 text-sm font-medium text-gray-900 text-right">Amount</div>
                   </div>
                   {items.map((item) => (
-                    <div key={item.id} className="grid grid-cols-[1fr_80px_80px_100px] border-b border-gray-300 group">
+                    <div key={item.id} className="grid grid-cols-[1fr_80px_80px_100px] border-b border-gray-300 group hover:bg-gray-50 transition-colors">
                       <div className="px-4 py-3 flex items-center justify-between">
                         <span className="text-sm text-gray-900">{item.name}</span>
                         <button
                           onClick={() => handleRemoveItem(item.id)}
-                          className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 cursor-pointer"
+                          className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 active:text-red-600 transition-all cursor-pointer"
                         >
                           <X className="h-4 w-4" />
                         </button>
@@ -995,7 +1011,7 @@ export function CreateEventDialog({
                     ) : (
                       <button
                         onClick={() => setShowItemForm(true)}
-                        className="text-sm text-gray-700 hover:text-gray-900 cursor-pointer"
+                        className="text-sm text-gray-700 hover:text-gray-900 hover:bg-gray-50 active:bg-gray-100 px-2 py-1 -mx-2 rounded transition-colors cursor-pointer"
                       >
                         Add an item
                       </button>
@@ -1213,7 +1229,7 @@ export function CreateEventDialog({
           <div className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900">Add Service</h3>
-              <button onClick={() => setShowServicePicker(false)} className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer">
+              <button onClick={() => setShowServicePicker(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 active:bg-gray-200 rounded-full transition-colors cursor-pointer">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -1228,7 +1244,7 @@ export function CreateEventDialog({
                     <button
                       key={service.id}
                       onClick={() => handleAddService(service)}
-                      className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors text-left cursor-pointer"
+                      className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-gray-100 active:bg-gray-200 transition-colors text-left cursor-pointer"
                     >
                       <div>
                         <p className="text-sm font-medium text-gray-900">{service.name}</p>
@@ -1252,13 +1268,13 @@ export function CreateEventDialog({
           <div className="flex items-center justify-between h-14 px-4 border-b border-gray-200">
             <button
               onClick={() => setShowRepetitionModal(false)}
-              className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors cursor-pointer"
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 active:bg-gray-300 transition-colors cursor-pointer"
             >
               <X className="h-5 w-5 text-gray-600" />
             </button>
             <button
               onClick={() => setShowRepetitionModal(false)}
-              className="h-9 px-6 rounded-full bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium transition-colors cursor-pointer"
+              className="h-9 px-6 rounded-full bg-gray-900 hover:bg-gray-800 active:bg-gray-700 text-white text-sm font-medium transition-colors cursor-pointer"
             >
               Save
             </button>
