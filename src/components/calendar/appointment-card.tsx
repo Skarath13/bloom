@@ -103,13 +103,12 @@ export function AppointmentCard({
       className={cn(
         "absolute rounded px-1.5 py-1 overflow-hidden cursor-pointer",
         "transition-all hover:brightness-110",
-        isDragging && "pointer-events-none",
         draggable && "touch-none",
         className
       )}
       style={{
         backgroundColor: bgColor,
-        opacity: isGhost ? 0.5 : isDragging ? 0.3 : 1,
+        opacity: isGhost ? 0.5 : 1,
         ...style,
       }}
       onClick={onClick}

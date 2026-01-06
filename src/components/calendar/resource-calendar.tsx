@@ -809,6 +809,7 @@ export function ResourceCalendar({
               )}
               style={{
                 backgroundColor: getDragOverlayTechColor(),
+                opacity: 0.75,
                 boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
                 width: "150px",
                 minHeight: `${Math.max(
