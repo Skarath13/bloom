@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, RefObject } from "react";
+import { useState, useCallback, useRef, RefObject } from "react";
 import { DragStartEvent, DragMoveEvent, DragEndEvent } from "@dnd-kit/core";
 
 // Calendar configuration (should match resource-calendar.tsx)
@@ -126,6 +126,10 @@ export function useCalendarDnd({
   const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
   const [pendingBlockMove, setPendingBlockMove] = useState<PendingBlockMove | null>(null);
 
+  // Ref to track latest selection - needed because handleSelectionEnd may be called
+  // immediately after handleSelectionMove before React re-renders with new state
+  const selectionRef = useRef<SelectionState>(initialSelectionState);
+
   // Calculate time from Y position
   const getTimeFromY = useCallback(
     (clientY: number): Date | null => {
@@ -137,8 +141,8 @@ export function useCalendarDnd({
       // Account for sticky header height
       const relativeY = clientY - rect.top + scrollTop - HEADER_HEIGHT;
 
-      // Snap to 15-minute increments
-      const minutes = Math.round(relativeY / PIXELS_PER_15_MIN) * 15;
+      // Use floor to match the hover highlight behavior - select the cell the cursor is IN
+      const minutes = Math.floor(relativeY / PIXELS_PER_15_MIN) * 15;
       const clampedMinutes = Math.max(
         0,
         Math.min(minutes, (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * 60 - 15)
@@ -365,64 +369,109 @@ export function useCalendarDnd({
       // Add 15 minutes for initial selection
       const endTime = new Date(time.getTime() + 15 * 60 * 1000);
 
-      setSelection({
+      const newSelection = {
         isSelecting: true,
         technicianId,
         startTime: time,
         endTime,
-      });
+      };
+
+      // Update both ref and state
+      selectionRef.current = newSelection;
+      setSelection(newSelection);
     },
     [getTimeFromY]
   );
 
   const handleSelectionMove = useCallback(
     (e: React.MouseEvent) => {
-      if (!selection.isSelecting || !selection.startTime) return;
+      // Use ref for reading to get latest values
+      const currentSelection = selectionRef.current;
+      if (!currentSelection.isSelecting || !currentSelection.startTime) return;
 
       const currentTime = getTimeFromY(e.clientY);
       if (!currentTime) return;
 
       // Ensure minimum 15-minute selection
-      const minEndTime = new Date(selection.startTime.getTime() + 15 * 60 * 1000);
+      const minEndTime = new Date(currentSelection.startTime.getTime() + 15 * 60 * 1000);
+
+      let newSelection: SelectionState;
 
       // Allow dragging both directions
-      if (currentTime.getTime() >= selection.startTime.getTime()) {
+      if (currentTime.getTime() >= currentSelection.startTime.getTime()) {
         // Dragging down - extend end time
         const newEndTime = new Date(currentTime.getTime() + 15 * 60 * 1000);
-        setSelection((prev) => ({
-          ...prev,
+        newSelection = {
+          ...currentSelection,
           endTime: newEndTime.getTime() > minEndTime.getTime() ? newEndTime : minEndTime,
-        }));
+        };
       } else {
         // Dragging up - keep original start as end, use current as start
-        setSelection((prev) => ({
-          ...prev,
+        newSelection = {
+          ...currentSelection,
           startTime: currentTime,
-          endTime: prev.startTime,
-        }));
+          endTime: currentSelection.startTime,
+        };
       }
+
+      // Update both ref and state
+      selectionRef.current = newSelection;
+      setSelection(newSelection);
     },
-    [selection.isSelecting, selection.startTime, getTimeFromY]
+    [getTimeFromY]
   );
 
   const handleSelectionEnd = useCallback(() => {
-    if (selection.isSelecting && selection.technicianId && selection.startTime && selection.endTime) {
+    // Use ref to get the latest selection values (state may be stale due to closure)
+    const currentSelection = selectionRef.current;
+
+    if (currentSelection.isSelecting && currentSelection.technicianId && currentSelection.startTime && currentSelection.endTime) {
       // Ensure start is before end
       const finalStartTime =
-        selection.startTime.getTime() < selection.endTime.getTime()
-          ? selection.startTime
-          : selection.endTime;
+        currentSelection.startTime.getTime() < currentSelection.endTime.getTime()
+          ? currentSelection.startTime
+          : currentSelection.endTime;
+      const finalEndTime =
+        currentSelection.startTime.getTime() < currentSelection.endTime.getTime()
+          ? currentSelection.endTime
+          : currentSelection.startTime;
+
+      // Calculate duration in minutes and save to localStorage with timestamp
+      // This allows CreateEventDialog to use the dragged duration for personal events
+      const durationMinutes = Math.round(
+        (finalEndTime.getTime() - finalStartTime.getTime()) / (1000 * 60)
+      );
+
+      // Determine if this was a drag (multiple segments) or click (single segment)
+      // A single segment is 15 minutes, so anything > 15 is a drag
+      const wasDragged = durationMinutes > 15;
+
+      try {
+        localStorage.setItem(
+          "bloom_calendar_selection",
+          JSON.stringify({
+            durationMinutes,
+            wasDragged,
+            timestamp: Date.now(),
+          })
+        );
+      } catch {
+        // localStorage might be unavailable, ignore
+      }
 
       // Call the slot select callback to open the create event dialog
       if (onSlotSelect) {
-        onSlotSelect(selection.technicianId, finalStartTime);
+        onSlotSelect(currentSelection.technicianId, finalStartTime);
       }
     }
 
+    // Reset both ref and state
+    selectionRef.current = initialSelectionState;
     setSelection(initialSelectionState);
-  }, [selection, onSlotSelect]);
+  }, [onSlotSelect]);
 
   const handleSelectionCancel = useCallback(() => {
+    selectionRef.current = initialSelectionState;
     setSelection(initialSelectionState);
   }, []);
 

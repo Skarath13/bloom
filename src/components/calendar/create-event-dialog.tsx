@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { format, addMinutes } from "date-fns";
 import { Input } from "@/components/ui/input";
 import {
@@ -97,6 +97,37 @@ interface CreateEventDialogProps {
 
 type EventType = "appointment" | "personal_event";
 
+// localStorage key for selection duration (set by useCalendarDnd when drag-selecting)
+const SELECTION_STORAGE_KEY = "bloom_calendar_selection";
+const SELECTION_MAX_AGE_MS = 5000; // 5 seconds - consider stale after this
+
+interface SavedSelection {
+  durationMinutes: number;
+  wasDragged: boolean;
+}
+
+// Helper to read and consume the saved selection info
+function getAndClearSavedSelection(): SavedSelection | null {
+  try {
+    const saved = localStorage.getItem(SELECTION_STORAGE_KEY);
+    if (!saved) return null;
+
+    // Always clear after reading to prevent stale usage
+    localStorage.removeItem(SELECTION_STORAGE_KEY);
+
+    const { durationMinutes, wasDragged, timestamp } = JSON.parse(saved);
+
+    // Check if the saved data is recent (within 5 seconds)
+    if (Date.now() - timestamp > SELECTION_MAX_AGE_MS) {
+      return null; // Stale, ignore
+    }
+
+    return { durationMinutes, wasDragged: wasDragged ?? false };
+  } catch {
+    return null;
+  }
+}
+
 interface RepetitionSettings {
   enabled: boolean;
   interval: number;
@@ -137,6 +168,9 @@ export function CreateEventDialog({
 }: CreateEventDialogProps) {
   // Event type state
   const [eventType, setEventType] = useState<EventType>("appointment");
+
+  // Track if we've done the initial setup (to avoid re-reading cleared localStorage)
+  const initialSetupDoneRef = useRef(false);
 
   // Appointment state
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -211,7 +245,21 @@ export function CreateEventDialog({
   // Reset form when dialog opens/closes
   useEffect(() => {
     if (open) {
-      setEventType("appointment");
+      // Only read localStorage on the FIRST time the dialog opens
+      // (useEffect may run multiple times due to dependency changes)
+      let effectiveDuration = 15;
+      let defaultEventType: EventType = "appointment";
+
+      if (!initialSetupDoneRef.current) {
+        const savedSelection = getAndClearSavedSelection();
+        effectiveDuration = savedSelection?.durationMinutes ?? 15;
+        defaultEventType = savedSelection?.wasDragged ? "personal_event" : "appointment";
+        initialSetupDoneRef.current = true;
+      } else {
+        return; // Don't reset form on subsequent runs
+      }
+
+      setEventType(defaultEventType);
       setSelectedClient(null);
       setClientSearchQuery("");
       setClientSearchResults([]);
@@ -238,11 +286,15 @@ export function CreateEventDialog({
       setStartDate(format(time, "yyyy-MM-dd"));
       setEndDate(format(time, "yyyy-MM-dd"));
       setStartTime(format(time, "HH:mm"));
-      setEndTime(format(addMinutes(time, 15), "HH:mm"));
+      // Use saved drag duration if available, otherwise default to 15 minutes
+      setEndTime(format(addMinutes(time, effectiveDuration), "HH:mm"));
       setRepetition({ enabled: false, interval: 1, frequency: "week", ends: "never" });
       setHasConflict(false);
       setConflictMessage("");
       fetchServices();
+    } else {
+      // Dialog closed - reset the flag so next open will read localStorage again
+      initialSetupDoneRef.current = false;
     }
   }, [open, locationId, technicianId, time]);
 
@@ -576,23 +628,33 @@ export function CreateEventDialog({
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto">
         <div className={`mx-auto py-8 px-6 ${eventType === "appointment" ? "max-w-4xl" : "max-w-lg"}`}>
-          {/* Event Type Selector */}
-          <div className="border border-gray-300 rounded-lg mb-8 overflow-hidden">
-            <div className={`grid ${eventType === "appointment" ? "grid-cols-1 sm:grid-cols-[160px_1fr] lg:grid-cols-[200px_1fr]" : ""}`}>
-              <div className="px-4 py-2 sm:py-3 bg-gray-50 text-sm font-medium text-gray-700">
-                Event type
-              </div>
-              <div className="px-2 py-1">
-                <Select value={eventType} onValueChange={(v) => setEventType(v as EventType)}>
-                  <SelectTrigger className="w-full border-0 shadow-none focus:ring-0 h-10 text-sm justify-between">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="appointment">Appointment</SelectItem>
-                    <SelectItem value="personal_event">Personal event</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+          {/* Event Type Toggle */}
+          <div className="flex justify-center mb-8">
+            <div className="inline-flex rounded-lg border border-gray-300 p-1 bg-gray-50">
+              <button
+                type="button"
+                onClick={() => setEventType("appointment")}
+                className={cn(
+                  "px-4 py-2 text-sm font-medium rounded-md transition-all cursor-pointer",
+                  eventType === "appointment"
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                )}
+              >
+                Appointment
+              </button>
+              <button
+                type="button"
+                onClick={() => setEventType("personal_event")}
+                className={cn(
+                  "px-4 py-2 text-sm font-medium rounded-md transition-all cursor-pointer",
+                  eventType === "personal_event"
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                )}
+              >
+                Personal Event
+              </button>
             </div>
           </div>
 
