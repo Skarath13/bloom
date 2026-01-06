@@ -117,7 +117,7 @@ export function MiniCalendar({ selectedDate, onDateSelect }: MiniCalendarProps) 
       </div>
 
       {/* Calendar grid */}
-      <div className="grid grid-cols-7 gap-0">
+      <div className="grid grid-cols-7 gap-1">
         {days.map((dayDate, index) => {
           const isCurrentMonth = isSameMonth(dayDate, currentMonth);
           const isSelected = isSameDay(dayDate, selectedDate);
@@ -127,12 +127,11 @@ export function MiniCalendar({ selectedDate, onDateSelect }: MiniCalendarProps) 
             <button
               key={index}
               className={cn(
-                "h-8 w-8 flex items-center justify-center text-sm rounded-full mx-auto",
-                "hover:bg-gray-100 transition-colors",
-                !isCurrentMonth && "text-gray-300",
-                isCurrentMonth && "text-gray-700",
+                "h-7 w-7 flex items-center justify-center text-sm rounded-full mx-auto transition-colors",
+                !isCurrentMonth && "text-gray-300 hover:bg-gray-50",
+                isCurrentMonth && !isSelected && "text-gray-700 hover:bg-gray-100",
                 isSelected && "bg-gray-900 text-white hover:bg-gray-800",
-                isTodayDate && !isSelected && "ring-1 ring-gray-900"
+                isTodayDate && !isSelected && "ring-1 ring-inset ring-gray-900"
               )}
               onClick={() => onDateSelect(dayDate)}
             >
