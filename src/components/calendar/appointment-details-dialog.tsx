@@ -374,7 +374,7 @@ export function AppointmentDetailsDialog({
     }
   };
 
-  const handleSetupRecurring = async (pattern: "weekly" | "biweekly" | "every3weeks" | "monthly", occurrences: number) => {
+  const handleSetupRecurring = async (pattern: "weekly" | "biweekly" | "every3weeks" | "monthly", occurrences: number | null) => {
     if (!appointment?.id) return;
     setSavingRecurring(true);
     try {
@@ -1010,14 +1010,16 @@ export function AppointmentDetailsDialog({
                         )}
                       >
                         <p className={cn(
-                          "leading-snug select-none",
+                          "leading-snug select-none flex items-center gap-2 flex-wrap",
                           historyItem.id === appointment?.id
                             ? "text-gray-900 font-medium"
                             : "text-blue-600 hover:underline"
                         )}>
                           {historyItem.serviceName}
                           {historyItem.id === appointment?.id && (
-                            <span className="ml-2 text-xs text-gray-400">(current)</span>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                              Current
+                            </span>
                           )}
                         </p>
                         <p className="text-gray-500 flex items-center gap-1 mt-1">
@@ -1025,15 +1027,9 @@ export function AppointmentDetailsDialog({
                           <Sparkles className="h-3 w-3" style={{ color: historyItem.technicianColor }} />
                           <span>{historyItem.locationName}</span>
                         </p>
-                        <p className="text-gray-500 underline mt-0.5">
+                        <p className="text-gray-500 mt-0.5">
                           {format(new Date(historyItem.startTime), "EEE, MMM d, yyyy, h:mm a")}
                         </p>
-                        {historyItem.noShowProtected && (
-                          <p className="text-gray-500 flex items-center gap-1 mt-1">
-                            <Check className="h-3.5 w-3.5" />
-                            <span>No-show protected</span>
-                          </p>
-                        )}
                       </button>
                       {index < appointmentHistory.length - 1 && (
                         <div className="h-px bg-gray-200 mt-4" />
@@ -1848,7 +1844,7 @@ function AddDiscountModal({ subtotal, onClose, onAdd }: AddDiscountModalProps) {
 interface RecurringModalProps {
   currentSettings: RecurringSettings | null;
   onClose: () => void;
-  onSetup: (pattern: "weekly" | "biweekly" | "every3weeks" | "monthly", occurrences: number) => Promise<void>;
+  onSetup: (pattern: "weekly" | "biweekly" | "every3weeks" | "monthly", occurrences: number | null) => Promise<void>;
   onCancel: (cancelAll: boolean) => Promise<void>;
   saving: boolean;
 }
@@ -1857,7 +1853,7 @@ function RecurringModal({ currentSettings, onClose, onSetup, onCancel, saving }:
   const [pattern, setPattern] = useState<"weekly" | "biweekly" | "every3weeks" | "monthly">(
     currentSettings?.recurrencePattern || "biweekly"
   );
-  const [occurrences, setOccurrences] = useState(currentSettings?.occurrences || 12);
+  const [occurrences, setOccurrences] = useState<number | null>(currentSettings?.occurrences ?? 12);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   const patternLabels = {
@@ -1966,7 +1962,10 @@ function RecurringModal({ currentSettings, onClose, onSetup, onCancel, saving }:
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Number of appointments</label>
-            <Select value={String(occurrences)} onValueChange={(v) => setOccurrences(Number(v))}>
+            <Select
+              value={occurrences === null ? "indefinite" : String(occurrences)}
+              onValueChange={(v) => setOccurrences(v === "indefinite" ? null : Number(v))}
+            >
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -1976,13 +1975,20 @@ function RecurringModal({ currentSettings, onClose, onSetup, onCancel, saving }:
                     {num} appointments
                   </SelectItem>
                 ))}
+                <SelectItem value="indefinite">Indefinite</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-gray-500 mt-1">
-              {pattern === "weekly" && `~${Math.round(occurrences / 4)} months`}
-              {pattern === "biweekly" && `~${Math.round(occurrences / 2)} months`}
-              {pattern === "every3weeks" && `~${Math.round((occurrences * 3) / 4)} months`}
-              {pattern === "monthly" && `${occurrences} months`}
+              {occurrences === null ? (
+                "Repeats until cancelled"
+              ) : (
+                <>
+                  {pattern === "weekly" && `~${Math.round(occurrences / 4)} months`}
+                  {pattern === "biweekly" && `~${Math.round(occurrences / 2)} months`}
+                  {pattern === "every3weeks" && `~${Math.round((occurrences * 3) / 4)} months`}
+                  {pattern === "monthly" && `${occurrences} months`}
+                </>
+              )}
             </p>
           </div>
 
