@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { format } from "date-fns";
-import { ArrowRight, Calendar, Loader2, MessageSquare, Sparkles } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
+import { ArrowRight, Clock, Loader2, MessageSquare, Sparkles, User } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 interface Technician {
   id: string;
@@ -76,110 +76,87 @@ export function MoveConfirmationModal({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
-        <div className="p-6">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 overflow-hidden">
+        <div className="p-5">
           {/* Header */}
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-              <Calendar className="h-5 w-5 text-blue-600" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900">Move Appointment</h3>
-          </div>
-
-          {/* Client info */}
-          <p className="text-gray-600 mb-4">
-            Move appointment for{" "}
-            <span className="font-medium">{appointment.clientName}</span>?
+          <h3 className="text-lg font-semibold text-gray-900 mb-1">Move Appointment</h3>
+          <p className="text-sm text-gray-500 mb-5">
+            {appointment.clientName} · {appointment.serviceName}
           </p>
 
-          {/* Service info */}
-          <p className="text-sm text-gray-500 mb-4">{appointment.serviceName}</p>
-
-          {/* Time change display */}
-          {timeChanged && (
-            <div className="bg-gray-50 rounded-lg p-3 mb-3">
-              <div className="text-xs text-gray-500 mb-1 font-medium uppercase tracking-wide">
-                Time
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-gray-700">
-                  {format(originalTime, "h:mm a")}
-                </span>
-                <ArrowRight className="h-4 w-4 text-gray-400" />
-                <span className="text-blue-600 font-medium">
-                  {format(newTime, "h:mm a")}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Technician change display */}
-          {techChanged && (
-            <div className="bg-gray-50 rounded-lg p-3 mb-3">
-              <div className="text-xs text-gray-500 mb-1 font-medium uppercase tracking-wide">
-                Staff
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-gray-700 flex items-center gap-1">
-                  {originalTech?.firstName}
-                  <Sparkles
-                    className="h-3 w-3"
-                    style={{ color: originalTech?.color }}
-                  />
-                </span>
-                <ArrowRight className="h-4 w-4 text-gray-400" />
-                <span className="text-blue-600 font-medium flex items-center gap-1">
-                  {newTech?.firstName}
-                  <Sparkles
-                    className="h-3 w-3"
-                    style={{ color: newTech?.color }}
-                  />
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* SMS notification checkbox */}
-          {appointment.client?.phone && (
-            <label className="flex items-center gap-3 p-4 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors">
-              <Checkbox
-                checked={notifyClient}
-                onCheckedChange={(checked) => setNotifyClient(checked === true)}
-                className="border-gray-400 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
-              />
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <MessageSquare className="h-4 w-4 text-gray-500" />
-                  <p className="text-sm font-medium text-gray-900">
-                    Notify client via SMS
-                  </p>
+          {/* Changes summary */}
+          <div className="space-y-3 mb-5">
+            {/* Time change */}
+            {timeChanged && (
+              <div className="flex items-center gap-3">
+                <Clock className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-gray-500 line-through">
+                    {format(originalTime, "h:mm a")}
+                  </span>
+                  <ArrowRight className="h-3 w-3 text-gray-300" />
+                  <span className="text-gray-900 font-medium">
+                    {format(newTime, "h:mm a")}
+                  </span>
                 </div>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  Send text to {formatPhone(appointment.client.phone)}
-                </p>
               </div>
-            </label>
+            )}
+
+            {/* Technician change */}
+            {techChanged && (
+              <div className="flex items-center gap-3">
+                <User className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-gray-500 line-through flex items-center gap-1">
+                    {originalTech?.firstName}
+                    <Sparkles className="h-3 w-3" style={{ color: originalTech?.color }} />
+                  </span>
+                  <ArrowRight className="h-3 w-3 text-gray-300" />
+                  <span className="text-gray-900 font-medium flex items-center gap-1">
+                    {newTech?.firstName}
+                    <Sparkles className="h-3 w-3" style={{ color: newTech?.color }} />
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* SMS notification toggle */}
+          {appointment.client?.phone && (
+            <div className="flex items-center justify-between py-3 border-t border-gray-100">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4 text-gray-400" />
+                <div>
+                  <p className="text-sm text-gray-700">Notify via SMS</p>
+                  <p className="text-xs text-gray-400">{formatPhone(appointment.client.phone)}</p>
+                </div>
+              </div>
+              <Switch
+                checked={notifyClient}
+                onCheckedChange={setNotifyClient}
+              />
+            </div>
           )}
         </div>
 
         {/* Footer buttons */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-lg">
+        <div className="flex border-t border-gray-100">
           <button
             onClick={onCancel}
             disabled={isLoading}
-            className="h-9 px-4 rounded-full border border-gray-300 hover:bg-gray-100 text-sm font-medium text-gray-700 transition-colors disabled:opacity-50 cursor-pointer"
+            className="flex-1 py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 active:bg-gray-100 transition-colors disabled:opacity-50 cursor-pointer border-r border-gray-100"
           >
             Cancel
           </button>
           <button
             onClick={handleConfirm}
             disabled={isLoading}
-            className="h-9 px-4 rounded-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-sm font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            className="flex-1 py-3 text-sm font-medium text-blue-600 hover:bg-blue-50 active:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin mx-auto" />
             ) : (
-              "Move Appointment"
+              "Confirm"
             )}
           </button>
         </div>

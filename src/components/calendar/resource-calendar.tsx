@@ -847,7 +847,7 @@ export function ResourceCalendar({
                   opacity: 0.75,
                   boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
                   width: `${cardWidth}px`,
-                  minHeight: `${Math.max(
+                  height: `${Math.max(
                     ((dragState.activeAppointment.endTime.getTime() -
                       dragState.activeAppointment.startTime.getTime()) /
                       (1000 * 60)) *
@@ -888,7 +888,7 @@ export function ResourceCalendar({
                   opacity: 0.75,
                   boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
                   width: `${cardWidth}px`,
-                  minHeight: `${Math.max(
+                  height: `${Math.max(
                     ((new Date(dragState.activeBlock.endTime).getTime() -
                       new Date(dragState.activeBlock.startTime).getTime()) /
                       (1000 * 60)) *
