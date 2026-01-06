@@ -31,9 +31,22 @@ interface Appointment {
   };
 }
 
+interface TechnicianBlock {
+  id: string;
+  technicianId: string;
+  title: string;
+  blockType: string;
+  startTime: Date;
+  endTime: Date;
+}
+
+type DragItemType = "appointment" | "block" | null;
+
 interface DragState {
   activeId: string | null;
+  dragType: DragItemType;
   activeAppointment: Appointment | null;
+  activeBlock: TechnicianBlock | null;
   currentTechId: string | null;
   currentTime: Date | null;
   originalTechId: string;
@@ -57,15 +70,17 @@ interface PendingMove {
   newTechId: string;
 }
 
-interface PendingBlock {
-  technicianId: string;
-  technicianName: string;
-  startTime: Date;
-  endTime: Date;
+interface PendingBlockMove {
+  block: TechnicianBlock;
+  originalTime: Date;
+  newTime: Date;
+  originalTechId: string;
+  newTechId: string;
 }
 
 interface UseCalendarDndOptions {
   appointments: Appointment[];
+  blocks: TechnicianBlock[];
   selectedDate: Date;
   visibleTechnicians: Technician[];
   gridRef: RefObject<HTMLDivElement | null>;
@@ -80,7 +95,9 @@ interface UseCalendarDndOptions {
 
 const initialDragState: DragState = {
   activeId: null,
+  dragType: null,
   activeAppointment: null,
+  activeBlock: null,
   currentTechId: null,
   currentTime: null,
   originalTechId: "",
@@ -98,6 +115,7 @@ const initialSelectionState: SelectionState = {
 
 export function useCalendarDnd({
   appointments,
+  blocks,
   selectedDate,
   visibleTechnicians,
   gridRef,
@@ -106,6 +124,7 @@ export function useCalendarDnd({
   const [dragState, setDragState] = useState<DragState>(initialDragState);
   const [selection, setSelection] = useState<SelectionState>(initialSelectionState);
   const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
+  const [pendingBlockMove, setPendingBlockMove] = useState<PendingBlockMove | null>(null);
 
   // Calculate time from Y position
   const getTimeFromY = useCallback(
@@ -184,16 +203,41 @@ export function useCalendarDnd({
   const handleDragStart = useCallback(
     (event: DragStartEvent) => {
       const { active, activatorEvent } = event;
-      const appointment = appointments.find((apt) => apt.id === active.id);
-
-      if (!appointment) return;
+      const activeIdStr = active.id as string;
 
       // Capture initial pointer Y for delta calculation
       const initialY = activatorEvent instanceof PointerEvent ? activatorEvent.clientY : null;
 
+      // Check if dragging a block (prefixed with "block-")
+      if (activeIdStr.startsWith("block-")) {
+        const blockId = activeIdStr.replace("block-", "");
+        const block = blocks.find((b) => b.id === blockId);
+        if (!block) return;
+
+        setDragState({
+          activeId: activeIdStr,
+          dragType: "block",
+          activeAppointment: null,
+          activeBlock: block,
+          currentTechId: block.technicianId,
+          currentTime: new Date(block.startTime),
+          originalTechId: block.technicianId,
+          originalStartTime: new Date(block.startTime),
+          initialPointerY: initialY,
+          hasConflict: false,
+        });
+        return;
+      }
+
+      // Otherwise, it's an appointment
+      const appointment = appointments.find((apt) => apt.id === activeIdStr);
+      if (!appointment) return;
+
       setDragState({
-        activeId: active.id as string,
+        activeId: activeIdStr,
+        dragType: "appointment",
         activeAppointment: appointment,
+        activeBlock: null,
         currentTechId: appointment.technicianId,
         currentTime: new Date(appointment.startTime),
         originalTechId: appointment.technicianId,
@@ -202,12 +246,13 @@ export function useCalendarDnd({
         hasConflict: false,
       });
     },
-    [appointments]
+    [appointments, blocks]
   );
 
   const handleDragMove = useCallback(
     (event: DragMoveEvent) => {
-      if (!dragState.activeAppointment || dragState.initialPointerY === null) return;
+      const activeItem = dragState.activeAppointment || dragState.activeBlock;
+      if (!activeItem || dragState.initialPointerY === null) return;
 
       // Get position from the pointer coordinates
       const { activatorEvent } = event;
@@ -228,7 +273,7 @@ export function useCalendarDnd({
       const minTime = new Date(dragState.originalStartTime);
       minTime.setHours(CALENDAR_START_HOUR, 0, 0, 0);
       const maxTime = new Date(dragState.originalStartTime);
-      maxTime.setHours(CALENDAR_END_HOUR - 1, 45, 0, 0); // Leave room for appointment
+      maxTime.setHours(CALENDAR_END_HOUR - 1, 45, 0, 0); // Leave room for item
 
       const clampedTime = new Date(Math.max(minTime.getTime(), Math.min(newTime.getTime(), maxTime.getTime())));
 
@@ -236,9 +281,14 @@ export function useCalendarDnd({
       if (!newTech) return;
 
       // Calculate new end time based on original duration
-      const duration =
-        dragState.activeAppointment.endTime.getTime() -
-        dragState.activeAppointment.startTime.getTime();
+      // Ensure we handle both Date objects and date strings
+      const startMs = activeItem.startTime instanceof Date
+        ? activeItem.startTime.getTime()
+        : new Date(activeItem.startTime).getTime();
+      const endMs = activeItem.endTime instanceof Date
+        ? activeItem.endTime.getTime()
+        : new Date(activeItem.endTime).getTime();
+      const duration = endMs - startMs;
       const newEndTime = new Date(clampedTime.getTime() + duration);
 
       // Check for conflicts (informational only, doesn't block)
@@ -256,12 +306,12 @@ export function useCalendarDnd({
         hasConflict,
       }));
     },
-    [dragState.activeAppointment, dragState.activeId, dragState.initialPointerY, dragState.originalStartTime, getTechnicianFromX, checkLocalConflict]
+    [dragState.activeAppointment, dragState.activeBlock, dragState.activeId, dragState.initialPointerY, dragState.originalStartTime, getTechnicianFromX, checkLocalConflict]
   );
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
-      if (!dragState.activeAppointment || !dragState.currentTime || !dragState.currentTechId) {
+      if (!dragState.currentTime || !dragState.currentTechId) {
         setDragState(initialDragState);
         return;
       }
@@ -277,14 +327,24 @@ export function useCalendarDnd({
         return;
       }
 
-      // Set pending move for confirmation (allow even with conflicts)
-      setPendingMove({
-        appointment: dragState.activeAppointment,
-        originalTime: dragState.originalStartTime,
-        newTime: dragState.currentTime,
-        originalTechId: dragState.originalTechId,
-        newTechId: dragState.currentTechId,
-      });
+      // Set pending move based on drag type
+      if (dragState.dragType === "block" && dragState.activeBlock) {
+        setPendingBlockMove({
+          block: dragState.activeBlock,
+          originalTime: dragState.originalStartTime,
+          newTime: dragState.currentTime,
+          originalTechId: dragState.originalTechId,
+          newTechId: dragState.currentTechId,
+        });
+      } else if (dragState.dragType === "appointment" && dragState.activeAppointment) {
+        setPendingMove({
+          appointment: dragState.activeAppointment,
+          originalTime: dragState.originalStartTime,
+          newTime: dragState.currentTime,
+          originalTechId: dragState.originalTechId,
+          newTechId: dragState.currentTechId,
+        });
+      }
 
       setDragState(initialDragState);
     },
@@ -369,6 +429,10 @@ export function useCalendarDnd({
   // Clear pending states
   const clearPendingMove = useCallback(() => {
     setPendingMove(null);
+  }, []);
+
+  const clearPendingBlockMove = useCallback(() => {
+    setPendingBlockMove(null);
   }, []);
 
   // Get style for selection overlay
@@ -468,6 +532,8 @@ export function useCalendarDnd({
     // Pending states
     pendingMove,
     clearPendingMove,
+    pendingBlockMove,
+    clearPendingBlockMove,
 
     // Helpers
     getDragOverlayTechColor,

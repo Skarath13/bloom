@@ -14,6 +14,7 @@ import {
 import { MiniCalendar } from "./mini-calendar";
 import { CalendarHeader } from "./calendar-header";
 import { AppointmentCard, calculateOverlapPositions } from "./appointment-card";
+import { BlockCard } from "./block-card";
 import { TimeIndicator, getCurrentTimeScrollPosition } from "./time-indicator";
 import { MoveConfirmationModal } from "./move-confirmation-modal";
 import { useCalendarDnd } from "@/hooks/use-calendar-dnd";
@@ -84,6 +85,12 @@ interface ResourceCalendarProps {
     newStartTime: Date,
     newEndTime: Date,
     notifyClient: boolean
+  ) => Promise<void>;
+  onMoveBlock?: (
+    blockId: string,
+    newTechnicianId: string,
+    newStartTime: Date,
+    newEndTime: Date
   ) => Promise<void>;
 }
 
@@ -206,6 +213,7 @@ export function ResourceCalendar({
   onSettingsClick,
   onMoreClick,
   onMoveAppointment,
+  onMoveBlock,
 }: ResourceCalendarProps) {
   const [selectedDate, setSelectedDate] = useState<Date>(initialDate || new Date());
   const [selectedTechIds, setSelectedTechIds] = useState<string[]>([]);
@@ -333,9 +341,12 @@ export function ResourceCalendar({
     getSelectionStyle,
     pendingMove,
     clearPendingMove,
+    pendingBlockMove,
+    clearPendingBlockMove,
     getDragOverlayTechColor,
   } = useCalendarDnd({
     appointments: dayAppointments,
+    blocks: dayBlocks,
     selectedDate,
     visibleTechnicians,
     gridRef,
@@ -370,6 +381,41 @@ export function ResourceCalendar({
     },
     [pendingMove, onMoveAppointment, clearPendingMove]
   );
+
+  // Handle block move (direct, no confirmation modal needed)
+  // Using ref to track if a move is already in flight to prevent race conditions
+  const blockMoveInFlight = useRef(false);
+
+  const handleBlockMove = useCallback(async () => {
+    if (!pendingBlockMove || !onMoveBlock) return;
+
+    // Prevent double-execution race condition
+    if (blockMoveInFlight.current) return;
+    blockMoveInFlight.current = true;
+
+    const { block, newTime, newTechId } = pendingBlockMove;
+    const duration = new Date(block.endTime).getTime() - new Date(block.startTime).getTime();
+    const newEndTime = new Date(newTime.getTime() + duration);
+
+    setIsMoving(true);
+    try {
+      await onMoveBlock(block.id, newTechId, newTime, newEndTime);
+      clearPendingBlockMove();
+    } catch (error) {
+      console.error("Failed to move block:", error);
+      clearPendingBlockMove();
+    } finally {
+      setIsMoving(false);
+      blockMoveInFlight.current = false;
+    }
+  }, [pendingBlockMove, onMoveBlock, clearPendingBlockMove]);
+
+  // Auto-execute block moves (no confirmation needed for personal events)
+  useEffect(() => {
+    if (pendingBlockMove && onMoveBlock && !blockMoveInFlight.current) {
+      handleBlockMove();
+    }
+  }, [pendingBlockMove, onMoveBlock, handleBlockMove]);
 
   // Calculate block position and height (similar to appointments)
   const getBlockStyle = (block: TechnicianBlock) => {
@@ -692,27 +738,21 @@ export function ResourceCalendar({
                     >
                       {blocksByTech[tech.id]?.map((block) => {
                         const { top, height } = getBlockStyle(block);
+                        // Hide the original block if it's being dragged
+                        const isBeingDragged = dragState.activeId === `block-${block.id}`;
 
                         return (
-                          <div
+                          <BlockCard
                             key={block.id}
-                            className="absolute rounded px-1.5 py-1 overflow-hidden cursor-pointer transition-all hover:brightness-110 pointer-events-auto"
+                            block={block}
                             style={{
                               top: `${top}px`,
                               height: `${height}px`,
-                              left: "2px",
-                              right: "2px",
-                              backgroundColor: "#9E9E9E",
                             }}
                             onClick={() => onBlockClick?.(block)}
-                          >
-                            <div className="text-xs font-medium text-white truncate">
-                              {format(block.startTime, "h:mm a")}
-                            </div>
-                            <div className="text-xs text-white font-medium truncate">
-                              {block.title}
-                            </div>
-                          </div>
+                            draggable={!!onMoveBlock && !isBeingDragged && !isMoving && !pendingBlockMove}
+                            isBeingDragged={isBeingDragged}
+                          />
                         );
                       })}
                     </div>
@@ -748,7 +788,7 @@ export function ResourceCalendar({
                             techColor={tech.color}
                             technicianId={tech.id}
                             height={height}
-                            draggable={!!onMoveAppointment}
+                            draggable={!!onMoveAppointment && !isMoving && !pendingMove}
                             className="pointer-events-auto"
                             style={{
                               top: `${top}px`,
@@ -804,6 +844,31 @@ export function ResourceCalendar({
                   Will overlap
                 </div>
               )}
+            </div>
+          )}
+          {dragState.activeBlock && (
+            <div
+              className="rounded px-1.5 py-1 overflow-hidden pointer-events-none"
+              style={{
+                backgroundColor: "#9E9E9E",
+                opacity: 0.75,
+                boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                width: "150px",
+                minHeight: `${Math.max(
+                  ((new Date(dragState.activeBlock.endTime).getTime() -
+                    new Date(dragState.activeBlock.startTime).getTime()) /
+                    (1000 * 60)) *
+                    (PIXELS_PER_HOUR / 60),
+                  40
+                )}px`,
+              }}
+            >
+              <div className="text-xs font-medium text-white truncate">
+                {format(dragState.currentTime || dragState.activeBlock.startTime, "h:mm a")}
+              </div>
+              <div className="text-xs text-white font-medium truncate">
+                {dragState.activeBlock.title}
+              </div>
             </div>
           )}
         </DragOverlay>

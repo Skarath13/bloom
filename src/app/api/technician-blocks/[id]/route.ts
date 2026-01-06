@@ -12,7 +12,7 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { title, startTime, endTime, blockType, isActive } = body;
+    const { title, startTime, endTime, blockType, isActive, technicianId } = body;
 
     const updateData: Record<string, unknown> = {
       updatedAt: new Date().toISOString(),
@@ -23,6 +23,7 @@ export async function PATCH(
     if (endTime !== undefined) updateData.endTime = endTime;
     if (blockType !== undefined) updateData.blockType = blockType;
     if (isActive !== undefined) updateData.isActive = isActive;
+    if (technicianId !== undefined) updateData.technicianId = technicianId;
 
     const { data: block, error } = await supabase
       .from(tables.technicianBlocks)

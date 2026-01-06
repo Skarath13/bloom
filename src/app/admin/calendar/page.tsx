@@ -434,6 +434,53 @@ function CalendarContent() {
     [fetchAppointments]
   );
 
+  // Handle drag-and-drop block (personal event) move
+  const handleMoveBlock = useCallback(
+    async (
+      blockId: string,
+      newTechnicianId: string,
+      newStartTime: Date,
+      newEndTime: Date
+    ) => {
+      try {
+        // Format as local datetime (YYYY-MM-DDTHH:mm:ss) to match how blocks are stored
+        // Using toISOString() would convert to UTC and cause timezone issues
+        const formatLocalDateTime = (date: Date) => {
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          const hours = String(date.getHours()).padStart(2, '0');
+          const minutes = String(date.getMinutes()).padStart(2, '0');
+          const seconds = String(date.getSeconds()).padStart(2, '0');
+          return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+        };
+
+        const response = await fetch(`/api/technician-blocks/${blockId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            technicianId: newTechnicianId,
+            startTime: formatLocalDateTime(newStartTime),
+            endTime: formatLocalDateTime(newEndTime),
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          toast.error(error.error || "Failed to move personal event");
+          throw new Error(error.error || "Failed to move personal event");
+        }
+
+        toast.success("Personal event moved.");
+        fetchBlocks();
+      } catch (error) {
+        console.error("Failed to move block:", error);
+        throw error;
+      }
+    },
+    [fetchBlocks]
+  );
+
   const newTech = technicians.find((t) => t.id === newAppointmentSlot?.technicianId);
 
   if (loading && locations.length === 0) {
@@ -460,6 +507,7 @@ function CalendarContent() {
         onSlotClick={handleSlotClick}
         onScheduleClick={() => setScheduleDialogOpen(true)}
         onMoveAppointment={handleMoveAppointment}
+        onMoveBlock={handleMoveBlock}
       />
 
       {/* Appointment details dialog - Square style */}
