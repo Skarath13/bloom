@@ -800,7 +800,7 @@ export function ResourceCalendar({
         </div>
 
         {/* Drag Overlay - Moving appointment card */}
-        <DragOverlay modifiers={[snapToGridModifier]}>
+        <DragOverlay modifiers={[snapToGridModifier]} dropAnimation={null}>
           {dragState.activeAppointment && (
             <div
               className={cn(
@@ -821,7 +821,7 @@ export function ResourceCalendar({
               }}
             >
               <div className="text-xs font-medium text-white truncate">
-                {format(dragState.activeAppointment.startTime, "h:mm a")}
+                {format(dragState.currentTime || dragState.activeAppointment.startTime, "h:mm a")}
               </div>
               <div className="text-xs text-white/90 truncate">
                 {dragState.activeAppointment.clientName}
@@ -831,7 +831,7 @@ export function ResourceCalendar({
               </div>
               {dragState.hasConflict && (
                 <div className="text-xs text-red-200 font-medium mt-1">
-                  Conflict!
+                  Overlaps existing appointment
                 </div>
               )}
             </div>
