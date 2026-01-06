@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Pencil, Trash2, Calendar, MapPin, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Calendar, MapPin, Loader2, Sparkles, Package } from "lucide-react";
+import { TechnicianServices } from "@/components/admin/technicians/technician-services";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -92,6 +93,7 @@ interface Technician {
   description: string | null;
   color: string;
   isActive: boolean;
+  hasMasterFee: boolean;
   locations: Location[];
   schedules?: Schedule[];
 }
@@ -110,6 +112,7 @@ export default function TechniciansPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
+  const [isServicesDialogOpen, setIsServicesDialogOpen] = useState(false);
   const [editingTech, setEditingTech] = useState<Technician | null>(null);
   const [selectedTech, setSelectedTech] = useState<Technician | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<string>("all");
@@ -121,6 +124,7 @@ export default function TechniciansPage() {
     locationIds: [] as string[],
     color: "#7CB342",
     isActive: true,
+    hasMasterFee: false,
   });
 
   // Fetch locations
@@ -166,6 +170,7 @@ export default function TechniciansPage() {
       locationIds: [],
       color: "#7CB342",
       isActive: true,
+      hasMasterFee: false,
     });
     setEditingTech(null);
   };
@@ -179,8 +184,14 @@ export default function TechniciansPage() {
       locationIds: tech.locations.map((l) => l.id),
       color: tech.color,
       isActive: tech.isActive,
+      hasMasterFee: tech.hasMasterFee || false,
     });
     setIsDialogOpen(true);
+  };
+
+  const handleServices = (tech: Technician) => {
+    setSelectedTech(tech);
+    setIsServicesDialogOpen(true);
   };
 
   const handleSchedule = async (tech: Technician) => {
@@ -227,6 +238,7 @@ export default function TechniciansPage() {
             color: formData.color,
             locationIds: formData.locationIds,
             isActive: formData.isActive,
+            hasMasterFee: formData.hasMasterFee,
           }),
         });
 
@@ -247,6 +259,7 @@ export default function TechniciansPage() {
             color: formData.color,
             locationIds: formData.locationIds,
             isActive: formData.isActive,
+            hasMasterFee: formData.hasMasterFee,
           }),
         });
 
@@ -450,7 +463,15 @@ export default function TechniciansPage() {
               {filteredTechnicians.map((tech) => (
                 <TableRow key={tech.id}>
                   <TableCell className="font-medium">
-                    {tech.firstName} {tech.lastName}
+                    <div className="flex items-center gap-2">
+                      {tech.firstName} {tech.lastName}
+                      {tech.hasMasterFee && (
+                        <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                          <Sparkles className="h-3 w-3 mr-1" />
+                          Master
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <span className="text-sm text-muted-foreground line-clamp-1">
@@ -486,6 +507,14 @@ export default function TechniciansPage() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleServices(tech)}
+                        title="Manage Services"
+                      >
+                        <Package className="h-4 w-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -684,6 +713,25 @@ export default function TechniciansPage() {
               />
               <Label htmlFor="isActive">Active</Label>
             </div>
+
+            <div className="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
+              <Switch
+                id="hasMasterFee"
+                checked={formData.hasMasterFee}
+                onCheckedChange={(checked) =>
+                  setFormData((prev) => ({ ...prev, hasMasterFee: checked }))
+                }
+              />
+              <div>
+                <Label htmlFor="hasMasterFee" className="cursor-pointer flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-amber-600" />
+                  Master Technician
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  +$5 fee notice displayed to clients
+                </p>
+              </div>
+            </div>
           </div>
 
           <DialogFooter>
@@ -769,6 +817,27 @@ export default function TechniciansPage() {
               Save Schedule
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Services Dialog */}
+      <Dialog open={isServicesDialogOpen} onOpenChange={setIsServicesDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              Services for {selectedTech?.firstName} {selectedTech?.lastName}
+            </DialogTitle>
+            <DialogDescription>
+              Configure which services this technician can perform and set custom durations
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedTech && (
+            <TechnicianServices
+              technicianId={selectedTech.id}
+              technicianLocationIds={selectedTech.locations.map((l) => l.id)}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>

@@ -1,425 +1,253 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Pencil, Trash2, Clock, DollarSign } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
+import { useState, useEffect, useCallback } from "react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-
-// Service categories
-const categories = [
-  { value: "LASH_EXTENSION", label: "Lash Extensions" },
-  { value: "LASH_FILL", label: "Lash Fills" },
-  { value: "LASH_LIFT", label: "Lash Lift" },
-  { value: "BROW", label: "Brow Services" },
-  { value: "PERMANENT_MAKEUP", label: "Permanent Makeup" },
-  { value: "OTHER", label: "Other" },
-];
-
-// Mock data - will come from database
-const initialServices = [
-  { id: "1", name: "Natural Wet Set (New Client)", category: "LASH_EXTENSION", price: 75, duration: 90, deposit: 25, isActive: true },
-  { id: "2", name: "Elegant Volume Set", category: "LASH_EXTENSION", price: 105, duration: 120, deposit: 25, isActive: true },
-  { id: "3", name: "Mega Volume Set", category: "LASH_EXTENSION", price: 125, duration: 150, deposit: 25, isActive: true },
-  { id: "4", name: "Natural Fill (2 weeks)", category: "LASH_FILL", price: 60, duration: 60, deposit: 25, isActive: true },
-  { id: "5", name: "Lash Lift + Tint", category: "LASH_LIFT", price: 75, duration: 60, deposit: 25, isActive: true },
-  { id: "6", name: "Brow Lamination", category: "BROW", price: 75, duration: 60, deposit: 25, isActive: true },
-];
+import { ServiceList } from "@/components/admin/services/service-list";
+import { ServiceDetailPanel, ServiceDetailEmpty } from "@/components/admin/services/service-detail-panel";
+import { AddServiceSheet } from "@/components/admin/services/add-service-sheet";
 
 interface Service {
   id: string;
   name: string;
+  description: string | null;
   category: string;
+  durationMinutes: number;
   price: number;
-  duration: number;
-  deposit: number;
+  depositAmount: number;
   isActive: boolean;
-  description?: string;
+  isVariablePrice: boolean;
+  imageUrl: string | null;
+  locationIds: string[];
+}
+
+interface Location {
+  id: string;
+  name: string;
+  city: string;
 }
 
 export default function ServicesPage() {
-  const [services, setServices] = useState<Service[]>(initialServices);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingService, setEditingService] = useState<Service | null>(null);
-  const [formData, setFormData] = useState({
-    name: "",
-    category: "LASH_EXTENSION",
-    price: "",
-    duration: "",
-    deposit: "25",
-    description: "",
-    isActive: true,
-  });
+  const [services, setServices] = useState<Service[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [selectedService, setSelectedService] = useState<Service | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const resetForm = () => {
-    setFormData({
-      name: "",
-      category: "LASH_EXTENSION",
-      price: "",
-      duration: "",
-      deposit: "25",
-      description: "",
-      isActive: true,
+  // Fetch all services with their locations
+  const fetchServices = useCallback(async () => {
+    try {
+      const response = await fetch("/api/services?includeInactive=true&includeLocations=true");
+      const data = await response.json();
+      if (data.services) {
+        setServices(data.services);
+        // Update selected service if it exists
+        if (selectedService) {
+          const updated = data.services.find((s: Service) => s.id === selectedService.id);
+          if (updated) {
+            setSelectedService(updated);
+          } else {
+            setSelectedService(null);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching services:", error);
+      toast.error("Failed to load services");
+    }
+  }, [selectedService?.id]);
+
+  // Fetch locations
+  const fetchLocations = useCallback(async () => {
+    try {
+      const response = await fetch("/api/locations");
+      const data = await response.json();
+      if (data.locations) {
+        setLocations(data.locations);
+      }
+    } catch (error) {
+      console.error("Error fetching locations:", error);
+      toast.error("Failed to load locations");
+    }
+  }, []);
+
+  useEffect(() => {
+    Promise.all([fetchServices(), fetchLocations()]).finally(() => {
+      setIsLoading(false);
     });
-    setEditingService(null);
+  }, []);
+
+  // Handle service selection
+  const handleSelectService = (service: Service) => {
+    // Find the full service with locations from our state
+    const fullService = services.find((s) => s.id === service.id);
+    setSelectedService(fullService || service);
   };
 
-  const handleEdit = (service: Service) => {
-    setEditingService(service);
-    setFormData({
-      name: service.name,
-      category: service.category,
-      price: service.price.toString(),
-      duration: service.duration.toString(),
-      deposit: service.deposit.toString(),
-      description: service.description || "",
-      isActive: service.isActive,
-    });
-    setIsDialogOpen(true);
-  };
+  // Handle service update (optimistic)
+  const handleUpdateService = async (updates: Partial<Service>) => {
+    if (!selectedService) return;
 
-  const handleSubmit = () => {
-    if (!formData.name || !formData.price || !formData.duration) {
-      toast.error("Please fill in all required fields");
-      return;
-    }
-
-    if (editingService) {
-      // Update existing service
-      setServices((prev) =>
-        prev.map((s) =>
-          s.id === editingService.id
-            ? {
-                ...s,
-                name: formData.name,
-                category: formData.category,
-                price: parseFloat(formData.price),
-                duration: parseInt(formData.duration),
-                deposit: parseFloat(formData.deposit),
-                description: formData.description,
-                isActive: formData.isActive,
-              }
-            : s
-        )
-      );
-      toast.success("Service updated successfully");
-    } else {
-      // Create new service
-      const newService: Service = {
-        id: `new-${Date.now()}`,
-        name: formData.name,
-        category: formData.category,
-        price: parseFloat(formData.price),
-        duration: parseInt(formData.duration),
-        deposit: parseFloat(formData.deposit),
-        description: formData.description,
-        isActive: formData.isActive,
-      };
-      setServices((prev) => [...prev, newService]);
-      toast.success("Service created successfully");
-    }
-
-    setIsDialogOpen(false);
-    resetForm();
-  };
-
-  const handleDelete = (id: string) => {
-    if (confirm("Are you sure you want to delete this service?")) {
-      setServices((prev) => prev.filter((s) => s.id !== id));
-      toast.success("Service deleted");
-    }
-  };
-
-  const toggleActive = (id: string) => {
+    // Optimistic update - apply changes immediately
+    const updatedService = { ...selectedService, ...updates };
+    setSelectedService(updatedService);
     setServices((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, isActive: !s.isActive } : s))
+      prev.map((s) => (s.id === selectedService.id ? updatedService : s))
     );
+
+    // Background API call
+    try {
+      const response = await fetch(`/api/services/${selectedService.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update service");
+      }
+    } catch (error) {
+      console.error("Error updating service:", error);
+      // Revert on error
+      toast.error("Failed to update");
+      await fetchServices();
+      throw error;
+    }
   };
 
-  const getCategoryLabel = (value: string) => {
-    return categories.find((c) => c.value === value)?.label || value;
+  // Handle service delete
+  const handleDeleteService = async () => {
+    if (!selectedService) return;
+
+    try {
+      const response = await fetch(`/api/services/${selectedService.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete service");
+      }
+
+      setSelectedService(null);
+      await fetchServices();
+    } catch (error) {
+      console.error("Error deleting service:", error);
+      throw error;
+    }
   };
+
+  // Handle location toggle (optimistic)
+  const handleLocationToggle = async (locationId: string, enabled: boolean) => {
+    if (!selectedService) return;
+
+    const newLocationIds = enabled
+      ? [...selectedService.locationIds, locationId]
+      : selectedService.locationIds.filter((id) => id !== locationId);
+
+    // Optimistic update - apply immediately
+    setSelectedService((prev) =>
+      prev ? { ...prev, locationIds: newLocationIds } : null
+    );
+    setServices((prev) =>
+      prev.map((s) =>
+        s.id === selectedService.id ? { ...s, locationIds: newLocationIds } : s
+      )
+    );
+
+    // Background API call
+    try {
+      const response = await fetch(`/api/services/${selectedService.id}/locations`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ locationIds: newLocationIds }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update locations");
+      }
+    } catch (error) {
+      console.error("Error updating locations:", error);
+      toast.error("Failed to update location");
+      // Revert on error
+      await fetchServices();
+    }
+  };
+
+  // Handle new service creation
+  const handleCreateService = async (serviceData: Omit<Service, "id">) => {
+    try {
+      const response = await fetch("/api/services", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(serviceData),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to create service");
+      }
+
+      const data = await response.json();
+      await fetchServices();
+
+      // Select the newly created service
+      if (data.service) {
+        setSelectedService(data.service);
+      }
+    } catch (error) {
+      console.error("Error creating service:", error);
+      throw error;
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="h-[calc(100vh-4rem)] flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b shrink-0">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Services</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl font-bold tracking-tight">Services</h1>
+          <p className="text-sm text-muted-foreground">
             Manage your salon services and pricing
           </p>
         </div>
-        <Button onClick={() => setIsDialogOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Service
-        </Button>
+        <AddServiceSheet
+          locations={locations}
+          onServiceCreated={handleCreateService}
+        />
       </div>
 
-      {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Services</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{services.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Active Services</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {services.filter((s) => s.isActive).length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Categories</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {new Set(services.map((s) => s.category)).size}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Two-panel layout */}
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        {/* Left panel - Service list */}
+        <div className="w-80 border-r bg-muted/30 shrink-0 overflow-hidden flex flex-col">
+          <ServiceList
+            services={services}
+            selectedId={selectedService?.id || null}
+            onSelect={handleSelectService}
+          />
+        </div>
+
+        {/* Right panel - Service detail */}
+        <div className="flex-1 min-w-0 overflow-auto">
+          {selectedService ? (
+            <ServiceDetailPanel
+              service={selectedService}
+              locations={locations}
+              onUpdate={handleUpdateService}
+              onDelete={handleDeleteService}
+              onLocationToggle={handleLocationToggle}
+            />
+          ) : (
+            <ServiceDetailEmpty />
+          )}
+        </div>
       </div>
-
-      {/* Services Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>All Services</CardTitle>
-          <CardDescription>
-            A list of all services offered at your salon
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Duration</TableHead>
-                <TableHead>Price</TableHead>
-                <TableHead>Deposit</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {services.map((service) => (
-                <TableRow key={service.id}>
-                  <TableCell className="font-medium">{service.name}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline">
-                      {getCategoryLabel(service.category)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1 text-muted-foreground">
-                      <Clock className="h-3 w-3" />
-                      {service.duration} min
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1 font-medium">
-                      <DollarSign className="h-3 w-3" />
-                      {service.price}
-                    </div>
-                  </TableCell>
-                  <TableCell>${service.deposit}</TableCell>
-                  <TableCell>
-                    <Switch
-                      checked={service.isActive}
-                      onCheckedChange={() => toggleActive(service.id)}
-                    />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleEdit(service)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDelete(service.id)}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Add/Edit Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={(open) => {
-        setIsDialogOpen(open);
-        if (!open) resetForm();
-      }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editingService ? "Edit Service" : "Add New Service"}
-            </DialogTitle>
-            <DialogDescription>
-              {editingService
-                ? "Update the service details below"
-                : "Fill in the details to create a new service"}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Service Name *</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, name: e.target.value }))
-                }
-                placeholder="e.g., Natural Volume Set"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="category">Category *</Label>
-              <Select
-                value={formData.category}
-                onValueChange={(value) =>
-                  setFormData((prev) => ({ ...prev, category: value }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat.value} value={cat.value}>
-                      {cat.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="price">Price ($) *</Label>
-                <Input
-                  id="price"
-                  type="number"
-                  value={formData.price}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, price: e.target.value }))
-                  }
-                  placeholder="0"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="duration">Duration (min) *</Label>
-                <Input
-                  id="duration"
-                  type="number"
-                  value={formData.duration}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, duration: e.target.value }))
-                  }
-                  placeholder="60"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="deposit">Deposit ($)</Label>
-                <Input
-                  id="deposit"
-                  type="number"
-                  value={formData.deposit}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, deposit: e.target.value }))
-                  }
-                  placeholder="25"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={formData.description}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, description: e.target.value }))
-                }
-                placeholder="Brief description of the service..."
-                rows={2}
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Switch
-                id="isActive"
-                checked={formData.isActive}
-                onCheckedChange={(checked) =>
-                  setFormData((prev) => ({ ...prev, isActive: checked }))
-                }
-              />
-              <Label htmlFor="isActive">Active</Label>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSubmit}>
-              {editingService ? "Update" : "Create"} Service
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

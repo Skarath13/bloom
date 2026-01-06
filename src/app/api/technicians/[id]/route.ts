@@ -21,6 +21,7 @@ export async function GET(
         avatarUrl,
         defaultBufferMinutes,
         isActive,
+        hasMasterFee,
         sortOrder,
         locationId,
         createdAt,
@@ -64,6 +65,7 @@ export async function GET(
       avatarUrl: tech.avatarUrl,
       defaultBufferMinutes: tech.defaultBufferMinutes,
       isActive: tech.isActive,
+      hasMasterFee: tech.hasMasterFee || false,
       sortOrder: tech.sortOrder,
       locationId: tech.locationId,
       createdAt: tech.createdAt,
@@ -91,7 +93,7 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { firstName, lastName, description, color, locationIds, isActive } = body;
+    const { firstName, lastName, description, color, locationIds, isActive, hasMasterFee } = body;
 
     // Build update object with only provided fields
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -104,6 +106,7 @@ export async function PUT(
     if (description !== undefined) updateData.description = description;
     if (color !== undefined) updateData.color = color;
     if (isActive !== undefined) updateData.isActive = isActive;
+    if (hasMasterFee !== undefined) updateData.hasMasterFee = hasMasterFee;
 
     // Update primary locationId if locationIds provided
     if (locationIds && Array.isArray(locationIds) && locationIds.length > 0) {

@@ -84,6 +84,7 @@ export interface Database {
           isActive: boolean;
           sortOrder: number;
           locationId: string;
+          hasMasterFee: boolean;
           createdAt: string;
           updatedAt: string;
         };
@@ -110,6 +111,8 @@ export interface Database {
           price: number;
           depositAmount: number;
           color: string | null;
+          imageUrl: string | null;
+          isVariablePrice: boolean;
           isActive: boolean;
           sortOrder: number;
           createdAt: string;
@@ -117,6 +120,19 @@ export interface Database {
         };
         Insert: Omit<Database["appointments"]["Tables"]["bloom_services"]["Row"], "id" | "createdAt" | "updatedAt">;
         Update: Partial<Database["appointments"]["Tables"]["bloom_services"]["Insert"]>;
+      };
+      bloom_service_technicians: {
+        Row: {
+          id: string;
+          serviceId: string;
+          technicianId: string;
+          isEnabled: boolean;
+          customDurationMinutes: number | null;
+          createdAt: string;
+          updatedAt: string;
+        };
+        Insert: Omit<Database["appointments"]["Tables"]["bloom_service_technicians"]["Row"], "id" | "createdAt" | "updatedAt">;
+        Update: Partial<Database["appointments"]["Tables"]["bloom_service_technicians"]["Insert"]>;
       };
       bloom_locations: {
         Row: {
@@ -253,6 +269,7 @@ export const tables = {
   technicianBlocks: "bloom_technician_blocks",
   technicianSchedules: "bloom_technician_schedules",
   serviceLocations: "bloom_service_locations",
+  serviceTechnicians: "bloom_service_technicians",
   users: "bloom_users",
   phoneVerifications: "bloom_phone_verifications",
   recurringAppointments: "bloom_recurring_appointments",

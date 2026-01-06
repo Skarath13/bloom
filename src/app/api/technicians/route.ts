@@ -42,6 +42,7 @@ export async function GET(request: NextRequest) {
         avatarUrl,
         defaultBufferMinutes,
         isActive,
+        hasMasterFee,
         sortOrder,
         locationId,
         createdAt,
@@ -82,6 +83,7 @@ export async function GET(request: NextRequest) {
       avatarUrl: tech.avatarUrl,
       defaultBufferMinutes: tech.defaultBufferMinutes,
       isActive: tech.isActive,
+      hasMasterFee: tech.hasMasterFee || false,
       sortOrder: tech.sortOrder,
       locationId: tech.locationId,
       createdAt: tech.createdAt,
@@ -106,7 +108,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { firstName, lastName, description, color, locationIds, isActive = true } = body;
+    const { firstName, lastName, description, color, locationIds, isActive = true, hasMasterFee = false } = body;
 
     if (!firstName || !lastName) {
       return NextResponse.json(
@@ -135,6 +137,7 @@ export async function POST(request: NextRequest) {
         description: description || null,
         color: color || "#7CB342",
         isActive,
+        hasMasterFee,
         locationId: locationIds[0], // Primary location for backwards compat
         defaultBufferMinutes: 0,
         sortOrder: 0,
