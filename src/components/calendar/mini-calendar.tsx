@@ -127,7 +127,7 @@ export function MiniCalendar({ selectedDate, onDateSelect }: MiniCalendarProps) 
             <button
               key={index}
               className={cn(
-                "h-7 w-7 flex items-center justify-center text-sm rounded-full mx-auto transition-colors",
+                "h-7 w-7 flex items-center justify-center text-sm rounded-full mx-auto transition-colors cursor-pointer",
                 !isCurrentMonth && "text-gray-300 hover:bg-gray-50",
                 isCurrentMonth && !isSelected && "text-gray-700 hover:bg-gray-100",
                 isSelected && "bg-gray-900 text-white hover:bg-gray-800",
