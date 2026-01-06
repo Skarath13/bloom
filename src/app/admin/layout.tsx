@@ -16,8 +16,8 @@ export default function AdminLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
 
-  // Calendar page gets full-bleed layout (no padding)
-  const isCalendarPage = pathname === "/admin/calendar";
+  // Full-bleed pages (no padding, handle their own layout)
+  const isFullBleedPage = pathname === "/admin/calendar" || pathname === "/admin/services";
 
   return (
     <SessionProvider>
@@ -46,7 +46,7 @@ export default function AdminLayout({
             <Menu className="h-5 w-5" />
             <span className="sr-only">Toggle menu</span>
           </Button>
-          <main className={`flex-1 bg-background relative ${isCalendarPage ? "overflow-hidden" : "overflow-auto p-6"}`}>
+          <main className={`flex-1 bg-background relative ${isFullBleedPage ? "overflow-hidden" : "overflow-auto p-6"}`}>
             {children}
           </main>
         </div>

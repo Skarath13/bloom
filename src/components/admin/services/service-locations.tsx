@@ -18,12 +18,35 @@ interface ServiceLocationsProps {
   disabled?: boolean;
 }
 
+// Custom location order
+const LOCATION_ORDER = ["Tustin", "Costa Mesa", "Santa Ana", "Irvine", "Newport Beach"];
+
+function sortLocations(locations: Location[]): Location[] {
+  return [...locations].sort((a, b) => {
+    const aIndex = LOCATION_ORDER.findIndex(city =>
+      a.city.toLowerCase().includes(city.toLowerCase()) || a.name.toLowerCase().includes(city.toLowerCase())
+    );
+    const bIndex = LOCATION_ORDER.findIndex(city =>
+      b.city.toLowerCase().includes(city.toLowerCase()) || b.name.toLowerCase().includes(city.toLowerCase())
+    );
+    // If both found in order, sort by order
+    if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+    // If only one found, it comes first
+    if (aIndex !== -1) return -1;
+    if (bIndex !== -1) return 1;
+    // Otherwise alphabetical
+    return a.name.localeCompare(b.name);
+  });
+}
+
 export function ServiceLocations({
   locations,
   enabledLocationIds,
   onToggle,
   disabled = false,
 }: ServiceLocationsProps) {
+  const sortedLocations = sortLocations(locations);
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -34,7 +57,7 @@ export function ServiceLocations({
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {locations.map((location) => {
+          {sortedLocations.map((location) => {
             const isEnabled = enabledLocationIds.includes(location.id);
             return (
               <div
