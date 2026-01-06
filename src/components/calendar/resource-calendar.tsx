@@ -16,7 +16,6 @@ import { CalendarHeader } from "./calendar-header";
 import { AppointmentCard, calculateOverlapPositions } from "./appointment-card";
 import { TimeIndicator, getCurrentTimeScrollPosition } from "./time-indicator";
 import { MoveConfirmationModal } from "./move-confirmation-modal";
-import { QuickBlockDialog } from "./quick-block-dialog";
 import { useCalendarDnd } from "@/hooks/use-calendar-dnd";
 import { cn } from "@/lib/utils";
 
@@ -85,12 +84,6 @@ interface ResourceCalendarProps {
     newStartTime: Date,
     newEndTime: Date,
     notifyClient: boolean
-  ) => Promise<void>;
-  onCreateBlock?: (
-    technicianId: string,
-    title: string,
-    startTime: Date,
-    endTime: Date
   ) => Promise<void>;
 }
 
@@ -213,7 +206,6 @@ export function ResourceCalendar({
   onSettingsClick,
   onMoreClick,
   onMoveAppointment,
-  onCreateBlock,
 }: ResourceCalendarProps) {
   const [selectedDate, setSelectedDate] = useState<Date>(initialDate || new Date());
   const [selectedTechIds, setSelectedTechIds] = useState<string[]>([]);
@@ -223,7 +215,6 @@ export function ResourceCalendar({
     minutesFromMidnight: number;
   } | null>(null);
   const [isMoving, setIsMoving] = useState(false);
-  const [isCreatingBlock, setIsCreatingBlock] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
 
   // DnD sensors - require 5px movement to start drag (prevents accidental drags on click)
@@ -341,15 +332,14 @@ export function ResourceCalendar({
     handleSelectionEnd,
     getSelectionStyle,
     pendingMove,
-    pendingBlock,
     clearPendingMove,
-    clearPendingBlock,
     getDragOverlayTechColor,
   } = useCalendarDnd({
     appointments: dayAppointments,
     selectedDate,
     visibleTechnicians,
     gridRef,
+    onSlotSelect: onSlotClick,
   });
 
   // Handle move confirmation
@@ -379,29 +369,6 @@ export function ResourceCalendar({
       }
     },
     [pendingMove, onMoveAppointment, clearPendingMove]
-  );
-
-  // Handle block creation
-  const handleConfirmBlock = useCallback(
-    async (title: string) => {
-      if (!pendingBlock || !onCreateBlock) return;
-
-      setIsCreatingBlock(true);
-      try {
-        await onCreateBlock(
-          pendingBlock.technicianId,
-          title,
-          pendingBlock.startTime,
-          pendingBlock.endTime
-        );
-        clearPendingBlock();
-      } catch (error) {
-        console.error("Failed to create block:", error);
-      } finally {
-        setIsCreatingBlock(false);
-      }
-    },
-    [pendingBlock, onCreateBlock, clearPendingBlock]
   );
 
   // Calculate block position and height (similar to appointments)
@@ -630,7 +597,7 @@ export function ResourceCalendar({
                       onClick={() => onSlotClick?.(tech.id, slot)}
                       onMouseDown={(e) => {
                         // Only start selection on primary mouse button
-                        if (e.button === 0 && onCreateBlock) {
+                        if (e.button === 0 && onSlotClick) {
                           handleSelectionStart(e, tech.id);
                         }
                       }}
@@ -858,18 +825,6 @@ export function ResourceCalendar({
         />
       )}
 
-      {/* Quick Block Dialog */}
-      {pendingBlock && (
-        <QuickBlockDialog
-          technicianId={pendingBlock.technicianId}
-          technicianName={pendingBlock.technicianName}
-          startTime={pendingBlock.startTime}
-          endTime={pendingBlock.endTime}
-          onSave={handleConfirmBlock}
-          onCancel={clearPendingBlock}
-          isLoading={isCreatingBlock}
-        />
-      )}
     </div>
   );
 }

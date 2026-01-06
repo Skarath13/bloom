@@ -434,43 +434,6 @@ function CalendarContent() {
     [fetchAppointments]
   );
 
-  // Handle drag-to-create personal event block
-  const handleCreateBlock = useCallback(
-    async (
-      technicianId: string,
-      title: string,
-      startTime: Date,
-      endTime: Date
-    ) => {
-      try {
-        const response = await fetch("/api/technician-blocks", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            technicianId,
-            title,
-            blockType: "PERSONAL",
-            startTime: startTime.toISOString(),
-            endTime: endTime.toISOString(),
-          }),
-        });
-
-        if (!response.ok) {
-          const error = await response.json();
-          toast.error(error.error || "Failed to create event");
-          throw new Error(error.error || "Failed to create event");
-        }
-
-        toast.success("Personal event created");
-        fetchBlocks();
-      } catch (error) {
-        console.error("Failed to create block:", error);
-        throw error;
-      }
-    },
-    [fetchBlocks]
-  );
-
   const newTech = technicians.find((t) => t.id === newAppointmentSlot?.technicianId);
 
   if (loading && locations.length === 0) {
@@ -497,7 +460,6 @@ function CalendarContent() {
         onSlotClick={handleSlotClick}
         onScheduleClick={() => setScheduleDialogOpen(true)}
         onMoveAppointment={handleMoveAppointment}
-        onCreateBlock={handleCreateBlock}
       />
 
       {/* Appointment details dialog - Square style */}

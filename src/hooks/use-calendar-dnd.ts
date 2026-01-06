@@ -9,6 +9,7 @@ const PIXELS_PER_15_MIN = 20;
 const TIME_COLUMN_WIDTH = 56;
 const CALENDAR_START_HOUR = 0;
 const CALENDAR_END_HOUR = 24;
+const HEADER_HEIGHT = 37; // Height of sticky technician header row
 
 interface Technician {
   id: string;
@@ -68,6 +69,7 @@ interface UseCalendarDndOptions {
   selectedDate: Date;
   visibleTechnicians: Technician[];
   gridRef: RefObject<HTMLDivElement | null>;
+  onSlotSelect?: (technicianId: string, time: Date) => void;
   onConflictCheck?: (
     technicianId: string,
     startTime: Date,
@@ -99,11 +101,11 @@ export function useCalendarDnd({
   selectedDate,
   visibleTechnicians,
   gridRef,
+  onSlotSelect,
 }: UseCalendarDndOptions) {
   const [dragState, setDragState] = useState<DragState>(initialDragState);
   const [selection, setSelection] = useState<SelectionState>(initialSelectionState);
   const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
-  const [pendingBlock, setPendingBlock] = useState<PendingBlock | null>(null);
 
   // Calculate time from Y position
   const getTimeFromY = useCallback(
@@ -113,7 +115,8 @@ export function useCalendarDnd({
 
       const rect = gridElement.getBoundingClientRect();
       const scrollTop = gridElement.scrollTop;
-      const relativeY = clientY - rect.top + scrollTop;
+      // Account for sticky header height
+      const relativeY = clientY - rect.top + scrollTop - HEADER_HEIGHT;
 
       // Snap to 15-minute increments
       const minutes = Math.round(relativeY / PIXELS_PER_15_MIN) * 15;
@@ -344,28 +347,20 @@ export function useCalendarDnd({
 
   const handleSelectionEnd = useCallback(() => {
     if (selection.isSelecting && selection.technicianId && selection.startTime && selection.endTime) {
-      const tech = visibleTechnicians.find((t) => t.id === selection.technicianId);
-
       // Ensure start is before end
       const finalStartTime =
         selection.startTime.getTime() < selection.endTime.getTime()
           ? selection.startTime
           : selection.endTime;
-      const finalEndTime =
-        selection.startTime.getTime() < selection.endTime.getTime()
-          ? selection.endTime
-          : selection.startTime;
 
-      setPendingBlock({
-        technicianId: selection.technicianId,
-        technicianName: tech?.firstName || "Unknown",
-        startTime: finalStartTime,
-        endTime: finalEndTime,
-      });
+      // Call the slot select callback to open the create event dialog
+      if (onSlotSelect) {
+        onSlotSelect(selection.technicianId, finalStartTime);
+      }
     }
 
     setSelection(initialSelectionState);
-  }, [selection, visibleTechnicians]);
+  }, [selection, onSlotSelect]);
 
   const handleSelectionCancel = useCallback(() => {
     setSelection(initialSelectionState);
@@ -374,10 +369,6 @@ export function useCalendarDnd({
   // Clear pending states
   const clearPendingMove = useCallback(() => {
     setPendingMove(null);
-  }, []);
-
-  const clearPendingBlock = useCallback(() => {
-    setPendingBlock(null);
   }, []);
 
   // Get style for selection overlay
@@ -476,9 +467,7 @@ export function useCalendarDnd({
 
     // Pending states
     pendingMove,
-    pendingBlock,
     clearPendingMove,
-    clearPendingBlock,
 
     // Helpers
     getDragOverlayTechColor,
