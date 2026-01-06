@@ -1377,12 +1377,16 @@ export function CreateEventDialog({
                           onValueChange={(v) => setRepetition((p) => ({ ...p, frequency: v as "day" | "week" | "month" }))}
                         >
                           <SelectTrigger className="h-10 w-full justify-between">
-                            <SelectValue />
+                            <SelectValue>
+                              {repetition.frequency === "day" && (repetition.interval === 1 ? "Day" : "Days")}
+                              {repetition.frequency === "week" && (repetition.interval === 1 ? "Week" : "Weeks")}
+                              {repetition.frequency === "month" && (repetition.interval === 1 ? "Month" : "Months")}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="day">Day</SelectItem>
-                            <SelectItem value="week">Week</SelectItem>
-                            <SelectItem value="month">Month</SelectItem>
+                            <SelectItem value="day">{repetition.interval === 1 ? "Day" : "Days"}</SelectItem>
+                            <SelectItem value="week">{repetition.interval === 1 ? "Week" : "Weeks"}</SelectItem>
+                            <SelectItem value="month">{repetition.interval === 1 ? "Month" : "Months"}</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>

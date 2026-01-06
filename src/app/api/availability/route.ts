@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase, tables } from "@/lib/supabase";
-import { startOfDay, endOfDay, addMinutes, format, parse, isBefore, isAfter, setHours, setMinutes } from "date-fns";
+import { supabase, tables, type RecurrenceException } from "@/lib/supabase";
+import { startOfDay, endOfDay, addMinutes, format, parse, isBefore, isAfter, setHours, setMinutes, parseISO } from "date-fns";
+import { expandRecurrence } from "@/lib/recurrence";
 
 interface TimeSlot {
   time: string;
@@ -128,19 +129,29 @@ export async function GET(request: NextRequest) {
           // Check for blocking time blocks
           let blocked = false;
           for (const block of tech.blocks) {
-            if (block.recurrenceRule) {
-              // Check recurring blocks (simplified - just check time)
-              if (block.recurringStart && block.recurringEnd) {
-                const blockStart = parse(block.recurringStart, "HH:mm", date);
-                const blockEnd = parse(block.recurringEnd, "HH:mm", date);
+            if (block.recurrenceRule && block.startTime && block.endTime) {
+              // Expand recurring block to check if there's an instance on this date
+              const instances = expandRecurrence(
+                block.id,
+                parseISO(block.startTime),
+                parseISO(block.endTime),
+                block.recurrenceRule,
+                (block.recurrenceExceptions as RecurrenceException[]) || [],
+                startOfDay(date),
+                endOfDay(date)
+              );
+
+              // Check if any instance overlaps with the slot
+              for (const instance of instances) {
                 if (
-                  (isAfter(slotStart, blockStart) || slotStart.getTime() === blockStart.getTime()) &&
-                  isBefore(slotStart, blockEnd)
+                  (isAfter(slotStart, instance.startTime) || slotStart.getTime() === instance.startTime.getTime()) &&
+                  isBefore(slotStart, instance.endTime)
                 ) {
                   blocked = true;
                   break;
                 }
               }
+              if (blocked) break;
             } else if (block.startTime && block.endTime) {
               // One-time block
               const blockStartTime = new Date(block.startTime);

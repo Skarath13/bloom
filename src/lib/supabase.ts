@@ -1,6 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 import { createId } from "@paralleldrive/cuid2";
 
+// Recurrence exception type for tracking modified/deleted instances
+export interface RecurrenceException {
+  date: string; // ISO date string (YYYY-MM-DD)
+  type: "deleted" | "modified";
+  modifiedBlockId?: string; // ID of the modified block instance
+}
+
 // Types for our database tables (in appointments schema)
 export interface Database {
   appointments: {
@@ -165,11 +172,13 @@ export interface Database {
           recurrenceRule: string | null;
           recurringStart: string | null;
           recurringEnd: string | null;
+          recurrenceExceptions: RecurrenceException[];
+          parentBlockId: string | null;
           isActive: boolean;
           createdAt: string;
           updatedAt: string;
         };
-        Insert: Omit<Database["appointments"]["Tables"]["bloom_technician_blocks"]["Row"], "id" | "createdAt" | "updatedAt">;
+        Insert: Omit<Database["appointments"]["Tables"]["bloom_technician_blocks"]["Row"], "id" | "createdAt" | "updatedAt" | "recurrenceExceptions"> & { recurrenceExceptions?: RecurrenceException[] };
         Update: Partial<Database["appointments"]["Tables"]["bloom_technician_blocks"]["Insert"]>;
       };
       bloom_appointment_line_items: {

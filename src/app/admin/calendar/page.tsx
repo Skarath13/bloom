@@ -96,6 +96,9 @@ interface TechnicianBlock {
   startTime: Date;
   endTime: Date;
   isActive: boolean;
+  recurrenceRule?: string | null;
+  instanceDate?: string;
+  isRecurring?: boolean;
 }
 
 // localStorage keys for persisting calendar state
@@ -236,96 +239,110 @@ function CalendarContent() {
   }, [fetchTechnicians]);
 
   // Fetch appointments when locations or date changes
+  // Fetch blocks helper (no loading state - used by combined fetch)
+  const fetchBlocksData = useCallback(async (dateStr: string) => {
+    const response = await fetch(
+      `/api/technician-blocks?startDate=${dateStr}&endDate=${dateStr}`
+    );
+    const data = await response.json();
+    if (data.blocks) {
+      return data.blocks.map((block: Record<string, unknown>) => ({
+        id: block.id,
+        technicianId: block.technicianId,
+        title: block.title,
+        blockType: block.blockType,
+        startTime: new Date(block.startTime as string),
+        endTime: new Date(block.endTime as string),
+        isActive: block.isActive,
+        recurrenceRule: block.recurrenceRule as string | null | undefined,
+        instanceDate: block.instanceDate as string | undefined,
+        isRecurring: block.isRecurring as boolean | undefined,
+      }));
+    }
+    return [];
+  }, []);
+
+  // Fetch appointments helper (no loading state - used by combined fetch)
+  const fetchAppointmentsData = useCallback(async (dateStr: string) => {
+    const allAppointments: Appointment[] = [];
+    for (const locationId of selectedLocationIds) {
+      const response = await fetch(
+        `/api/appointments?locationId=${locationId}&date=${dateStr}`
+      );
+      const data = await response.json();
+      if (data.appointments) {
+        allAppointments.push(
+          ...data.appointments.map((apt: Record<string, unknown>) => ({
+            id: apt.id,
+            startTime: new Date(apt.startTime as string),
+            endTime: new Date(apt.endTime as string),
+            clientName: `${(apt.client as Record<string, string>)?.firstName || ""} ${(apt.client as Record<string, string>)?.lastName || ""}`,
+            serviceName: (apt.service as Record<string, string>)?.name || "",
+            technicianId: apt.technicianId,
+            status: apt.status,
+            notes: apt.notes,
+            noShowProtected: apt.noShowProtected,
+            noShowFeeCharged: apt.noShowFeeCharged,
+            noShowFeeAmount: apt.noShowFeeAmount,
+            noShowChargedAt: apt.noShowChargedAt ? new Date(apt.noShowChargedAt as string) : undefined,
+            createdAt: apt.createdAt ? new Date(apt.createdAt as string) : undefined,
+            bookedBy: apt.bookedBy as string | undefined,
+            client: apt.client,
+            service: apt.service,
+            technician: apt.technician,
+            location: apt.location,
+          }))
+        );
+      }
+    }
+    return allAppointments;
+  }, [selectedLocationIds]);
+
+  // Combined fetch for appointments and blocks - prevents flash/blink
   const fetchAppointments = useCallback(async () => {
     if (selectedLocationIds.length === 0) return;
 
     setLoading(true);
     try {
       const dateStr = format(selectedDate, "yyyy-MM-dd");
-      // Fetch appointments for all selected locations
-      const allAppointments: Appointment[] = [];
-      for (const locationId of selectedLocationIds) {
-        const response = await fetch(
-          `/api/appointments?locationId=${locationId}&date=${dateStr}`
-        );
-        const data = await response.json();
-        if (data.appointments) {
-          allAppointments.push(
-            ...data.appointments.map((apt: Record<string, unknown>) => ({
-              id: apt.id,
-              startTime: new Date(apt.startTime as string),
-              endTime: new Date(apt.endTime as string),
-              clientName: `${(apt.client as Record<string, string>)?.firstName || ""} ${(apt.client as Record<string, string>)?.lastName || ""}`,
-              serviceName: (apt.service as Record<string, string>)?.name || "",
-              technicianId: apt.technicianId,
-              status: apt.status,
-              notes: apt.notes,
-              noShowProtected: apt.noShowProtected,
-              noShowFeeCharged: apt.noShowFeeCharged,
-              noShowFeeAmount: apt.noShowFeeAmount,
-              noShowChargedAt: apt.noShowChargedAt ? new Date(apt.noShowChargedAt as string) : undefined,
-              createdAt: apt.createdAt ? new Date(apt.createdAt as string) : undefined,
-              bookedBy: apt.bookedBy as string | undefined,
-              client: apt.client,
-              service: apt.service,
-              technician: apt.technician,
-              location: apt.location,
-            }))
-          );
-        }
-      }
-      setAppointments(allAppointments);
+
+      // Fetch both in parallel, wait for both to complete
+      const [appointmentsData, blocksData] = await Promise.all([
+        fetchAppointmentsData(dateStr),
+        fetchBlocksData(dateStr),
+      ]);
+
+      // Update both states together
+      setAppointments(appointmentsData);
+      setBlocks(blocksData);
     } catch (error) {
-      console.error("Failed to fetch appointments:", error);
-      toast.error("Failed to load appointments");
+      console.error("Failed to fetch calendar data:", error);
+      toast.error("Failed to load calendar");
     } finally {
       setLoading(false);
     }
-  }, [selectedLocationIds, selectedDate]);
+  }, [selectedLocationIds, selectedDate, fetchAppointmentsData, fetchBlocksData]);
 
   useEffect(() => {
     fetchAppointments();
   }, [fetchAppointments]);
 
-  // Fetch technician blocks when locations or date changes
+  // Standalone blocks fetch for refresh after block operations
   const fetchBlocks = useCallback(async () => {
     if (selectedLocationIds.length === 0) return;
-
     try {
       const dateStr = format(selectedDate, "yyyy-MM-dd");
-
-      // Fetch all blocks for the selected date
-      const response = await fetch(
-        `/api/technician-blocks?startDate=${dateStr}&endDate=${dateStr}`
-      );
-      const data = await response.json();
-      if (data.blocks) {
-        setBlocks(
-          data.blocks.map((block: Record<string, unknown>) => ({
-            id: block.id,
-            technicianId: block.technicianId,
-            title: block.title,
-            blockType: block.blockType,
-            startTime: new Date(block.startTime as string),
-            endTime: new Date(block.endTime as string),
-            isActive: block.isActive,
-          }))
-        );
-      }
+      const blocksData = await fetchBlocksData(dateStr);
+      setBlocks(blocksData);
     } catch (error) {
       console.error("Failed to fetch technician blocks:", error);
     }
-  }, [selectedLocationIds, selectedDate]);
-
-  useEffect(() => {
-    fetchBlocks();
-  }, [fetchBlocks]);
+  }, [selectedLocationIds, selectedDate, fetchBlocksData]);
 
   // Combined refresh function for after creating events
   const refreshCalendarData = useCallback(() => {
-    fetchAppointments();
-    fetchBlocks();
-  }, [fetchAppointments, fetchBlocks]);
+    fetchAppointments(); // Now fetches both appointments and blocks
+  }, [fetchAppointments]);
 
   // Fetch a specific appointment by ID (for deep linking)
   const fetchAppointmentById = useCallback(async (appointmentId: string) => {
