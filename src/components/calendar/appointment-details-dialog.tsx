@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { DurationPicker } from "@/components/ui/duration-picker";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DatePicker } from "@/components/ui/date-picker";
 import { TimePicker } from "@/components/ui/time-picker";
@@ -540,7 +541,7 @@ export function AppointmentDetailsDialog({
       <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
         {/* Left Column - Main content */}
         <div className="flex-1 overflow-y-auto order-2 lg:order-1 min-w-0">
-          <div className="max-w-[820px] py-6 sm:py-10 px-4 sm:px-6 lg:ml-auto lg:mr-6 xl:mr-12">
+          <div className="max-w-[820px] py-6 sm:py-10 px-4 sm:px-6 mx-auto">
             {/* Client Information */}
             <div className="mb-10">
               <div className="flex items-center justify-between mb-4">
@@ -714,44 +715,11 @@ export function AppointmentDetailsDialog({
                     </div>
                   </div>
                   <div className="px-4 py-4 border-l border-gray-300">
-                    <Select
-                      value={String(editingDuration)}
-                      onValueChange={(value) => setEditingDuration(Number(value))}
-                    >
-                      <SelectTrigger className="w-28 h-10 text-sm border-gray-300 bg-white cursor-pointer">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-[300px]">
-                        <SelectItem value="5">5m</SelectItem>
-                        <SelectItem value="10">10m</SelectItem>
-                        <SelectItem value="15">15m</SelectItem>
-                        <SelectItem value="30">30m</SelectItem>
-                        <SelectItem value="45">45m</SelectItem>
-                        <SelectItem value="60">1h</SelectItem>
-                        <SelectItem value="75">1h 15m</SelectItem>
-                        <SelectItem value="90">1h 30m</SelectItem>
-                        <SelectItem value="105">1h 45m</SelectItem>
-                        <SelectItem value="120">2h</SelectItem>
-                        <SelectItem value="135">2h 15m</SelectItem>
-                        <SelectItem value="150">2h 30m</SelectItem>
-                        <SelectItem value="165">2h 45m</SelectItem>
-                        <SelectItem value="180">3h</SelectItem>
-                        <SelectItem value="195">3h 15m</SelectItem>
-                        <SelectItem value="210">3h 30m</SelectItem>
-                        <SelectItem value="225">3h 45m</SelectItem>
-                        <SelectItem value="240">4h</SelectItem>
-                        <SelectItem value="270">4h 30m</SelectItem>
-                        <SelectItem value="300">5h</SelectItem>
-                        <SelectItem value="330">5h 30m</SelectItem>
-                        <SelectItem value="360">6h</SelectItem>
-                        <SelectItem value="420">7h</SelectItem>
-                        <SelectItem value="480">8h</SelectItem>
-                        <SelectItem value="540">9h</SelectItem>
-                        <SelectItem value="600">10h</SelectItem>
-                        <SelectItem value="660">11h</SelectItem>
-                        <SelectItem value="720">12h</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <DurationPicker
+                      duration={editingDuration}
+                      onDurationChange={setEditingDuration}
+                      className="w-28"
+                    />
                   </div>
                   <div className="px-4 py-4 text-sm text-gray-900 border-l border-gray-300">
                     ${(appointment.service?.price || 0).toFixed(2)}
