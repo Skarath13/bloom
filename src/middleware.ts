@@ -12,9 +12,9 @@ export default withAuth(
       return NextResponse.redirect(new URL("/admin/login", req.url));
     }
 
-    // If logged in and trying to access login page, redirect to dashboard
+    // If logged in and trying to access login page, redirect to calendar
     if (isLoginPage && token) {
-      return NextResponse.redirect(new URL("/admin", req.url));
+      return NextResponse.redirect(new URL("/admin/calendar", req.url));
     }
 
     return NextResponse.next();

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import { supabase, tables, generateId } from "@/lib/supabase";
 import { generateVerificationCode, sendVerificationCode } from "@/lib/twilio";
 import { addMinutes } from "date-fns";
 
@@ -25,14 +25,13 @@ export async function POST(request: NextRequest) {
 
     // Check rate limit
     const windowStart = addMinutes(new Date(), -RATE_LIMIT_WINDOW_MINUTES);
-    const recentAttempts = await prisma.phoneVerification.count({
-      where: {
-        phone: normalizedPhone,
-        createdAt: { gte: windowStart },
-      },
-    });
+    const { count: recentAttempts } = await supabase
+      .from(tables.phoneVerifications)
+      .select("*", { count: "exact", head: true })
+      .eq("phone", normalizedPhone)
+      .gte("createdAt", windowStart.toISOString());
 
-    if (recentAttempts >= MAX_REQUESTS_PER_WINDOW) {
+    if ((recentAttempts || 0) >= MAX_REQUESTS_PER_WINDOW) {
       return NextResponse.json(
         { error: "Too many verification attempts. Please try again later." },
         { status: 429 }
@@ -44,24 +43,25 @@ export async function POST(request: NextRequest) {
     const expiresAt = addMinutes(new Date(), 10); // Code expires in 10 minutes
 
     // Invalidate any existing codes for this phone
-    await prisma.phoneVerification.updateMany({
-      where: {
-        phone: normalizedPhone,
-        verified: false,
-      },
-      data: {
-        verified: true, // Mark as used so they can't be used again
-      },
-    });
+    await supabase
+      .from(tables.phoneVerifications)
+      .update({ verified: true })
+      .eq("phone", normalizedPhone)
+      .eq("verified", false);
 
     // Create new verification record
-    await prisma.phoneVerification.create({
-      data: {
+    const { error: createError } = await supabase
+      .from(tables.phoneVerifications)
+      .insert({
+        id: generateId(),
         phone: normalizedPhone,
         code,
-        expiresAt,
-      },
-    });
+        expiresAt: expiresAt.toISOString(),
+        verified: false,
+        createdAt: new Date().toISOString(),
+      });
+
+    if (createError) throw createError;
 
     // Send SMS
     const result = await sendVerificationCode(normalizedPhone, code);

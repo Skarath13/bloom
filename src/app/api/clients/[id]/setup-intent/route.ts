@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import { supabase, tables } from "@/lib/supabase";
 import { getOrCreateStripeCustomer, createSetupIntent } from "@/lib/stripe";
 
 /**
@@ -14,11 +14,13 @@ export async function POST(
     const { id: clientId } = await params;
 
     // Get client
-    const client = await prisma.client.findUnique({
-      where: { id: clientId },
-    });
+    const { data: client, error } = await supabase
+      .from(tables.clients)
+      .select("*")
+      .eq("id", clientId)
+      .single();
 
-    if (!client) {
+    if (error || !client) {
       return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }
 
@@ -33,10 +35,13 @@ export async function POST(
 
     // Update client with Stripe customer ID if new
     if (!client.stripeCustomerId) {
-      await prisma.client.update({
-        where: { id: clientId },
-        data: { stripeCustomerId: stripeCustomer.id },
-      });
+      await supabase
+        .from(tables.clients)
+        .update({
+          stripeCustomerId: stripeCustomer.id,
+          updatedAt: new Date().toISOString(),
+        })
+        .eq("id", clientId);
     }
 
     // Create Setup Intent

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import { supabase, tables } from "@/lib/supabase";
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,15 +17,16 @@ export async function POST(request: NextRequest) {
     const normalizedPhone = phone.replace(/\D/g, "");
 
     // Find the verification record
-    const verification = await prisma.phoneVerification.findFirst({
-      where: {
-        phone: normalizedPhone,
-        code,
-        verified: false,
-        expiresAt: { gt: new Date() },
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    const { data: verification } = await supabase
+      .from(tables.phoneVerifications)
+      .select("*")
+      .eq("phone", normalizedPhone)
+      .eq("code", code)
+      .eq("verified", false)
+      .gt("expiresAt", new Date().toISOString())
+      .order("createdAt", { ascending: false })
+      .limit(1)
+      .single();
 
     if (!verification) {
       return NextResponse.json(
@@ -35,16 +36,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Mark as verified
-    await prisma.phoneVerification.update({
-      where: { id: verification.id },
-      data: { verified: true },
-    });
+    await supabase
+      .from(tables.phoneVerifications)
+      .update({ verified: true })
+      .eq("id", verification.id);
 
     // Update client phone verified status if client exists
-    await prisma.client.updateMany({
-      where: { phone: normalizedPhone },
-      data: { phoneVerified: true },
-    });
+    await supabase
+      .from(tables.clients)
+      .update({ phoneVerified: true, updatedAt: new Date().toISOString() })
+      .eq("phone", normalizedPhone);
 
     return NextResponse.json({
       success: true,

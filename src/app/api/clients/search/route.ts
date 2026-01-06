@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import { supabase, tables } from "@/lib/supabase";
 
 /**
  * GET /api/clients/search
@@ -17,50 +17,39 @@ export async function GET(request: NextRequest) {
     // Normalize the query - remove non-alphanumeric for phone matching
     const phoneQuery = query.replace(/\D/g, "");
 
-    // Search by name or phone
-    const clients = await prisma.client.findMany({
-      where: {
-        OR: [
-          {
-            firstName: {
-              contains: query,
-              mode: "insensitive",
-            },
-          },
-          {
-            lastName: {
-              contains: query,
-              mode: "insensitive",
-            },
-          },
-          // Search by phone if query looks like a number
-          ...(phoneQuery.length >= 3
-            ? [
-                {
-                  phone: {
-                    contains: phoneQuery,
-                  },
-                },
-              ]
-            : []),
-        ],
-      },
-      take: 20,
-      orderBy: { lastName: "asc" },
-      include: {
-        paymentMethods: {
-          select: {
-            id: true,
-            brand: true,
-            last4: true,
-            isDefault: true,
-          },
-          orderBy: { isDefault: "desc" },
-        },
-      },
-    });
+    // Build OR conditions for search using Supabase
+    // Supabase uses ilike for case-insensitive search
+    let orConditions = `firstName.ilike.%${query}%,lastName.ilike.%${query}%`;
 
-    return NextResponse.json({ clients });
+    // Add phone search if query looks like a number
+    if (phoneQuery.length >= 3) {
+      orConditions += `,phone.ilike.%${phoneQuery}%`;
+    }
+
+    const { data: clients, error } = await supabase
+      .from(tables.clients)
+      .select(`
+        *,
+        bloom_payment_methods (
+          id,
+          brand,
+          last4,
+          isDefault
+        )
+      `)
+      .or(orConditions)
+      .order("lastName", { ascending: true })
+      .limit(20);
+
+    if (error) throw error;
+
+    // Transform to match expected shape
+    const transformedClients = clients?.map((client) => ({
+      ...client,
+      paymentMethods: client.bloom_payment_methods || [],
+    }));
+
+    return NextResponse.json({ clients: transformedClients });
   } catch (error) {
     console.error("Search clients error:", error);
     return NextResponse.json(

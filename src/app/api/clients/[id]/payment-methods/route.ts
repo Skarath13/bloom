@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import { supabase, tables, generateId } from "@/lib/supabase";
 import {
   getPaymentMethodDetails,
-  listCustomerPaymentMethods,
   detachPaymentMethod,
   setDefaultPaymentMethod,
 } from "@/lib/stripe";
@@ -18,23 +17,29 @@ export async function GET(
   try {
     const { id: clientId } = await params;
 
-    // Get client with payment methods
-    const client = await prisma.client.findUnique({
-      where: { id: clientId },
-      include: {
-        paymentMethods: {
-          orderBy: { createdAt: "desc" },
-        },
-      },
-    });
+    // Get client
+    const { data: client, error: clientError } = await supabase
+      .from(tables.clients)
+      .select("*")
+      .eq("id", clientId)
+      .single();
 
-    if (!client) {
+    if (clientError || !client) {
       return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }
 
+    // Get payment methods
+    const { data: paymentMethods, error: pmError } = await supabase
+      .from(tables.paymentMethods)
+      .select("*")
+      .eq("clientId", clientId)
+      .order("createdAt", { ascending: false });
+
+    if (pmError) throw pmError;
+
     return NextResponse.json({
-      paymentMethods: client.paymentMethods,
-      hasCardOnFile: client.paymentMethods.length > 0,
+      paymentMethods: paymentMethods || [],
+      hasCardOnFile: (paymentMethods?.length || 0) > 0,
     });
   } catch (error) {
     console.error("List payment methods error:", error);
@@ -64,13 +69,14 @@ export async function POST(
       );
     }
 
-    // Get client
-    const client = await prisma.client.findUnique({
-      where: { id: clientId },
-      include: { paymentMethods: true },
-    });
+    // Get client with payment methods count
+    const { data: client, error: clientError } = await supabase
+      .from(tables.clients)
+      .select("*")
+      .eq("id", clientId)
+      .single();
 
-    if (!client) {
+    if (clientError || !client) {
       return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }
 
@@ -85,9 +91,11 @@ export async function POST(
     const pmDetails = await getPaymentMethodDetails(paymentMethodId);
 
     // Check if already saved
-    const existingPm = await prisma.paymentMethod.findUnique({
-      where: { stripePaymentMethodId: paymentMethodId },
-    });
+    const { data: existingPm } = await supabase
+      .from(tables.paymentMethods)
+      .select("*")
+      .eq("stripePaymentMethodId", paymentMethodId)
+      .single();
 
     if (existingPm) {
       return NextResponse.json({
@@ -96,24 +104,33 @@ export async function POST(
       });
     }
 
+    // Get count of existing payment methods
+    const { count } = await supabase
+      .from(tables.paymentMethods)
+      .select("*", { count: "exact", head: true })
+      .eq("clientId", clientId);
+
     // If setting as default or first card, update other cards
-    const isFirstCard = client.paymentMethods.length === 0;
+    const isFirstCard = (count || 0) === 0;
     const shouldBeDefault = setAsDefault || isFirstCard;
 
     if (shouldBeDefault) {
       // Unset other defaults
-      await prisma.paymentMethod.updateMany({
-        where: { clientId, isDefault: true },
-        data: { isDefault: false },
-      });
+      await supabase
+        .from(tables.paymentMethods)
+        .update({ isDefault: false, updatedAt: new Date().toISOString() })
+        .eq("clientId", clientId)
+        .eq("isDefault", true);
 
       // Set as default in Stripe too
       await setDefaultPaymentMethod(client.stripeCustomerId, paymentMethodId);
     }
 
     // Save to database
-    const paymentMethod = await prisma.paymentMethod.create({
-      data: {
+    const { data: paymentMethod, error: createError } = await supabase
+      .from(tables.paymentMethods)
+      .insert({
+        id: generateId(),
         clientId,
         stripePaymentMethodId: paymentMethodId,
         brand: pmDetails.brand,
@@ -121,8 +138,13 @@ export async function POST(
         expiryMonth: pmDetails.expiryMonth,
         expiryYear: pmDetails.expiryYear,
         isDefault: shouldBeDefault,
-      },
-    });
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (createError) throw createError;
 
     return NextResponse.json({ paymentMethod });
   } catch (error) {
@@ -155,12 +177,12 @@ export async function DELETE(
     }
 
     // Get payment method
-    const paymentMethod = await prisma.paymentMethod.findFirst({
-      where: {
-        clientId,
-        stripePaymentMethodId: paymentMethodId,
-      },
-    });
+    const { data: paymentMethod } = await supabase
+      .from(tables.paymentMethods)
+      .select("*")
+      .eq("clientId", clientId)
+      .eq("stripePaymentMethodId", paymentMethodId)
+      .single();
 
     if (!paymentMethod) {
       return NextResponse.json(
@@ -173,22 +195,26 @@ export async function DELETE(
     await detachPaymentMethod(paymentMethodId);
 
     // Delete from database
-    await prisma.paymentMethod.delete({
-      where: { id: paymentMethod.id },
-    });
+    await supabase
+      .from(tables.paymentMethods)
+      .delete()
+      .eq("id", paymentMethod.id);
 
     // If this was the default, set another card as default
     if (paymentMethod.isDefault) {
-      const otherCard = await prisma.paymentMethod.findFirst({
-        where: { clientId },
-        orderBy: { createdAt: "desc" },
-      });
+      const { data: otherCard } = await supabase
+        .from(tables.paymentMethods)
+        .select("*")
+        .eq("clientId", clientId)
+        .order("createdAt", { ascending: false })
+        .limit(1)
+        .single();
 
       if (otherCard) {
-        await prisma.paymentMethod.update({
-          where: { id: otherCard.id },
-          data: { isDefault: true },
-        });
+        await supabase
+          .from(tables.paymentMethods)
+          .update({ isDefault: true, updatedAt: new Date().toISOString() })
+          .eq("id", otherCard.id);
       }
     }
 

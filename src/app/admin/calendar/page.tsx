@@ -100,7 +100,7 @@ interface TechnicianBlock {
 
 // localStorage keys for persisting calendar state
 const STORAGE_KEYS = {
-  locationId: "bloom_calendar_locationId",
+  locationIds: "bloom_calendar_locationIds",
   date: "bloom_calendar_date",
 };
 
@@ -118,9 +118,17 @@ function CalendarContent() {
   const [loading, setLoading] = useState(true);
 
   // Initialize from localStorage (client-side only)
-  const [selectedLocationId, setSelectedLocationId] = useState<string>(() => {
-    if (typeof window === "undefined") return "";
-    return localStorage.getItem(STORAGE_KEYS.locationId) || "";
+  const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    const saved = localStorage.getItem(STORAGE_KEYS.locationIds);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return [];
+      }
+    }
+    return [];
   });
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     if (typeof window === "undefined") return new Date();
@@ -159,14 +167,29 @@ function CalendarContent() {
         const response = await fetch("/api/locations");
         const data = await response.json();
         if (data.locations && data.locations.length > 0) {
-          setLocations(data.locations);
-          // Check if saved location is valid, otherwise default to first
-          const savedIsValid = selectedLocationId &&
-            data.locations.some((loc: Location) => loc.id === selectedLocationId);
-          if (!savedIsValid) {
-            const defaultLoc = data.locations[0].id;
-            setSelectedLocationId(defaultLoc);
-            localStorage.setItem(STORAGE_KEYS.locationId, defaultLoc);
+          // Sort locations in preferred order
+          const locationOrder = ["Tustin", "Costa Mesa", "Santa Ana", "Irvine", "Newport Beach"];
+          const sortedLocations = [...data.locations].sort((a: Location, b: Location) => {
+            const aIndex = locationOrder.indexOf(a.name);
+            const bIndex = locationOrder.indexOf(b.name);
+            // If not in the order list, put at the end
+            if (aIndex === -1 && bIndex === -1) return 0;
+            if (aIndex === -1) return 1;
+            if (bIndex === -1) return -1;
+            return aIndex - bIndex;
+          });
+          setLocations(sortedLocations);
+          // Check if saved locations are valid, otherwise default to first
+          const validIds = selectedLocationIds.filter((id: string) =>
+            data.locations.some((loc: Location) => loc.id === id)
+          );
+          if (validIds.length === 0) {
+            const defaultLocs = [data.locations[0].id];
+            setSelectedLocationIds(defaultLocs);
+            localStorage.setItem(STORAGE_KEYS.locationIds, JSON.stringify(defaultLocs));
+          } else if (validIds.length !== selectedLocationIds.length) {
+            setSelectedLocationIds(validIds);
+            localStorage.setItem(STORAGE_KEYS.locationIds, JSON.stringify(validIds));
           }
         }
       } catch (error) {
@@ -178,85 +201,95 @@ function CalendarContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Fetch technicians when location changes
+  // Fetch technicians when locations change
   const fetchTechnicians = useCallback(async () => {
-    if (!selectedLocationId) return;
+    if (selectedLocationIds.length === 0) return;
 
     try {
-      const response = await fetch(`/api/technicians?locationId=${selectedLocationId}`);
-      const data = await response.json();
-      if (data.technicians) {
-        setTechnicians(
-          data.technicians.map((t: Technician & { schedules?: TechnicianSchedule[] }) => ({
-            id: t.id,
-            firstName: t.firstName,
-            lastName: t.lastName,
-            color: t.color,
-            locationId: t.locationId,
-            schedules: t.schedules || [],
-          }))
-        );
+      // Fetch technicians for all selected locations
+      const allTechnicians: Technician[] = [];
+      for (const locationId of selectedLocationIds) {
+        const response = await fetch(`/api/technicians?locationId=${locationId}`);
+        const data = await response.json();
+        if (data.technicians) {
+          allTechnicians.push(
+            ...data.technicians.map((t: Technician & { schedules?: TechnicianSchedule[] }) => ({
+              id: t.id,
+              firstName: t.firstName,
+              lastName: t.lastName,
+              color: t.color,
+              locationId: t.locationId,
+              schedules: t.schedules || [],
+            }))
+          );
+        }
       }
+      setTechnicians(allTechnicians);
     } catch (error) {
       console.error("Failed to fetch technicians:", error);
       toast.error("Failed to load technicians");
     }
-  }, [selectedLocationId]);
+  }, [selectedLocationIds]);
 
   useEffect(() => {
     fetchTechnicians();
   }, [fetchTechnicians]);
 
-  // Fetch appointments when location or date changes
+  // Fetch appointments when locations or date changes
   const fetchAppointments = useCallback(async () => {
-    if (!selectedLocationId) return;
+    if (selectedLocationIds.length === 0) return;
 
     setLoading(true);
     try {
       const dateStr = format(selectedDate, "yyyy-MM-dd");
-      const response = await fetch(
-        `/api/appointments?locationId=${selectedLocationId}&date=${dateStr}`
-      );
-      const data = await response.json();
-      if (data.appointments) {
-        setAppointments(
-          data.appointments.map((apt: Record<string, unknown>) => ({
-            id: apt.id,
-            startTime: new Date(apt.startTime as string),
-            endTime: new Date(apt.endTime as string),
-            clientName: `${(apt.client as Record<string, string>)?.firstName || ""} ${(apt.client as Record<string, string>)?.lastName || ""}`,
-            serviceName: (apt.service as Record<string, string>)?.name || "",
-            technicianId: apt.technicianId,
-            status: apt.status,
-            notes: apt.notes,
-            noShowProtected: apt.noShowProtected,
-            noShowFeeCharged: apt.noShowFeeCharged,
-            noShowFeeAmount: apt.noShowFeeAmount,
-            noShowChargedAt: apt.noShowChargedAt ? new Date(apt.noShowChargedAt as string) : undefined,
-            createdAt: apt.createdAt ? new Date(apt.createdAt as string) : undefined,
-            bookedBy: apt.bookedBy as string | undefined,
-            client: apt.client,
-            service: apt.service,
-            technician: apt.technician,
-            location: apt.location,
-          }))
+      // Fetch appointments for all selected locations
+      const allAppointments: Appointment[] = [];
+      for (const locationId of selectedLocationIds) {
+        const response = await fetch(
+          `/api/appointments?locationId=${locationId}&date=${dateStr}`
         );
+        const data = await response.json();
+        if (data.appointments) {
+          allAppointments.push(
+            ...data.appointments.map((apt: Record<string, unknown>) => ({
+              id: apt.id,
+              startTime: new Date(apt.startTime as string),
+              endTime: new Date(apt.endTime as string),
+              clientName: `${(apt.client as Record<string, string>)?.firstName || ""} ${(apt.client as Record<string, string>)?.lastName || ""}`,
+              serviceName: (apt.service as Record<string, string>)?.name || "",
+              technicianId: apt.technicianId,
+              status: apt.status,
+              notes: apt.notes,
+              noShowProtected: apt.noShowProtected,
+              noShowFeeCharged: apt.noShowFeeCharged,
+              noShowFeeAmount: apt.noShowFeeAmount,
+              noShowChargedAt: apt.noShowChargedAt ? new Date(apt.noShowChargedAt as string) : undefined,
+              createdAt: apt.createdAt ? new Date(apt.createdAt as string) : undefined,
+              bookedBy: apt.bookedBy as string | undefined,
+              client: apt.client,
+              service: apt.service,
+              technician: apt.technician,
+              location: apt.location,
+            }))
+          );
+        }
       }
+      setAppointments(allAppointments);
     } catch (error) {
       console.error("Failed to fetch appointments:", error);
       toast.error("Failed to load appointments");
     } finally {
       setLoading(false);
     }
-  }, [selectedLocationId, selectedDate]);
+  }, [selectedLocationIds, selectedDate]);
 
   useEffect(() => {
     fetchAppointments();
   }, [fetchAppointments]);
 
-  // Fetch technician blocks when location or date changes
+  // Fetch technician blocks when locations or date changes
   const fetchBlocks = useCallback(async () => {
-    if (!selectedLocationId) return;
+    if (selectedLocationIds.length === 0) return;
 
     try {
       const dateStr = format(selectedDate, "yyyy-MM-dd");
@@ -282,7 +315,7 @@ function CalendarContent() {
     } catch (error) {
       console.error("Failed to fetch technician blocks:", error);
     }
-  }, [selectedLocationId, selectedDate]);
+  }, [selectedLocationIds, selectedDate]);
 
   useEffect(() => {
     fetchBlocks();
@@ -351,22 +384,32 @@ function CalendarContent() {
     }
   }, [appointmentIdFromUrl, appointments, loading, fetchAppointmentById]);
 
-  // Subscribe to realtime updates for live calendar sync
+  // Subscribe to realtime updates for live calendar sync (use first selected location)
   useRealtimeAppointments({
-    locationId: selectedLocationId,
+    locationId: selectedLocationIds[0] || "",
     onChange: fetchAppointments,
   });
 
   // Subscribe to realtime technician/schedule updates
   useRealtimeTechnicians({
-    locationId: selectedLocationId,
+    locationId: selectedLocationIds[0] || "",
     onChange: fetchTechnicians,
   });
 
-  const handleLocationChange = (locationId: string) => {
-    setSelectedLocationId(locationId);
-    // Persist to localStorage
-    localStorage.setItem(STORAGE_KEYS.locationId, locationId);
+  const handleLocationToggle = (locationId: string) => {
+    let newIds: string[];
+    if (selectedLocationIds.includes(locationId)) {
+      // Don't allow deselecting if it's the last one
+      if (selectedLocationIds.length > 1) {
+        newIds = selectedLocationIds.filter((id) => id !== locationId);
+      } else {
+        return; // Don't deselect the last one
+      }
+    } else {
+      newIds = [...selectedLocationIds, locationId];
+    }
+    setSelectedLocationIds(newIds);
+    localStorage.setItem(STORAGE_KEYS.locationIds, JSON.stringify(newIds));
   };
 
   const handleDateChange = (date: Date) => {
@@ -511,9 +554,9 @@ function CalendarContent() {
         technicians={technicians}
         appointments={appointments}
         blocks={blocks}
-        selectedLocationId={selectedLocationId}
+        selectedLocationIds={selectedLocationIds}
         selectedDate={selectedDate}
-        onLocationChange={handleLocationChange}
+        onLocationToggle={handleLocationToggle}
         onDateChange={handleDateChange}
         onAppointmentClick={handleAppointmentClick}
         onBlockClick={handleBlockClick}
@@ -649,8 +692,8 @@ function CalendarContent() {
           technicianId={newAppointmentSlot.technicianId}
           technicianName={`${newTech?.firstName || ""} ${newTech?.lastName || ""}`}
           technicianColor={newTech?.color || "#8B687A"}
-          locationId={selectedLocationId}
-          locationName={locations.find(l => l.id === selectedLocationId)?.name || ""}
+          locationId={newTech?.locationId || selectedLocationIds[0] || ""}
+          locationName={locations.find(l => l.id === (newTech?.locationId || selectedLocationIds[0]))?.name || ""}
           time={newAppointmentSlot.time}
           locations={locations}
           technicians={technicians}
@@ -664,7 +707,7 @@ function CalendarContent() {
         onClose={() => setScheduleDialogOpen(false)}
         technicians={technicians}
         locations={locations}
-        selectedLocationId={selectedLocationId}
+        selectedLocationId={selectedLocationIds[0] || ""}
         selectedDate={selectedDate}
       />
 

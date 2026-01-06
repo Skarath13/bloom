@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import { supabase, tables } from "@/lib/supabase";
 import { startOfDay, endOfDay, addMinutes, format, parse, isBefore, isAfter, setHours, setMinutes } from "date-fns";
 
 interface TimeSlot {
@@ -27,47 +27,69 @@ export async function GET(request: NextRequest) {
     const dayOfWeek = date.getDay();
 
     // Get service duration
-    const service = await prisma.service.findUnique({
-      where: { id: serviceId },
-    });
+    const { data: service, error: serviceError } = await supabase
+      .from(tables.services)
+      .select("*")
+      .eq("id", serviceId)
+      .single();
 
-    if (!service) {
+    if (serviceError || !service) {
       return NextResponse.json({ error: "Service not found" }, { status: 404 });
     }
 
     const serviceDuration = service.durationMinutes;
 
     // Get technicians for the location (or specific technician)
-    const technicians = await prisma.technician.findMany({
-      where: {
-        locationId,
-        isActive: true,
-        ...(technicianId && technicianId !== "any" ? { id: technicianId } : {}),
-      },
-      include: {
-        schedules: {
-          where: { dayOfWeek },
-        },
-        blocks: {
-          where: { isActive: true },
-        },
-      },
-    });
+    let techQuery = supabase
+      .from(tables.technicians)
+      .select("*")
+      .eq("locationId", locationId)
+      .eq("isActive", true);
+
+    if (technicianId && technicianId !== "any") {
+      techQuery = techQuery.eq("id", technicianId);
+    }
+
+    const { data: technicians, error: techError } = await techQuery;
+
+    if (techError) throw techError;
+
+    // Get schedules for these technicians
+    const techIds = technicians?.map((t) => t.id) || [];
+    const { data: schedules } = await supabase
+      .from(tables.technicianSchedules)
+      .select("*")
+      .in("technicianId", techIds)
+      .eq("dayOfWeek", dayOfWeek);
+
+    // Get blocks for these technicians
+    const { data: blocks } = await supabase
+      .from(tables.technicianBlocks)
+      .select("*")
+      .in("technicianId", techIds)
+      .eq("isActive", true);
 
     // Get existing appointments for the date
-    const existingAppointments = await prisma.appointment.findMany({
-      where: {
-        locationId,
-        startTime: {
-          gte: startOfDay(date),
-          lte: endOfDay(date),
-        },
-        status: {
-          notIn: ["CANCELLED", "NO_SHOW"],
-        },
-        ...(technicianId && technicianId !== "any" ? { technicianId } : {}),
-      },
-    });
+    let apptQuery = supabase
+      .from(tables.appointments)
+      .select("*")
+      .eq("locationId", locationId)
+      .gte("startTime", startOfDay(date).toISOString())
+      .lte("startTime", endOfDay(date).toISOString())
+      .not("status", "in", '("CANCELLED","NO_SHOW")');
+
+    if (technicianId && technicianId !== "any") {
+      apptQuery = apptQuery.eq("technicianId", technicianId);
+    }
+
+    const { data: existingAppointments } = await apptQuery;
+
+    // Map schedules and blocks to technicians
+    const techsWithData = technicians?.map((tech) => ({
+      ...tech,
+      schedules: schedules?.filter((s) => s.technicianId === tech.id) || [],
+      blocks: blocks?.filter((b) => b.technicianId === tech.id) || [],
+    })) || [];
 
     // Generate time slots (9 AM to 6 PM, every 15 minutes)
     const slots: TimeSlot[] = [];
@@ -91,7 +113,7 @@ export async function GET(request: NextRequest) {
         let available = false;
         let availableTechId: string | undefined;
 
-        for (const tech of technicians) {
+        for (const tech of techsWithData) {
           // Check if tech is working this day
           const schedule = tech.schedules[0];
           if (!schedule || !schedule.isWorking) continue;
@@ -121,9 +143,11 @@ export async function GET(request: NextRequest) {
               }
             } else if (block.startTime && block.endTime) {
               // One-time block
+              const blockStartTime = new Date(block.startTime);
+              const blockEndTime = new Date(block.endTime);
               if (
-                (isAfter(slotStart, block.startTime) || slotStart.getTime() === block.startTime.getTime()) &&
-                isBefore(slotStart, block.endTime)
+                (isAfter(slotStart, blockStartTime) || slotStart.getTime() === blockStartTime.getTime()) &&
+                isBefore(slotStart, blockEndTime)
               ) {
                 blocked = true;
                 break;
@@ -134,7 +158,7 @@ export async function GET(request: NextRequest) {
           if (blocked) continue;
 
           // Check for conflicting appointments
-          const hasConflict = existingAppointments.some((apt) => {
+          const hasConflict = existingAppointments?.some((apt) => {
             if (apt.technicianId !== tech.id) return false;
 
             const aptStart = new Date(apt.startTime);

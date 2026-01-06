@@ -68,9 +68,9 @@ interface ResourceCalendarProps {
   technicians: Technician[];
   appointments: Appointment[];
   blocks?: TechnicianBlock[];
-  selectedLocationId: string;
+  selectedLocationIds: string[];
   selectedDate?: Date; // Initial date from parent (e.g., from localStorage)
-  onLocationChange: (locationId: string) => void;
+  onLocationToggle: (locationId: string) => void;
   onDateChange: (date: Date) => void;
   onAppointmentClick?: (appointment: Appointment) => void;
   onBlockClick?: (block: TechnicianBlock) => void;
@@ -199,14 +199,17 @@ const getAppointmentStyle = (appointment: Appointment, calendarDate: Date) => {
   return { top, height, spansNextDay: appointmentSpansNextDay };
 };
 
+// localStorage key for persisting staff selection
+const STORAGE_KEY_TECH_IDS = "bloom_calendar_techIds";
+
 export function ResourceCalendar({
   locations,
   technicians,
   appointments,
   blocks = [],
-  selectedLocationId,
+  selectedLocationIds,
   selectedDate: initialDate,
-  onLocationChange,
+  onLocationToggle,
   onDateChange,
   onAppointmentClick,
   onBlockClick,
@@ -218,8 +221,20 @@ export function ResourceCalendar({
   onMoveBlock,
 }: ResourceCalendarProps) {
   const [selectedDate, setSelectedDate] = useState<Date>(initialDate || new Date());
-  const [selectedTechIds, setSelectedTechIds] = useState<string[]>([]);
-  const [autoSelectScheduled, setAutoSelectScheduled] = useState(true);
+
+  // Initialize selectedTechIds from localStorage
+  const [selectedTechIds, setSelectedTechIds] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    const saved = localStorage.getItem(STORAGE_KEY_TECH_IDS);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  });
   const [hoveredSlot, setHoveredSlot] = useState<{
     technicianId: string;
     minutesFromMidnight: number;
@@ -243,21 +258,54 @@ export function ResourceCalendar({
     }
   }, [initialDate]);
 
-  // Auto-select all technicians when they load or when location changes
+  // Track previous technician IDs to detect newly added ones
+  const prevTechIdsRef = useRef<Set<string>>(new Set());
+  const isFirstLoadRef = useRef(true);
+
+  // Auto-select technicians: restore from localStorage, select new ones when locations added
   useEffect(() => {
     if (technicians.length > 0) {
-      // Check if current selection contains any valid tech IDs for this location
-      const validSelection = selectedTechIds.filter((id) =>
-        technicians.some((t) => t.id === id)
-      );
+      const currentTechIds = new Set(technicians.map((t) => t.id));
+      const prevTechIds = prevTechIdsRef.current;
 
-      // If no valid selection (e.g., location changed), auto-select all
-      if (validSelection.length === 0) {
-        setSelectedTechIds(technicians.map((t) => t.id));
+      // Find newly added technicians (in current but not in previous)
+      const newTechIds = technicians
+        .filter((t) => !prevTechIds.has(t.id))
+        .map((t) => t.id);
+
+      // Find still-valid selections (techs that still exist)
+      const validSelection = selectedTechIds.filter((id) => currentTechIds.has(id));
+
+      let newSelection: string[];
+
+      if (isFirstLoadRef.current) {
+        // First load - restore from localStorage if valid, otherwise select all
+        isFirstLoadRef.current = false;
+        if (validSelection.length > 0) {
+          // Restore saved preferences
+          newSelection = validSelection;
+        } else {
+          // No valid saved preferences, select all
+          newSelection = technicians.map((t) => t.id);
+        }
+      } else if (newTechIds.length > 0) {
+        // New technicians added (new location toggled on) - add them to selection
+        newSelection = [...validSelection, ...newTechIds];
       } else if (validSelection.length !== selectedTechIds.length) {
-        // Clean up invalid IDs
-        setSelectedTechIds(validSelection);
+        // Some techs were removed (location toggled off) - keep valid ones
+        newSelection = validSelection.length > 0 ? validSelection : technicians.map((t) => t.id);
+      } else {
+        // No changes needed
+        prevTechIdsRef.current = currentTechIds;
+        return;
       }
+
+      setSelectedTechIds(newSelection);
+      // Save to localStorage
+      localStorage.setItem(STORAGE_KEY_TECH_IDS, JSON.stringify(newSelection));
+
+      // Update ref for next comparison
+      prevTechIdsRef.current = currentTechIds;
     }
   }, [technicians]);
 
@@ -522,14 +570,81 @@ export function ResourceCalendar({
 
   const totalGridHeight = (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * PIXELS_PER_HOUR;
 
+  // Toggle individual technician
+  const handleTechToggle = (techId: string) => {
+    let newSelection: string[];
+    if (selectedTechIds.includes(techId)) {
+      // Don't allow deselecting the last one
+      if (selectedTechIds.length > 1) {
+        newSelection = selectedTechIds.filter((id) => id !== techId);
+      } else {
+        return;
+      }
+    } else {
+      newSelection = [...selectedTechIds, techId];
+    }
+    setSelectedTechIds(newSelection);
+    // Save to localStorage
+    localStorage.setItem(STORAGE_KEY_TECH_IDS, JSON.stringify(newSelection));
+  };
+
   return (
     <div className="flex h-full bg-white">
-      {/* Left Sidebar - Mini Calendar */}
-      <div className="w-64 border-r border-gray-200 flex-shrink-0 hidden md:block">
+      {/* Left Sidebar - Mini Calendar + Staff */}
+      <div className="w-64 border-r border-gray-200 flex-shrink-0 hidden md:flex md:flex-col">
         <MiniCalendar
           selectedDate={selectedDate}
           onDateSelect={handleDateChange}
         />
+
+        {/* Staff toggle pills - iOS style */}
+        <div className="px-4 pb-4 flex-1 overflow-y-auto">
+          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">
+            Staff
+          </div>
+          <div className="flex flex-col gap-2">
+            {technicians.map((tech) => {
+              const isSelected = selectedTechIds.includes(tech.id);
+              return (
+                <button
+                  key={tech.id}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium cursor-pointer transition-all duration-200",
+                    isSelected
+                      ? "text-white shadow-sm"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  )}
+                  style={isSelected ? { backgroundColor: tech.color } : undefined}
+                  onClick={() => handleTechToggle(tech.id)}
+                >
+                  {/* Toggle checkbox indicator */}
+                  <span
+                    className={cn(
+                      "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200 flex-shrink-0",
+                      isSelected
+                        ? "border-white/50 bg-white/20"
+                        : "border-gray-300 bg-white"
+                    )}
+                  >
+                    {isSelected && (
+                      <svg className="w-3 h-3 text-white" viewBox="0 0 12 12" fill="none">
+                        <path d="M2 6L5 9L10 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </span>
+                  {/* Color dot for unselected state */}
+                  {!isSelected && (
+                    <span
+                      className="w-3 h-3 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: tech.color }}
+                    />
+                  )}
+                  <span className="truncate">{tech.firstName}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Main Calendar Area */}
@@ -540,13 +655,8 @@ export function ResourceCalendar({
           onPrevDay={handlePrevDay}
           onNextDay={handleNextDay}
           locations={locations}
-          selectedLocationId={selectedLocationId}
-          onLocationChange={onLocationChange}
-          technicians={technicians}
-          selectedTechIds={selectedTechIds}
-          onTechSelectionChange={setSelectedTechIds}
-          autoSelectScheduled={autoSelectScheduled}
-          onAutoSelectChange={setAutoSelectScheduled}
+          selectedLocationIds={selectedLocationIds}
+          onLocationToggle={onLocationToggle}
           onScheduleClick={onScheduleClick}
           onSettingsClick={onSettingsClick}
           onMoreClick={onMoreClick}

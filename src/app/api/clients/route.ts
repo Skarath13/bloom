@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import { supabase, tables, generateId } from "@/lib/supabase";
 
 /**
  * GET /api/clients
@@ -10,23 +10,29 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const limit = parseInt(searchParams.get("limit") || "50");
 
-    const clients = await prisma.client.findMany({
-      take: limit,
-      orderBy: { createdAt: "desc" },
-      include: {
-        paymentMethods: {
-          select: {
-            id: true,
-            brand: true,
-            last4: true,
-            isDefault: true,
-          },
-          orderBy: { isDefault: "desc" },
-        },
-      },
-    });
+    const { data: clients, error } = await supabase
+      .from(tables.clients)
+      .select(`
+        *,
+        bloom_payment_methods (
+          id,
+          brand,
+          last4,
+          isDefault
+        )
+      `)
+      .order("createdAt", { ascending: false })
+      .limit(limit);
 
-    return NextResponse.json({ clients });
+    if (error) throw error;
+
+    // Transform to match expected shape
+    const transformedClients = clients?.map((client) => ({
+      ...client,
+      paymentMethods: client.bloom_payment_methods || [],
+    }));
+
+    return NextResponse.json({ clients: transformedClients });
   } catch (error) {
     console.error("List clients error:", error);
     return NextResponse.json(
@@ -57,51 +63,63 @@ export async function POST(request: NextRequest) {
     const normalizedPhone = phone.replace(/\D/g, "");
 
     // Check if client with this phone already exists
-    const existingClient = await prisma.client.findUnique({
-      where: { phone: normalizedPhone },
-      include: {
-        paymentMethods: {
-          select: {
-            id: true,
-            brand: true,
-            last4: true,
-            isDefault: true,
-          },
-        },
-      },
-    });
+    const { data: existingClient } = await supabase
+      .from(tables.clients)
+      .select(`
+        *,
+        bloom_payment_methods (
+          id,
+          brand,
+          last4,
+          isDefault
+        )
+      `)
+      .eq("phone", normalizedPhone)
+      .single();
 
     if (existingClient) {
       return NextResponse.json({
-        client: existingClient,
+        client: {
+          ...existingClient,
+          paymentMethods: existingClient.bloom_payment_methods || [],
+        },
         message: "Client already exists with this phone number",
         existing: true,
       });
     }
 
     // Create new client
-    const client = await prisma.client.create({
-      data: {
+    const { data: client, error } = await supabase
+      .from(tables.clients)
+      .insert({
+        id: generateId(),
         firstName,
         lastName,
         phone: normalizedPhone,
         email: email || null,
         phoneVerified: false,
-      },
-      include: {
-        paymentMethods: {
-          select: {
-            id: true,
-            brand: true,
-            last4: true,
-            isDefault: true,
-          },
-        },
-      },
-    });
+        isBlocked: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })
+      .select(`
+        *,
+        bloom_payment_methods (
+          id,
+          brand,
+          last4,
+          isDefault
+        )
+      `)
+      .single();
+
+    if (error) throw error;
 
     return NextResponse.json({
-      client,
+      client: {
+        ...client,
+        paymentMethods: client?.bloom_payment_methods || [],
+      },
       message: "Client created successfully",
       existing: false,
     });

@@ -1,8 +1,8 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { compare } from "bcryptjs";
-import { UserRole } from "@prisma/client";
-import prisma from "./prisma";
+import { supabase, tables } from "./supabase";
+import type { UserRole } from "@/types/next-auth";
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -24,11 +24,13 @@ export const authOptions: NextAuthOptions = {
           throw new Error("Email and password are required");
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
-        });
+        const { data: user, error } = await supabase
+          .from(tables.users)
+          .select("*")
+          .eq("email", credentials.email)
+          .single();
 
-        if (!user || !user.isActive) {
+        if (error || !user || !user.isActive) {
           throw new Error("Invalid credentials");
         }
 
@@ -42,7 +44,7 @@ export const authOptions: NextAuthOptions = {
           id: user.id,
           email: user.email,
           name: user.name,
-          role: user.role,
+          role: user.role as UserRole,
         };
       },
     }),
