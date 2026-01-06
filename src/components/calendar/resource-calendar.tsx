@@ -16,6 +16,7 @@ import { AppointmentCard, calculateOverlapPositions } from "./appointment-card";
 import { BlockCard } from "./block-card";
 import { TimeIndicator } from "./time-indicator";
 import { MoveConfirmationModal } from "./move-confirmation-modal";
+import { CalendarSettingsDialog, ViewRange } from "./calendar-settings-dialog";
 import { useCalendarDnd } from "@/hooks/use-calendar-dnd";
 import { cn } from "@/lib/utils";
 
@@ -199,8 +200,9 @@ const getAppointmentStyle = (appointment: Appointment, calendarDate: Date) => {
   return { top, height, spansNextDay: appointmentSpansNextDay };
 };
 
-// localStorage key for persisting staff selection
+// localStorage keys for persisting calendar preferences
 const STORAGE_KEY_TECH_IDS = "bloom_calendar_techIds";
+const STORAGE_KEY_VIEW_RANGE = "bloom_calendar_viewRange";
 
 export function ResourceCalendar({
   locations,
@@ -221,6 +223,15 @@ export function ResourceCalendar({
   onMoveBlock,
 }: ResourceCalendarProps) {
   const [selectedDate, setSelectedDate] = useState<Date>(initialDate || new Date());
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Initialize viewRange from localStorage
+  const [viewRange, setViewRange] = useState<ViewRange>(() => {
+    if (typeof window === "undefined") return "day";
+    const saved = localStorage.getItem(STORAGE_KEY_VIEW_RANGE);
+    if (saved === "week" || saved === "month") return saved;
+    return "day";
+  });
 
   // Initialize selectedTechIds from localStorage
   const [selectedTechIds, setSelectedTechIds] = useState<string[]>(() => {
@@ -586,6 +597,18 @@ export function ResourceCalendar({
     setSelectedTechIds(newSelection);
     // Save to localStorage
     localStorage.setItem(STORAGE_KEY_TECH_IDS, JSON.stringify(newSelection));
+
+    // Reset to day view if moving to multiple staff and currently on week/month
+    if (newSelection.length > 1 && (viewRange === "week" || viewRange === "month")) {
+      setViewRange("day");
+      localStorage.setItem(STORAGE_KEY_VIEW_RANGE, "day");
+    }
+  };
+
+  // Handle view range change
+  const handleViewRangeChange = (range: ViewRange) => {
+    setViewRange(range);
+    localStorage.setItem(STORAGE_KEY_VIEW_RANGE, range);
   };
 
   return (
@@ -658,7 +681,7 @@ export function ResourceCalendar({
           selectedLocationIds={selectedLocationIds}
           onLocationToggle={onLocationToggle}
           onScheduleClick={onScheduleClick}
-          onSettingsClick={onSettingsClick}
+          onSettingsClick={() => setSettingsOpen(true)}
           onMoreClick={onMoreClick}
         />
 
@@ -1029,6 +1052,15 @@ export function ResourceCalendar({
           isLoading={isMoving}
         />
       )}
+
+      {/* Calendar Settings Dialog */}
+      <CalendarSettingsDialog
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        viewRange={viewRange}
+        onViewRangeChange={handleViewRangeChange}
+        selectedStaffCount={selectedTechIds.length}
+      />
 
     </div>
   );

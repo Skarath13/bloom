@@ -2,13 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { ChevronLeft, ChevronRight, Settings, MoreHorizontal, ChevronDown, Check, Clock } from "lucide-react";
+import { ChevronLeft, ChevronRight, Settings, MoreHorizontal, Check, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
 interface Location {
@@ -16,8 +11,6 @@ interface Location {
   name: string;
   slug: string;
 }
-
-type RangeType = "day" | "week" | "month";
 
 interface CalendarHeaderProps {
   selectedDate: Date;
@@ -29,8 +22,6 @@ interface CalendarHeaderProps {
   onScheduleClick?: () => void;
   onSettingsClick?: () => void;
   onMoreClick?: () => void;
-  range?: RangeType;
-  onRangeChange?: (range: RangeType) => void;
 }
 
 export function CalendarHeader({
@@ -43,22 +34,13 @@ export function CalendarHeader({
   onScheduleClick,
   onSettingsClick,
   onMoreClick,
-  range = "day",
-  onRangeChange,
 }: CalendarHeaderProps) {
   const [mounted, setMounted] = useState(false);
-  const [rangeOpen, setRangeOpen] = useState(false);
 
   // Handle hydration
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  const rangeLabels: Record<RangeType, string> = {
-    day: "Day",
-    week: "Week",
-    month: "Month",
-  };
 
   // Avoid hydration mismatch by not rendering date until mounted
   const dateDisplay = mounted ? format(selectedDate, "MMM d") : "...";
@@ -89,34 +71,6 @@ export function CalendarHeader({
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
-
-        {/* Range selector (pill style with dropdown) */}
-        <Popover open={rangeOpen} onOpenChange={setRangeOpen}>
-          <PopoverTrigger asChild>
-            <button className="px-3 py-1.5 rounded-full border border-gray-300 bg-white text-sm cursor-pointer hover:bg-gray-50 flex items-center gap-1">
-              <span className="font-medium">{rangeLabels[range]}</span>
-              <ChevronDown className="h-3 w-3 text-gray-400" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent className="w-40 p-1" align="start">
-            {(Object.keys(rangeLabels) as RangeType[]).map((r) => (
-              <button
-                key={r}
-                className={cn(
-                  "w-full flex items-center justify-between px-3 py-2 text-sm rounded hover:bg-gray-100",
-                  range === r && "bg-gray-50"
-                )}
-                onClick={() => {
-                  onRangeChange?.(r);
-                  setRangeOpen(false);
-                }}
-              >
-                {rangeLabels[r]}
-                {range === r && <Check className="h-4 w-4 text-gray-600" />}
-              </button>
-            ))}
-          </PopoverContent>
-        </Popover>
 
         {/* Location toggle pills - iOS style */}
         <div className="flex items-center gap-2">
