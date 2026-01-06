@@ -9,6 +9,7 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  type Modifier,
 } from "@dnd-kit/core";
 import { MiniCalendar } from "./mini-calendar";
 import { CalendarHeader } from "./calendar-header";
@@ -100,6 +101,14 @@ const PIXELS_PER_HOUR = 80; // 80px per hour for better visibility
 const PIXELS_PER_15_MIN = 20; // 20px per 15 minutes (snap increment)
 const TIME_COLUMN_WIDTH = 56; // Width of time column in pixels
 const HEADER_HEIGHT = 37; // Height of sticky technician header row
+
+// Snap modifier to align drag overlay to 15-minute grid
+const snapToGridModifier: Modifier = ({ transform }) => {
+  return {
+    ...transform,
+    y: Math.round(transform.y / PIXELS_PER_15_MIN) * PIXELS_PER_15_MIN,
+  };
+};
 
 // Generate time slots for the full day
 const generateTimeSlots = (date: Date) => {
@@ -791,7 +800,7 @@ export function ResourceCalendar({
         </div>
 
         {/* Drag Overlay - Moving appointment card */}
-        <DragOverlay>
+        <DragOverlay modifiers={[snapToGridModifier]}>
           {dragState.activeAppointment && (
             <div
               className={cn(
