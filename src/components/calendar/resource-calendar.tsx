@@ -102,11 +102,46 @@ const PIXELS_PER_15_MIN = 20; // 20px per 15 minutes (snap increment)
 const TIME_COLUMN_WIDTH = 56; // Width of time column in pixels
 const HEADER_HEIGHT = 37; // Height of sticky technician header row
 
-// Snap modifier to align drag overlay to 15-minute grid
-const snapToGridModifier: Modifier = ({ transform }) => {
-  return {
-    ...transform,
-    y: Math.round(transform.y / PIXELS_PER_15_MIN) * PIXELS_PER_15_MIN,
+// Factory to create snap modifier with access to grid dimensions
+const createSnapModifier = (
+  gridRef: React.RefObject<HTMLDivElement | null>,
+  techCount: number
+): Modifier => {
+  return ({ transform, activatorEvent }) => {
+    // Snap Y to 15-minute grid
+    const snappedY = Math.round(transform.y / PIXELS_PER_15_MIN) * PIXELS_PER_15_MIN;
+
+    // Snap X to technician columns
+    let snappedX = transform.x;
+    const gridElement = gridRef.current;
+
+    if (gridElement && techCount > 0 && activatorEvent instanceof PointerEvent) {
+      const rect = gridElement.getBoundingClientRect();
+      const contentWidth = rect.width - TIME_COLUMN_WIDTH;
+      const columnWidth = contentWidth / techCount;
+
+      // Get initial X position relative to grid content area
+      const initialX = activatorEvent.clientX - rect.left - TIME_COLUMN_WIDTH;
+      // Get current X with transform applied
+      const currentX = initialX + transform.x;
+
+      // Calculate which column we started in and which we're now in
+      const startColumn = Math.floor(initialX / columnWidth);
+      const currentColumn = Math.floor(currentX / columnWidth);
+
+      // Clamp to valid column range
+      const targetColumn = Math.max(0, Math.min(currentColumn, techCount - 1));
+
+      // Calculate snapped X: difference between target column center and start column center
+      const columnDelta = targetColumn - startColumn;
+      snappedX = columnDelta * columnWidth;
+    }
+
+    return {
+      ...transform,
+      x: snappedX,
+      y: snappedY,
+    };
   };
 };
 
@@ -286,6 +321,12 @@ export function ResourceCalendar({
   const visibleTechnicians = useMemo(() => {
     return technicians.filter((t) => selectedTechIds.includes(t.id));
   }, [technicians, selectedTechIds]);
+
+  // Snap modifier - snaps to 15-min grid vertically and technician columns horizontally
+  const snapModifier = useMemo(
+    () => createSnapModifier(gridRef, visibleTechnicians.length),
+    [visibleTechnicians.length]
+  );
 
   // Filter appointments for selected date
   const dayAppointments = useMemo(() => {
@@ -828,18 +869,20 @@ export function ResourceCalendar({
         </div>
 
         {/* Drag Overlay - Moving appointment card */}
-        <DragOverlay modifiers={[snapToGridModifier]} dropAnimation={null}>
+        <DragOverlay modifiers={[snapModifier]} dropAnimation={null}>
           {dragState.activeAppointment && (() => {
             // Calculate column width to match the original card size
             const gridWidth = gridRef.current?.clientWidth || 800;
             const columnWidth = (gridWidth - TIME_COLUMN_WIDTH) / visibleTechnicians.length;
             // Account for padding (2px on each side)
             const cardWidth = columnWidth - 4;
+            const aptHeight = ((dragState.activeAppointment.endTime.getTime() -
+              dragState.activeAppointment.startTime.getTime()) / (1000 * 60)) * (PIXELS_PER_HOUR / 60);
 
             return (
               <div
                 className={cn(
-                  "rounded px-1.5 py-1 overflow-hidden pointer-events-none",
+                  "rounded overflow-hidden pointer-events-none",
                   dragState.hasConflict && "ring-2 ring-amber-400 ring-offset-1"
                 )}
                 style={{
@@ -847,26 +890,24 @@ export function ResourceCalendar({
                   opacity: 0.75,
                   boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
                   width: `${cardWidth}px`,
-                  height: `${Math.max(
-                    ((dragState.activeAppointment.endTime.getTime() -
-                      dragState.activeAppointment.startTime.getTime()) /
-                      (1000 * 60)) *
-                      (PIXELS_PER_HOUR / 60),
-                    40
-                  )}px`,
+                  height: `${aptHeight}px`,
                 }}
               >
-                <div className="text-xs font-medium text-white">
+                <div className="px-1.5 py-0.5 text-xs font-medium text-white truncate">
                   {format(dragState.currentTime || dragState.activeAppointment.startTime, "h:mm a")}
                 </div>
-                <div className="text-xs text-white/90">
-                  {dragState.activeAppointment.clientName}
-                </div>
-                <div className="text-xs text-white/80">
-                  {dragState.activeAppointment.serviceName}
-                </div>
-                {dragState.hasConflict && (
-                  <div className="text-xs text-amber-200 font-medium mt-1">
+                {aptHeight > 30 && (
+                  <div className="px-1.5 text-xs text-white/90 truncate">
+                    {dragState.activeAppointment.clientName}
+                  </div>
+                )}
+                {aptHeight > 45 && (
+                  <div className="px-1.5 text-xs text-white/80 truncate">
+                    {dragState.activeAppointment.serviceName}
+                  </div>
+                )}
+                {dragState.hasConflict && aptHeight > 60 && (
+                  <div className="px-1.5 text-xs text-amber-200 font-medium">
                     Will overlap
                   </div>
                 )}
@@ -880,29 +921,28 @@ export function ResourceCalendar({
             // Account for padding (2px on each side)
             const cardWidth = columnWidth - 4;
 
+            const blockHeight = ((new Date(dragState.activeBlock.endTime).getTime() -
+              new Date(dragState.activeBlock.startTime).getTime()) / (1000 * 60)) * (PIXELS_PER_HOUR / 60);
+
             return (
               <div
-                className="rounded px-1.5 py-1 overflow-hidden pointer-events-none"
+                className="rounded overflow-hidden pointer-events-none"
                 style={{
                   backgroundColor: "#9E9E9E",
                   opacity: 0.75,
                   boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
                   width: `${cardWidth}px`,
-                  height: `${Math.max(
-                    ((new Date(dragState.activeBlock.endTime).getTime() -
-                      new Date(dragState.activeBlock.startTime).getTime()) /
-                      (1000 * 60)) *
-                      (PIXELS_PER_HOUR / 60),
-                    40
-                  )}px`,
+                  height: `${blockHeight}px`,
                 }}
               >
-                <div className="text-xs font-medium text-white">
+                <div className="px-1.5 py-0.5 text-xs font-medium text-white truncate">
                   {format(dragState.currentTime || dragState.activeBlock.startTime, "h:mm a")}
                 </div>
-                <div className="text-xs text-white font-medium">
-                  {dragState.activeBlock.title}
-                </div>
+                {blockHeight > 30 && (
+                  <div className="px-1.5 text-xs text-white font-medium truncate">
+                    {dragState.activeBlock.title}
+                  </div>
+                )}
               </div>
             );
           })()}

@@ -31,7 +31,6 @@ export function useRealtimeTechnicians({
             filter: `locationId=eq.${locationId}`,
           },
           () => {
-            console.log("Technician changed");
             onChange?.();
           }
         )
@@ -44,13 +43,10 @@ export function useRealtimeTechnicians({
             table: tables.technicianSchedules,
           },
           () => {
-            console.log("Technician schedule changed");
             onChange?.();
           }
         )
-        .subscribe((status) => {
-          console.log("Technicians realtime subscription status:", status);
-        });
+        .subscribe();
     };
 
     setupSubscription();

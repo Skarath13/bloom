@@ -36,7 +36,6 @@ export function useRealtimeAppointments({
             filter: `locationId=eq.${locationId}`,
           },
           () => {
-            console.log("Appointment inserted");
             onInsert?.();
             onChange?.();
           }
@@ -50,7 +49,6 @@ export function useRealtimeAppointments({
             filter: `locationId=eq.${locationId}`,
           },
           () => {
-            console.log("Appointment updated");
             onUpdate?.();
             onChange?.();
           }
@@ -63,14 +61,11 @@ export function useRealtimeAppointments({
             table: tables.appointments,
           },
           () => {
-            console.log("Appointment deleted");
             onDelete?.();
             onChange?.();
           }
         )
-        .subscribe((status) => {
-          console.log("Realtime subscription status:", status);
-        });
+        .subscribe();
     };
 
     setupSubscription();
