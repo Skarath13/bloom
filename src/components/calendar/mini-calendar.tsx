@@ -132,7 +132,7 @@ export function MiniCalendar({ selectedDate, onDateSelect }: MiniCalendarProps) 
                 !isCurrentMonth && "text-gray-300",
                 isCurrentMonth && "text-gray-700",
                 isSelected && "bg-gray-900 text-white hover:bg-gray-800",
-                isTodayDate && !isSelected && "text-blue-600 font-semibold"
+                isTodayDate && !isSelected && "ring-1 ring-gray-900"
               )}
               onClick={() => onDateSelect(dayDate)}
             >

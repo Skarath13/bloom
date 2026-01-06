@@ -703,12 +703,14 @@ export function ResourceCalendar({
                 </div>
               )}
 
-              {/* Current time indicator */}
-              <TimeIndicator
-                startHour={CALENDAR_START_HOUR}
-                pixelsPerHour={PIXELS_PER_HOUR}
-                leftOffset={TIME_COLUMN_WIDTH}
-              />
+              {/* Current time indicator - only show on today */}
+              {isSameDay(selectedDate, new Date()) && (
+                <TimeIndicator
+                  startHour={CALENDAR_START_HOUR}
+                  pixelsPerHour={PIXELS_PER_HOUR}
+                  leftOffset={TIME_COLUMN_WIDTH}
+                />
+              )}
 
               {/* Personal events/blocks overlay */}
               <div
