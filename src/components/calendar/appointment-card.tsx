@@ -140,20 +140,20 @@ export function AppointmentCard({
       </div>
 
       {/* Client name */}
-      <div className="text-xs text-white font-medium truncate">
+      <div className="text-xs text-white font-medium">
         {isPersonalEvent ? "Personal Event" : clientName}
       </div>
 
       {/* Service name (if height allows) */}
       {showServiceName && !isPersonalEvent && (
-        <div className="text-xs text-white/90 truncate">
+        <div className="text-xs text-white/90">
           {serviceName}
         </div>
       )}
 
       {/* Service category with sparkle (if height allows) */}
       {showCategory && serviceCategory && !isPersonalEvent && (
-        <div className="text-xs text-white/80 flex items-center gap-0.5 truncate">
+        <div className="text-xs text-white/80 flex items-center gap-0.5">
           ({serviceCategory})
           <Sparkles className="h-2.5 w-2.5 flex-shrink-0" />
         </div>
