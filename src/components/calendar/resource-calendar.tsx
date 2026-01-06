@@ -805,7 +805,7 @@ export function ResourceCalendar({
             <div
               className={cn(
                 "rounded px-1.5 py-1 overflow-hidden pointer-events-none",
-                dragState.hasConflict && "ring-2 ring-red-500 ring-offset-1"
+                dragState.hasConflict && "ring-2 ring-amber-400 ring-offset-1"
               )}
               style={{
                 backgroundColor: getDragOverlayTechColor(),
@@ -830,8 +830,8 @@ export function ResourceCalendar({
                 {dragState.activeAppointment.serviceName}
               </div>
               {dragState.hasConflict && (
-                <div className="text-xs text-red-200 font-medium mt-1">
-                  Overlaps existing appointment
+                <div className="text-xs text-amber-200 font-medium mt-1">
+                  Will overlap
                 </div>
               )}
             </div>
