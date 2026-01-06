@@ -336,7 +336,6 @@ export function ResourceCalendar({
     clearPendingMove,
     clearPendingBlock,
     getDragOverlayTechColor,
-    getLandingZoneStyle,
   } = useCalendarDnd({
     appointments: dayAppointments,
     selectedDate,
@@ -695,26 +694,6 @@ export function ResourceCalendar({
                 </div>
               )}
 
-              {/* Landing zone indicator during drag */}
-              {isDragging && getLandingZoneStyle() && (
-                <div
-                  className="absolute top-0 bottom-0 pointer-events-none"
-                  style={{ left: TIME_COLUMN_WIDTH, right: 0 }}
-                >
-                  <div className="relative h-full">
-                    <div
-                      className={cn(
-                        "absolute border-2 border-dashed rounded transition-all duration-75",
-                        dragState.hasConflict
-                          ? "bg-red-100/50 border-red-400"
-                          : "bg-blue-100/50 border-blue-400"
-                      )}
-                      style={getLandingZoneStyle() || undefined}
-                    />
-                  </div>
-                </div>
-              )}
-
               {/* Current time indicator */}
               <TimeIndicator
                 startHour={CALENDAR_START_HOUR}
@@ -811,17 +790,17 @@ export function ResourceCalendar({
           </div>
         </div>
 
-        {/* Drag Overlay - Ghost preview */}
+        {/* Drag Overlay - Moving appointment card */}
         <DragOverlay>
           {dragState.activeAppointment && (
             <div
-              className={`rounded px-1.5 py-1 overflow-hidden pointer-events-none ${
-                dragState.hasConflict ? "border-2 border-red-500" : "border-2 border-blue-500"
-              }`}
+              className={cn(
+                "rounded px-1.5 py-1 overflow-hidden pointer-events-none",
+                dragState.hasConflict && "ring-2 ring-red-500 ring-offset-1"
+              )}
               style={{
                 backgroundColor: getDragOverlayTechColor(),
-                opacity: 0.75,
-                boxShadow: "0 8px 16px rgba(0,0,0,0.2)",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
                 width: "150px",
                 minHeight: `${Math.max(
                   ((dragState.activeAppointment.endTime.getTime() -
