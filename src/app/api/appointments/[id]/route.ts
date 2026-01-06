@@ -145,6 +145,7 @@ export async function PATCH(
     }
 
     // Use the safe update function with conflict checking
+    // skipConflictCheck allows overlapping appointments (for drag-and-drop moves)
     const appointment = await updateAppointmentWithCheck({
       appointmentId: id,
       expectedUpdatedAt: body.expectedUpdatedAt, // For optimistic locking
@@ -155,6 +156,7 @@ export async function PATCH(
         status: body.status,
         notes: body.notes,
       },
+      skipConflictCheck: body.skipConflictCheck === true,
     });
 
     // Send SMS notification if requested and appointment was moved

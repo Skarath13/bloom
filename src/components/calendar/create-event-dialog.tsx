@@ -552,22 +552,22 @@ export function CreateEventDialog({
   return (
     <div className="fixed inset-0 z-50 bg-white flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between h-14 px-4 border-b border-gray-200 flex-shrink-0">
+      <div className="flex items-center justify-between h-auto min-h-[56px] px-4 py-2 border-b border-gray-200 flex-shrink-0 gap-2 flex-wrap">
         <button
           onClick={onClose}
-          className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 active:bg-gray-300 transition-colors cursor-pointer"
+          className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 active:bg-gray-300 transition-colors cursor-pointer flex-shrink-0"
         >
           <X className="h-5 w-5 text-gray-600" />
         </button>
 
-        <h2 className="absolute left-1/2 -translate-x-1/2 text-xl font-bold text-gray-900">
+        <h2 className="text-lg sm:text-xl font-bold text-gray-900 flex-1 text-center min-w-0 order-first sm:order-none w-full sm:w-auto truncate">
           {eventType === "appointment" ? "Create Appointment" : "Create Personal Event"}
         </h2>
 
         <button
           onClick={handleSave}
           disabled={saving || !canSave}
-          className="h-9 px-6 rounded-full bg-gray-900 hover:bg-gray-800 active:bg-gray-700 text-white text-sm font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          className="h-9 px-4 sm:px-6 rounded-full bg-gray-900 hover:bg-gray-800 active:bg-gray-700 text-white text-sm font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
         >
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
         </button>
@@ -578,8 +578,8 @@ export function CreateEventDialog({
         <div className={`mx-auto py-8 px-6 ${eventType === "appointment" ? "max-w-4xl" : "max-w-lg"}`}>
           {/* Event Type Selector */}
           <div className="border border-gray-300 rounded-lg mb-8 overflow-hidden">
-            <div className={`grid ${eventType === "appointment" ? "grid-cols-[200px_1fr]" : ""}`}>
-              <div className="px-4 py-3 bg-gray-50 text-sm font-medium text-gray-700">
+            <div className={`grid ${eventType === "appointment" ? "grid-cols-1 sm:grid-cols-[160px_1fr] lg:grid-cols-[200px_1fr]" : ""}`}>
+              <div className="px-4 py-2 sm:py-3 bg-gray-50 text-sm font-medium text-gray-700">
                 Event type
               </div>
               <div className="px-2 py-1">
@@ -604,9 +604,9 @@ export function CreateEventDialog({
                 <h3 className="text-base font-medium text-gray-900 mb-3">Client information</h3>
                 <div className="border border-gray-300 rounded-lg overflow-hidden">
                   {/* Name row */}
-                  <div className="grid grid-cols-[200px_1fr] border-b border-gray-300">
-                    <div className="px-4 py-3 bg-gray-50 text-sm font-medium text-gray-700">Name</div>
-                    <div className="px-4 py-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] lg:grid-cols-[200px_1fr] border-b border-gray-300">
+                    <div className="px-4 py-2 sm:py-3 bg-gray-50 text-sm font-medium text-gray-700">Name</div>
+                    <div className="px-4 py-2 sm:py-3">
                       {selectedClient ? (
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-gray-900">
@@ -723,16 +723,16 @@ export function CreateEventDialog({
                       )}
                     </div>
                   </div>
-                  {/* Email & Phone row */}
-                  <div className="grid grid-cols-[200px_1fr_160px_1fr]">
-                    <div className="px-4 py-3 bg-gray-50 text-sm font-medium text-gray-700">Email</div>
-                    <div className="px-4 py-3 text-sm text-gray-400">
+                  {/* Email & Phone row - stacks on mobile */}
+                  <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] lg:grid-cols-[200px_1fr_160px_1fr]">
+                    <div className="px-4 py-2 sm:py-3 bg-gray-50 text-sm font-medium text-gray-700 border-b sm:border-b-0 lg:border-b-0">Email</div>
+                    <div className="px-4 py-2 sm:py-3 text-sm text-gray-400 border-b lg:border-b-0">
                       {selectedClient?.email || "Email"}
                     </div>
-                    <div className="px-4 py-3 bg-gray-50 text-sm font-medium text-gray-700 border-l border-gray-300">
+                    <div className="px-4 py-2 sm:py-3 bg-gray-50 text-sm font-medium text-gray-700 lg:border-l border-gray-300 border-b sm:border-b-0 lg:border-b-0">
                       Phone
                     </div>
-                    <div className="px-4 py-3 text-sm text-gray-400">
+                    <div className="px-4 py-2 sm:py-3 text-sm text-gray-400">
                       {selectedClient ? formatPhone(selectedClient.phone) : "Primary phone number"}
                     </div>
                   </div>
@@ -753,9 +753,9 @@ export function CreateEventDialog({
                 </div>
                 <div className="border border-gray-300 rounded-lg overflow-hidden">
                   {/* Date & time */}
-                  <div className="grid grid-cols-[200px_1fr] border-b border-gray-300">
-                    <div className="px-4 py-3 bg-gray-50 text-sm font-medium text-gray-700">Date & time</div>
-                    <div className="px-4 py-3 flex items-center gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] lg:grid-cols-[200px_1fr] border-b border-gray-300">
+                    <div className="px-4 py-2 sm:py-3 bg-gray-50 text-sm font-medium text-gray-700">Date & time</div>
+                    <div className="px-4 py-2 sm:py-3 flex items-center gap-2 flex-wrap">
                       <DatePicker
                         date={appointmentDate ? new Date(appointmentDate + "T00:00:00") : undefined}
                         onDateChange={(date) => setAppointmentDate(date ? format(date, "yyyy-MM-dd") : "")}
@@ -770,9 +770,9 @@ export function CreateEventDialog({
                   {/* Repeat every - shown when repeat is checked */}
                   {repeat && (
                     <>
-                      <div className="grid grid-cols-[200px_1fr] border-b border-gray-300">
-                        <div className="px-4 py-3 bg-gray-50 text-sm font-medium text-gray-700">Repeat every</div>
-                        <div className="px-4 py-3 flex items-center gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] lg:grid-cols-[200px_1fr] border-b border-gray-300">
+                        <div className="px-4 py-2 sm:py-3 bg-gray-50 text-sm font-medium text-gray-700">Repeat every</div>
+                        <div className="px-4 py-2 sm:py-3 flex items-center gap-2 flex-wrap">
                           <input
                             type="number"
                             min="1"
@@ -796,8 +796,8 @@ export function CreateEventDialog({
                           </Select>
                         </div>
                       </div>
-                      <div className="grid grid-cols-[200px_1fr] border-b border-gray-300">
-                        <div className="px-4 py-3 bg-gray-50 text-sm font-medium text-gray-700">End repeating</div>
+                      <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] lg:grid-cols-[200px_1fr] border-b border-gray-300">
+                        <div className="px-4 py-2 sm:py-3 bg-gray-50 text-sm font-medium text-gray-700">End repeating</div>
                         <div className="px-2 py-1 flex items-center gap-2">
                           <Select value={repeatEnds} onValueChange={(v) => setRepeatEnds(v as "never" | "after" | "on_date")}>
                             <SelectTrigger className="w-full border-0 shadow-none focus:ring-0 h-10 text-sm justify-between">
@@ -816,9 +816,9 @@ export function CreateEventDialog({
                         </div>
                       </div>
                       {repeatEnds === "after" && (
-                        <div className="grid grid-cols-[200px_1fr] border-b border-gray-300">
-                          <div className="px-4 py-3 bg-gray-50 text-sm font-medium text-gray-700">Occurrences</div>
-                          <div className="px-4 py-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] lg:grid-cols-[200px_1fr] border-b border-gray-300">
+                          <div className="px-4 py-2 sm:py-3 bg-gray-50 text-sm font-medium text-gray-700">Occurrences</div>
+                          <div className="px-4 py-2 sm:py-3">
                             <input
                               type="number"
                               min="1"
@@ -830,9 +830,9 @@ export function CreateEventDialog({
                         </div>
                       )}
                       {repeatEnds === "on_date" && (
-                        <div className="grid grid-cols-[200px_1fr] border-b border-gray-300">
-                          <div className="px-4 py-3 bg-gray-50 text-sm font-medium text-gray-700">End date</div>
-                          <div className="px-4 py-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] lg:grid-cols-[200px_1fr] border-b border-gray-300">
+                          <div className="px-4 py-2 sm:py-3 bg-gray-50 text-sm font-medium text-gray-700">End date</div>
+                          <div className="px-4 py-2 sm:py-3">
                             <DatePicker
                               date={repeatEndDate ? new Date(repeatEndDate + "T00:00:00") : undefined}
                               onDateChange={(date) => setRepeatEndDate(date ? format(date, "yyyy-MM-dd") : "")}
@@ -844,8 +844,8 @@ export function CreateEventDialog({
                     </>
                   )}
                   {/* Location */}
-                  <div className="grid grid-cols-[200px_1fr] border-b border-gray-300">
-                    <div className="px-4 py-3 bg-gray-50 text-sm font-medium text-gray-700">Location</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] lg:grid-cols-[200px_1fr] border-b border-gray-300">
+                    <div className="px-4 py-2 sm:py-3 bg-gray-50 text-sm font-medium text-gray-700">Location</div>
                     <div className="px-2 py-1">
                       <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
                         <SelectTrigger className="w-full border-0 shadow-none focus:ring-0 h-10 text-sm justify-between">
@@ -862,8 +862,8 @@ export function CreateEventDialog({
                     </div>
                   </div>
                   {/* Staff */}
-                  <div className="grid grid-cols-[200px_1fr] border-b border-gray-300">
-                    <div className="px-4 py-3 bg-gray-50 text-sm font-medium text-gray-700">Staff</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] lg:grid-cols-[200px_1fr] border-b border-gray-300">
+                    <div className="px-4 py-2 sm:py-3 bg-gray-50 text-sm font-medium text-gray-700">Staff</div>
                     <div className="px-2 py-1">
                       <Select value={selectedTechnicianId} onValueChange={setSelectedTechnicianId}>
                         <SelectTrigger className="w-full border-0 shadow-none focus:ring-0 h-10 text-sm justify-between">
@@ -892,8 +892,8 @@ export function CreateEventDialog({
                     </div>
                   </div>
                   {/* Notes */}
-                  <div className="grid grid-cols-[200px_1fr]">
-                    <div className="px-4 py-3 bg-gray-50 text-sm font-medium text-gray-700">Appointment notes</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] lg:grid-cols-[200px_1fr]">
+                    <div className="px-4 py-2 sm:py-3 bg-gray-50 text-sm font-medium text-gray-700">Appointment notes</div>
                     <div className="px-2 py-1">
                       <Input
                         value={appointmentNotes}
@@ -908,14 +908,14 @@ export function CreateEventDialog({
 
               {/* Services Table */}
               <div className="mb-4">
-                <div className="border border-gray-300 rounded-lg overflow-hidden">
-                  <div className="grid grid-cols-[1fr_120px_100px] bg-gray-50 border-b-2 border-gray-300">
-                    <div className="px-4 py-3 text-sm font-medium text-gray-900">Services</div>
-                    <div className="px-4 py-3 text-sm font-medium text-gray-900">Duration</div>
-                    <div className="px-4 py-3 text-sm font-medium text-gray-900 text-right">Amount</div>
+                <div className="border border-gray-300 rounded-lg overflow-hidden overflow-x-auto">
+                  <div className="grid grid-cols-[1fr_90px_80px] sm:grid-cols-[1fr_120px_100px] bg-gray-50 border-b-2 border-gray-300 min-w-[280px]">
+                    <div className="px-3 sm:px-4 py-3 text-sm font-medium text-gray-900">Services</div>
+                    <div className="px-3 sm:px-4 py-3 text-sm font-medium text-gray-900">Duration</div>
+                    <div className="px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 text-right">Amount</div>
                   </div>
                   {selectedServices.map((item) => (
-                    <div key={item.id} className="grid grid-cols-[1fr_120px_100px] border-b border-gray-300 group hover:bg-gray-50 transition-colors">
+                    <div key={item.id} className="grid grid-cols-[1fr_90px_80px] sm:grid-cols-[1fr_120px_100px] border-b border-gray-300 group hover:bg-gray-50 transition-colors min-w-[280px]">
                       <div className="px-4 py-3 flex items-center justify-between">
                         <div>
                           <div className="text-sm text-gray-900">{item.service.name}</div>
@@ -952,15 +952,15 @@ export function CreateEventDialog({
 
               {/* Items Table */}
               <div className="mb-4">
-                <div className="border border-gray-300 rounded-lg overflow-hidden">
-                  <div className="grid grid-cols-[1fr_80px_80px_100px] bg-gray-50 border-b-2 border-gray-300">
-                    <div className="px-4 py-3 text-sm font-medium text-gray-900">Items</div>
-                    <div className="px-4 py-3 text-sm font-medium text-gray-900">Quantity</div>
-                    <div className="px-4 py-3 text-sm font-medium text-gray-900">Price</div>
-                    <div className="px-4 py-3 text-sm font-medium text-gray-900 text-right">Amount</div>
+                <div className="border border-gray-300 rounded-lg overflow-hidden overflow-x-auto">
+                  <div className="grid grid-cols-[1fr_60px_60px_80px] sm:grid-cols-[1fr_80px_80px_100px] bg-gray-50 border-b-2 border-gray-300 min-w-[280px]">
+                    <div className="px-3 sm:px-4 py-3 text-sm font-medium text-gray-900">Items</div>
+                    <div className="px-2 sm:px-4 py-3 text-sm font-medium text-gray-900">Qty</div>
+                    <div className="px-2 sm:px-4 py-3 text-sm font-medium text-gray-900">Price</div>
+                    <div className="px-2 sm:px-4 py-3 text-sm font-medium text-gray-900 text-right">Amount</div>
                   </div>
                   {items.map((item) => (
-                    <div key={item.id} className="grid grid-cols-[1fr_80px_80px_100px] border-b border-gray-300 group hover:bg-gray-50 transition-colors">
+                    <div key={item.id} className="grid grid-cols-[1fr_60px_60px_80px] sm:grid-cols-[1fr_80px_80px_100px] border-b border-gray-300 group hover:bg-gray-50 transition-colors min-w-[280px]">
                       <div className="px-4 py-3 flex items-center justify-between">
                         <span className="text-sm text-gray-900">{item.name}</span>
                         <button

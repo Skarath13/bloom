@@ -178,7 +178,7 @@ const getOffHoursBlocks = (
 };
 
 // Calculate appointment position and height
-const getAppointmentStyle = (appointment: Appointment) => {
+const getAppointmentStyle = (appointment: Appointment, calendarDate: Date) => {
   const startHour = appointment.startTime.getHours();
   const startMinute = appointment.startTime.getMinutes();
   const endHour = appointment.endTime.getHours();
@@ -186,7 +186,17 @@ const getAppointmentStyle = (appointment: Appointment) => {
 
   // Calculate total minutes from calendar start
   const startMinutesFromMidnight = (startHour - CALENDAR_START_HOUR) * 60 + startMinute;
-  const endMinutesFromMidnight = (endHour - CALENDAR_START_HOUR) * 60 + endMinute;
+  let endMinutesFromMidnight = (endHour - CALENDAR_START_HOUR) * 60 + endMinute;
+
+  // Check if appointment spans into the next day
+  const appointmentSpansNextDay = !isSameDay(appointment.startTime, appointment.endTime);
+
+  if (appointmentSpansNextDay) {
+    // If appointment goes past midnight, extend to end of calendar (24 hours = 1440 minutes)
+    // This makes the appointment "protrude" to the bottom of the day view
+    endMinutesFromMidnight = (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * 60;
+  }
+
   const durationMinutes = endMinutesFromMidnight - startMinutesFromMidnight;
 
   // Convert minutes to pixels (PIXELS_PER_HOUR / 60 = pixels per minute)
@@ -194,7 +204,7 @@ const getAppointmentStyle = (appointment: Appointment) => {
   const top = startMinutesFromMidnight * pixelsPerMinute;
   const height = Math.max(durationMinutes * pixelsPerMinute, 20); // Minimum 20px height
 
-  return { top, height };
+  return { top, height, spansNextDay: appointmentSpansNextDay };
 };
 
 export function ResourceCalendar({
@@ -425,14 +435,23 @@ export function ResourceCalendar({
     const endMinute = block.endTime.getMinutes();
 
     const startMinutesFromMidnight = (startHour - CALENDAR_START_HOUR) * 60 + startMinute;
-    const endMinutesFromMidnight = (endHour - CALENDAR_START_HOUR) * 60 + endMinute;
+    let endMinutesFromMidnight = (endHour - CALENDAR_START_HOUR) * 60 + endMinute;
+
+    // Check if block spans into the next day
+    const blockSpansNextDay = !isSameDay(block.startTime, block.endTime);
+
+    if (blockSpansNextDay) {
+      // Extend to end of calendar
+      endMinutesFromMidnight = (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * 60;
+    }
+
     const durationMinutes = endMinutesFromMidnight - startMinutesFromMidnight;
 
     const pixelsPerMinute = PIXELS_PER_HOUR / 60;
     const top = startMinutesFromMidnight * pixelsPerMinute;
     const height = Math.max(durationMinutes * pixelsPerMinute, 20);
 
-    return { top, height };
+    return { top, height, spansNextDay: blockSpansNextDay };
   };
 
   const timeSlots = useMemo(() => generateTimeSlots(selectedDate), [selectedDate]);
@@ -772,7 +791,7 @@ export function ResourceCalendar({
                       className="relative min-w-0 flex-1"
                     >
                       {appointmentsByTech[tech.id]?.map((apt) => {
-                        const { top, height } = getAppointmentStyle(apt);
+                        const { top, height, spansNextDay } = getAppointmentStyle(apt, selectedDate);
                         const { left, width } = apt.overlapPosition;
 
                         return (
@@ -792,9 +811,9 @@ export function ResourceCalendar({
                             className="pointer-events-auto"
                             style={{
                               top: `${top}px`,
-                              height: `${height}px`,
+                              height: `${height - 2}px`, // 2px bottom gap between adjacent appointments
                               left: `calc(${left}% + 2px)`,
-                              width: `calc(${width}% - 4px)`,
+                              width: `calc(${width}% - 5px)`, // 1px extra for gap between side-by-side appointments
                             }}
                             onClick={() => onAppointmentClick?.(apt)}
                           />
@@ -810,67 +829,83 @@ export function ResourceCalendar({
 
         {/* Drag Overlay - Moving appointment card */}
         <DragOverlay modifiers={[snapToGridModifier]} dropAnimation={null}>
-          {dragState.activeAppointment && (
-            <div
-              className={cn(
-                "rounded px-1.5 py-1 overflow-hidden pointer-events-none",
-                dragState.hasConflict && "ring-2 ring-amber-400 ring-offset-1"
-              )}
-              style={{
-                backgroundColor: getDragOverlayTechColor(),
-                opacity: 0.75,
-                boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                width: "150px",
-                minHeight: `${Math.max(
-                  ((dragState.activeAppointment.endTime.getTime() -
-                    dragState.activeAppointment.startTime.getTime()) /
-                    (1000 * 60)) *
-                    (PIXELS_PER_HOUR / 60),
-                  40
-                )}px`,
-              }}
-            >
-              <div className="text-xs font-medium text-white truncate">
-                {format(dragState.currentTime || dragState.activeAppointment.startTime, "h:mm a")}
-              </div>
-              <div className="text-xs text-white/90 truncate">
-                {dragState.activeAppointment.clientName}
-              </div>
-              <div className="text-xs text-white/80 truncate">
-                {dragState.activeAppointment.serviceName}
-              </div>
-              {dragState.hasConflict && (
-                <div className="text-xs text-amber-200 font-medium mt-1">
-                  Will overlap
+          {dragState.activeAppointment && (() => {
+            // Calculate column width to match the original card size
+            const gridWidth = gridRef.current?.clientWidth || 800;
+            const columnWidth = (gridWidth - TIME_COLUMN_WIDTH) / visibleTechnicians.length;
+            // Account for padding (2px on each side)
+            const cardWidth = columnWidth - 4;
+
+            return (
+              <div
+                className={cn(
+                  "rounded px-1.5 py-1 overflow-hidden pointer-events-none",
+                  dragState.hasConflict && "ring-2 ring-amber-400 ring-offset-1"
+                )}
+                style={{
+                  backgroundColor: getDragOverlayTechColor(),
+                  opacity: 0.75,
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                  width: `${cardWidth}px`,
+                  minHeight: `${Math.max(
+                    ((dragState.activeAppointment.endTime.getTime() -
+                      dragState.activeAppointment.startTime.getTime()) /
+                      (1000 * 60)) *
+                      (PIXELS_PER_HOUR / 60),
+                    40
+                  )}px`,
+                }}
+              >
+                <div className="text-xs font-medium text-white">
+                  {format(dragState.currentTime || dragState.activeAppointment.startTime, "h:mm a")}
                 </div>
-              )}
-            </div>
-          )}
-          {dragState.activeBlock && (
-            <div
-              className="rounded px-1.5 py-1 overflow-hidden pointer-events-none"
-              style={{
-                backgroundColor: "#9E9E9E",
-                opacity: 0.75,
-                boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                width: "150px",
-                minHeight: `${Math.max(
-                  ((new Date(dragState.activeBlock.endTime).getTime() -
-                    new Date(dragState.activeBlock.startTime).getTime()) /
-                    (1000 * 60)) *
-                    (PIXELS_PER_HOUR / 60),
-                  40
-                )}px`,
-              }}
-            >
-              <div className="text-xs font-medium text-white truncate">
-                {format(dragState.currentTime || dragState.activeBlock.startTime, "h:mm a")}
+                <div className="text-xs text-white/90">
+                  {dragState.activeAppointment.clientName}
+                </div>
+                <div className="text-xs text-white/80">
+                  {dragState.activeAppointment.serviceName}
+                </div>
+                {dragState.hasConflict && (
+                  <div className="text-xs text-amber-200 font-medium mt-1">
+                    Will overlap
+                  </div>
+                )}
               </div>
-              <div className="text-xs text-white font-medium truncate">
-                {dragState.activeBlock.title}
+            );
+          })()}
+          {dragState.activeBlock && (() => {
+            // Calculate column width to match the original card size
+            const gridWidth = gridRef.current?.clientWidth || 800;
+            const columnWidth = (gridWidth - TIME_COLUMN_WIDTH) / visibleTechnicians.length;
+            // Account for padding (2px on each side)
+            const cardWidth = columnWidth - 4;
+
+            return (
+              <div
+                className="rounded px-1.5 py-1 overflow-hidden pointer-events-none"
+                style={{
+                  backgroundColor: "#9E9E9E",
+                  opacity: 0.75,
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                  width: `${cardWidth}px`,
+                  minHeight: `${Math.max(
+                    ((new Date(dragState.activeBlock.endTime).getTime() -
+                      new Date(dragState.activeBlock.startTime).getTime()) /
+                      (1000 * 60)) *
+                      (PIXELS_PER_HOUR / 60),
+                    40
+                  )}px`,
+                }}
+              >
+                <div className="text-xs font-medium text-white">
+                  {format(dragState.currentTime || dragState.activeBlock.startTime, "h:mm a")}
+                </div>
+                <div className="text-xs text-white font-medium">
+                  {dragState.activeBlock.title}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </DragOverlay>
         </DndContext>
       </div>

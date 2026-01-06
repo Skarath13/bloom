@@ -403,14 +403,27 @@ function CalendarContent() {
       notifyClient: boolean
     ) => {
       try {
+        // Format as local datetime (YYYY-MM-DDTHH:mm:ss) to avoid timezone issues
+        // Using toISOString() would convert to UTC and cause date filter mismatches
+        const formatLocalDateTime = (date: Date) => {
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          const hours = String(date.getHours()).padStart(2, '0');
+          const minutes = String(date.getMinutes()).padStart(2, '0');
+          const seconds = String(date.getSeconds()).padStart(2, '0');
+          return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+        };
+
         const response = await fetch(`/api/appointments/${appointmentId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             technicianId: newTechnicianId,
-            startTime: newStartTime.toISOString(),
-            endTime: newEndTime.toISOString(),
+            startTime: formatLocalDateTime(newStartTime),
+            endTime: formatLocalDateTime(newEndTime),
             notifyClient,
+            skipConflictCheck: true, // Allow overlapping appointments for drag-and-drop moves
           }),
         });
 

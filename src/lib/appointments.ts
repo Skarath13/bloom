@@ -423,11 +423,13 @@ export async function createAppointmentWithCheck({
 
 /**
  * Update appointment with application-level locking
+ * @param skipConflictCheck - Skip conflict checking (for drag-and-drop moves that allow overlaps)
  */
 export async function updateAppointmentWithCheck({
   appointmentId,
   expectedUpdatedAt,
   data,
+  skipConflictCheck = false,
 }: {
   appointmentId: string;
   expectedUpdatedAt?: string;
@@ -438,6 +440,7 @@ export async function updateAppointmentWithCheck({
     status?: string;
     notes?: string;
   };
+  skipConflictCheck?: boolean;
 }) {
   // Step 1: Get current appointment
   const { data: current, error: fetchError } = await supabase
@@ -463,40 +466,53 @@ export async function updateAppointmentWithCheck({
     }
   }
 
-  // Step 3: If changing time or tech, check for conflicts
-  const newTechnicianId = data.technicianId || current.technicianId;
-  const newStartTime = data.startTime || new Date(current.startTime);
-  const newEndTime = data.endTime || new Date(current.endTime);
+  // Step 3: If changing time or tech, check for conflicts (unless skipped)
+  if (!skipConflictCheck) {
+    const newTechnicianId = data.technicianId || current.technicianId;
+    const newStartTime = data.startTime || new Date(current.startTime);
+    const newEndTime = data.endTime || new Date(current.endTime);
 
-  const timeOrTechChanged =
-    data.technicianId !== undefined ||
-    data.startTime !== undefined ||
-    data.endTime !== undefined;
+    const timeOrTechChanged =
+      data.technicianId !== undefined ||
+      data.startTime !== undefined ||
+      data.endTime !== undefined;
 
-  if (timeOrTechChanged) {
-    const conflict = await checkAppointmentConflict({
-      technicianId: newTechnicianId,
-      startTime: newStartTime,
-      endTime: newEndTime,
-      excludeAppointmentId: appointmentId,
-    });
+    if (timeOrTechChanged) {
+      const conflict = await checkAppointmentConflict({
+        technicianId: newTechnicianId,
+        startTime: newStartTime,
+        endTime: newEndTime,
+        excludeAppointmentId: appointmentId,
+      });
 
-    if (conflict) {
-      throw new AppointmentConflictError(
-        `New time slot conflicts with existing appointment for ${conflict.clientName}`,
-        conflict
-      );
+      if (conflict) {
+        throw new AppointmentConflictError(
+          `New time slot conflicts with existing appointment for ${conflict.clientName}`,
+          conflict
+        );
+      }
     }
   }
 
   // Step 4: Update with optimistic lock check
+  // Helper to format date as local datetime (avoids UTC conversion that causes timezone issues)
+  const formatLocalDateTime = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+  };
+
   const updateData: Record<string, unknown> = {
     updatedAt: new Date().toISOString(),
   };
 
   if (data.technicianId !== undefined) updateData.technicianId = data.technicianId;
-  if (data.startTime !== undefined) updateData.startTime = data.startTime.toISOString();
-  if (data.endTime !== undefined) updateData.endTime = data.endTime.toISOString();
+  if (data.startTime !== undefined) updateData.startTime = formatLocalDateTime(data.startTime);
+  if (data.endTime !== undefined) updateData.endTime = formatLocalDateTime(data.endTime);
   if (data.status !== undefined) updateData.status = data.status;
   if (data.notes !== undefined) updateData.notes = data.notes;
 
@@ -529,6 +545,24 @@ export async function updateAppointmentWithCheck({
       throw new AppointmentStaleError(
         "This appointment was modified by another user. Please refresh and try again.",
         current
+      );
+    }
+    // Handle database-level exclusion constraint (overlapping appointments)
+    if (updateError.code === "23P01" || updateError.message?.includes("CONFLICT")) {
+      // Extract conflict info from error message if available
+      let conflictClientName = "another appointment";
+      try {
+        const match = updateError.message?.match(/CONFLICT:\s*({.*})/);
+        if (match) {
+          const conflictInfo = JSON.parse(match[1]);
+          conflictClientName = conflictInfo.clientName || conflictClientName;
+        }
+      } catch {
+        // Ignore parsing errors
+      }
+      throw new AppointmentConflictError(
+        `Time slot conflicts with existing appointment for ${conflictClientName}`,
+        { id: "", startTime: "", endTime: "", clientName: conflictClientName }
       );
     }
     console.error("Error updating appointment:", updateError);

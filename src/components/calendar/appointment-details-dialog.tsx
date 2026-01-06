@@ -479,42 +479,45 @@ export function AppointmentDetailsDialog({
   return (
     <div className="fixed inset-0 z-50 bg-white flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between h-14 px-4 border-b border-gray-200 flex-shrink-0">
+      <div className="flex items-center justify-between h-auto min-h-[56px] px-4 py-2 border-b border-gray-200 flex-shrink-0 gap-2 flex-wrap">
         {/* Left: Close button */}
         <button
           onClick={onClose}
-          className="w-10 h-10 flex items-center justify-center rounded-full border border-gray-300 hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer"
+          className="w-10 h-10 flex items-center justify-center rounded-full border border-gray-300 hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer flex-shrink-0"
         >
           <X className="h-5 w-5 text-gray-600" />
         </button>
 
         {/* Center: Title */}
-        <h2 className="absolute left-1/2 -translate-x-1/2 text-xl font-bold text-gray-900">
+        <h2 className="text-xl font-bold text-gray-900 flex-1 text-center min-w-0 order-first sm:order-none w-full sm:w-auto">
           Appointment Details
         </h2>
 
         {/* Right: Action buttons */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           <button
             onClick={() => setShowCancelModal(true)}
-            className="h-9 px-4 rounded-full border border-red-300 hover:bg-red-50 text-sm font-medium text-red-600 transition-colors cursor-pointer"
+            className="h-9 px-3 sm:px-4 rounded-full border border-red-300 hover:bg-red-50 text-sm font-medium text-red-600 transition-colors cursor-pointer whitespace-nowrap"
           >
-            Cancel Appointment
+            <span className="hidden sm:inline">Cancel Appointment</span>
+            <span className="sm:hidden">Cancel</span>
           </button>
 
           <button
             onClick={() => setShowNoShowModal(true)}
-            className="h-9 px-4 rounded-full border border-gray-300 hover:bg-gray-50 text-sm font-medium text-gray-700 transition-colors cursor-pointer"
+            className="h-9 px-3 sm:px-4 rounded-full border border-gray-300 hover:bg-gray-50 text-sm font-medium text-gray-700 transition-colors cursor-pointer whitespace-nowrap"
           >
-            Mark No-Show
+            <span className="hidden sm:inline">Mark No-Show</span>
+            <span className="sm:hidden">No-Show</span>
           </button>
 
           {onTakePayment && (
             <button
               onClick={onTakePayment}
-              className="h-9 px-4 rounded-full border border-gray-300 hover:bg-gray-50 text-sm font-medium text-gray-700 transition-colors cursor-pointer"
+              className="h-9 px-3 sm:px-4 rounded-full border border-gray-300 hover:bg-gray-50 text-sm font-medium text-gray-700 transition-colors cursor-pointer whitespace-nowrap"
             >
-              Take payment
+              <span className="hidden sm:inline">Take payment</span>
+              <span className="sm:hidden">Pay</span>
             </button>
           )}
 
@@ -522,7 +525,7 @@ export function AppointmentDetailsDialog({
             onClick={handleSave}
             disabled={saving || !hasChanges}
             className={cn(
-              "h-9 px-6 rounded-full text-sm font-medium transition-colors cursor-pointer",
+              "h-9 px-4 sm:px-6 rounded-full text-sm font-medium transition-colors cursor-pointer flex-shrink-0",
               hasChanges
                 ? "bg-gray-900 hover:bg-gray-800 text-white"
                 : "bg-gray-200 text-gray-400 cursor-not-allowed"
@@ -534,10 +537,10 @@ export function AppointmentDetailsDialog({
       </div>
 
       {/* Main Content */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left Column - Content positioned closer to sidebar */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-[820px] mx-auto py-10 px-6 translate-x-[160px]">
+      <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
+        {/* Left Column - Main content */}
+        <div className="flex-1 overflow-y-auto order-2 lg:order-1 min-w-0">
+          <div className="max-w-[820px] py-6 sm:py-10 px-4 sm:px-6 lg:ml-auto lg:mr-6 xl:mr-12">
             {/* Client Information */}
             <div className="mb-10">
               <div className="flex items-center justify-between mb-4">
@@ -549,26 +552,26 @@ export function AppointmentDetailsDialog({
 
               <div className="border border-gray-300 rounded-lg overflow-hidden">
                 {/* Name row */}
-                <div className="grid grid-cols-[200px_1fr]">
-                  <div className="px-4 py-3 bg-gray-100 text-sm font-medium text-gray-700 border-b border-gray-300">
+                <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] lg:grid-cols-[200px_1fr]">
+                  <div className="px-4 py-2 sm:py-3 bg-gray-100 text-sm font-medium text-gray-700 border-b border-gray-300">
                     Name
                   </div>
-                  <div className="px-4 py-3 text-sm text-gray-900 border-b border-gray-300">
+                  <div className="px-4 py-2 sm:py-3 text-sm text-gray-900 border-b border-gray-300">
                     {appointment.client?.firstName} {appointment.client?.lastName}
                   </div>
                 </div>
-                {/* Email & Phone row */}
-                <div className="grid grid-cols-[200px_1fr_140px_1fr]">
-                  <div className="px-4 py-3 bg-gray-100 text-sm font-medium text-gray-700">
+                {/* Email & Phone row - stacks on mobile */}
+                <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] lg:grid-cols-[200px_1fr_140px_1fr]">
+                  <div className="px-4 py-2 sm:py-3 bg-gray-100 text-sm font-medium text-gray-700 border-b sm:border-b-0 lg:border-b-0">
                     Email
                   </div>
-                  <div className="px-4 py-3 text-sm text-gray-900 truncate">
+                  <div className="px-4 py-2 sm:py-3 text-sm text-gray-900 truncate border-b lg:border-b-0">
                     {appointment.client?.email || "—"}
                   </div>
-                  <div className="px-4 py-3 bg-gray-100 text-sm font-medium text-gray-700 border-l border-gray-300">
+                  <div className="px-4 py-2 sm:py-3 bg-gray-100 text-sm font-medium text-gray-700 lg:border-l border-gray-300 border-b sm:border-b-0 lg:border-b-0">
                     Phone
                   </div>
-                  <div className="px-4 py-3 text-sm text-gray-900">
+                  <div className="px-4 py-2 sm:py-3 text-sm text-gray-900">
                     {appointment.client?.phone ? formatPhone(appointment.client.phone) : "—"}
                   </div>
                 </div>
@@ -583,12 +586,12 @@ export function AppointmentDetailsDialog({
 
               <div className="border border-gray-300 rounded-lg overflow-hidden">
                 {/* Date & time */}
-                <div className="grid grid-cols-[200px_1fr]">
-                  <div className="px-4 py-3 bg-gray-100 text-sm font-medium text-gray-700 border-b border-gray-300">
+                <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] lg:grid-cols-[200px_1fr]">
+                  <div className="px-4 py-2 sm:py-3 bg-gray-100 text-sm font-medium text-gray-700 border-b border-gray-300">
                     Date & time
                   </div>
-                  <div className="px-4 py-3 text-sm text-gray-900 flex items-center justify-between border-b border-gray-300">
-                    <div className="flex items-center gap-4">
+                  <div className="px-4 py-2 sm:py-3 text-sm text-gray-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-gray-300">
+                    <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
                       <DatePicker
                         date={editingDate ? new Date(editingDate + "T00:00:00") : undefined}
                         onDateChange={(date) => setEditingDate(date ? format(date, "yyyy-MM-dd") : "")}
@@ -604,25 +607,25 @@ export function AppointmentDetailsDialog({
                       className="flex items-center gap-2 text-gray-600 hover:text-gray-900 cursor-pointer"
                     >
                       <Search className="h-4 w-4" />
-                      <span className="text-sm">Find availability</span>
+                      <span className="text-sm hidden sm:inline">Find availability</span>
                     </button>
                   </div>
                 </div>
                 {/* Location */}
-                <div className="grid grid-cols-[200px_1fr]">
-                  <div className="px-4 py-3 bg-gray-100 text-sm font-medium text-gray-700 border-b border-gray-300">
+                <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] lg:grid-cols-[200px_1fr]">
+                  <div className="px-4 py-2 sm:py-3 bg-gray-100 text-sm font-medium text-gray-700 border-b border-gray-300">
                     Location
                   </div>
-                  <div className="px-4 py-3 text-sm text-gray-900 border-b border-gray-300">
+                  <div className="px-4 py-2 sm:py-3 text-sm text-gray-900 border-b border-gray-300 break-words">
                     Elegant Lashes By Katie - {appointment.location?.name || "Unknown"} Location
                   </div>
                 </div>
                 {/* Repeat */}
-                <div className="grid grid-cols-[200px_1fr]">
-                  <div className="px-4 py-3 bg-gray-100 text-sm font-medium text-gray-700 border-b border-gray-300">
+                <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] lg:grid-cols-[200px_1fr]">
+                  <div className="px-4 py-2 sm:py-3 bg-gray-100 text-sm font-medium text-gray-700 border-b border-gray-300">
                     Repeat
                   </div>
-                  <div className="px-4 py-3 text-sm text-gray-900 flex items-center justify-between border-b border-gray-300">
+                  <div className="px-4 py-2 sm:py-3 text-sm text-gray-900 flex items-center justify-between border-b border-gray-300">
                     {recurringSettings ? (
                       <div className="flex items-center gap-2">
                         <span className="text-green-600">
@@ -651,8 +654,8 @@ export function AppointmentDetailsDialog({
                   </div>
                 </div>
                 {/* Appointment notes */}
-                <div className="grid grid-cols-[200px_1fr]">
-                  <div className="px-4 py-3 bg-gray-100 text-sm font-medium text-gray-700">
+                <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] lg:grid-cols-[200px_1fr]">
+                  <div className="px-4 py-2 sm:py-3 bg-gray-100 text-sm font-medium text-gray-700">
                     Appointment Notes
                   </div>
                   <div className="px-2 py-1">
@@ -690,16 +693,16 @@ export function AppointmentDetailsDialog({
 
             {/* Services Table */}
             <div className="mb-6 relative">
-              <div className="border border-gray-300 rounded-lg overflow-hidden">
+              <div className="border border-gray-300 rounded-lg overflow-hidden overflow-x-auto">
                 {/* Header row */}
-                <div className="grid grid-cols-[1fr_180px_100px] border-b-2 border-gray-300 bg-gray-50">
-                  <div className="px-4 py-3 text-sm font-medium text-gray-900">Services</div>
-                  <div className="px-4 py-3 text-sm font-medium text-gray-900">Duration</div>
-                  <div className="px-4 py-3 text-sm font-medium text-gray-900 text-right">Amount</div>
+                <div className="grid grid-cols-[1fr_120px_80px] sm:grid-cols-[1fr_180px_100px] border-b-2 border-gray-300 bg-gray-50 min-w-[300px]">
+                  <div className="px-3 sm:px-4 py-3 text-sm font-medium text-gray-900">Services</div>
+                  <div className="px-3 sm:px-4 py-3 text-sm font-medium text-gray-900">Duration</div>
+                  <div className="px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 text-right">Amount</div>
                 </div>
 
                 {/* Primary Service row */}
-                <div className="grid grid-cols-[1fr_180px_100px] border-b border-gray-300 relative group hover:bg-gray-50 transition-colors">
+                <div className="grid grid-cols-[1fr_120px_80px] sm:grid-cols-[1fr_180px_100px] border-b border-gray-300 relative group hover:bg-gray-50 transition-colors min-w-[300px]">
                   <div className="px-4 py-4">
                     <div className="text-sm text-gray-900 leading-snug">
                       {appointment.serviceName}
@@ -759,7 +762,7 @@ export function AppointmentDetailsDialog({
                 {lineItems
                   .filter(item => item.itemType === "service")
                   .map((item) => (
-                    <div key={item.id} className="grid grid-cols-[1fr_180px_100px] border-b border-gray-300 relative group hover:bg-gray-50 transition-colors">
+                    <div key={item.id} className="grid grid-cols-[1fr_120px_80px] sm:grid-cols-[1fr_180px_100px] border-b border-gray-300 relative group hover:bg-gray-50 transition-colors min-w-[300px]">
                       <div className="px-4 py-4">
                         <div className="text-sm text-gray-900 leading-snug">
                           {item.name}
@@ -801,20 +804,20 @@ export function AppointmentDetailsDialog({
             </div>
 
             {/* Items Table */}
-            <div className="mb-6 border border-gray-300 rounded-lg overflow-hidden">
+            <div className="mb-6 border border-gray-300 rounded-lg overflow-hidden overflow-x-auto">
               {/* Header row */}
-              <div className="grid grid-cols-[1fr_100px_100px_100px] border-b-2 border-gray-300 bg-gray-50">
-                <div className="px-4 py-3 text-sm font-medium text-gray-900">Items</div>
-                <div className="px-4 py-3 text-sm font-medium text-gray-900">Qty</div>
-                <div className="px-4 py-3 text-sm font-medium text-gray-900">Price</div>
-                <div className="px-4 py-3 text-sm font-medium text-gray-900 text-right">Amount</div>
+              <div className="grid grid-cols-[1fr_60px_70px_80px] sm:grid-cols-[1fr_100px_100px_100px] border-b-2 border-gray-300 bg-gray-50 min-w-[280px]">
+                <div className="px-3 sm:px-4 py-3 text-sm font-medium text-gray-900">Items</div>
+                <div className="px-2 sm:px-4 py-3 text-sm font-medium text-gray-900">Qty</div>
+                <div className="px-2 sm:px-4 py-3 text-sm font-medium text-gray-900">Price</div>
+                <div className="px-2 sm:px-4 py-3 text-sm font-medium text-gray-900 text-right">Amount</div>
               </div>
 
               {/* Product line items */}
               {lineItems
                 .filter(item => item.itemType === "product")
                 .map((item) => (
-                  <div key={item.id} className="grid grid-cols-[1fr_100px_100px_100px] border-b border-gray-300 relative group hover:bg-gray-50 transition-colors">
+                  <div key={item.id} className="grid grid-cols-[1fr_60px_70px_80px] sm:grid-cols-[1fr_100px_100px_100px] border-b border-gray-300 relative group hover:bg-gray-50 transition-colors min-w-[280px]">
                     <div className="px-4 py-3 text-sm text-gray-900">{item.name}</div>
                     <div className="px-4 py-3 text-sm text-gray-600 border-l border-gray-300">{item.quantity}</div>
                     <div className="px-4 py-3 text-sm text-gray-600 border-l border-gray-300">${item.unitPrice.toFixed(2)}</div>
@@ -901,8 +904,8 @@ export function AppointmentDetailsDialog({
         </div>
 
         {/* Right Sidebar */}
-        <div className="w-[320px] min-w-[320px] border-l border-gray-200 bg-white overflow-y-auto">
-          <div className="p-6">
+        <div className="w-full lg:w-[320px] lg:min-w-[320px] border-b lg:border-b-0 lg:border-l border-gray-200 bg-white overflow-y-auto order-1 lg:order-2 max-h-[40vh] lg:max-h-none">
+          <div className="p-4 sm:p-6">
             {/* Client Name */}
             <h3 className="text-lg font-semibold text-gray-900 mb-6">
               {appointment.client?.firstName} {appointment.client?.lastName}
