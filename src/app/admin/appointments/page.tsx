@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search,
@@ -107,14 +107,23 @@ export default function AppointmentsPage() {
 
   const weekEnd = useMemo(() => endOfWeek(weekStart, { weekStartsOn: 0 }), [weekStart]);
 
+  // Track request IDs for race condition handling
+  const appointmentsFetchId = useRef(0);
+  const filtersFetchId = useRef(0);
+
   // Fetch locations and technicians for filters
   useEffect(() => {
     const fetchFilters = async () => {
+      const requestId = ++filtersFetchId.current;
+
       try {
         const [locRes, techRes] = await Promise.all([
           fetch("/api/locations"),
           fetch("/api/technicians"),
         ]);
+
+        // Only update if this is still the latest request
+        if (requestId !== filtersFetchId.current) return;
 
         if (locRes.ok) {
           const locData = await locRes.json();
@@ -126,7 +135,9 @@ export default function AppointmentsPage() {
           setTechnicians(techData.technicians || []);
         }
       } catch (error) {
-        console.error("Failed to fetch filters:", error);
+        if (requestId === filtersFetchId.current) {
+          console.error("Failed to fetch filters:", error);
+        }
       }
     };
 
@@ -136,7 +147,9 @@ export default function AppointmentsPage() {
   // Fetch appointments
   useEffect(() => {
     const fetchAppointments = async () => {
+      const requestId = ++appointmentsFetchId.current;
       setIsLoading(true);
+
       try {
         const params = new URLSearchParams();
         params.set("startDate", format(weekStart, "yyyy-MM-dd"));
@@ -153,14 +166,22 @@ export default function AppointmentsPage() {
         }
 
         const response = await fetch(`/api/appointments?${params.toString()}`);
+
+        // Only update if this is still the latest request
+        if (requestId !== appointmentsFetchId.current) return;
+
         if (response.ok) {
           const data = await response.json();
           setAppointments(data.appointments || []);
         }
       } catch (error) {
-        console.error("Failed to fetch appointments:", error);
+        if (requestId === appointmentsFetchId.current) {
+          console.error("Failed to fetch appointments:", error);
+        }
       } finally {
-        setIsLoading(false);
+        if (requestId === appointmentsFetchId.current) {
+          setIsLoading(false);
+        }
       }
     };
 

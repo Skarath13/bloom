@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Plus, Pencil, Trash2, Calendar, MapPin, Loader2, Sparkles, Package } from "lucide-react";
 import { TechnicianServices } from "@/components/admin/technicians/technician-services";
 import { Button } from "@/components/ui/button";
@@ -96,6 +96,7 @@ interface Technician {
   hasMasterFee: boolean;
   locations: Location[];
   schedules?: Schedule[];
+  updatedAt?: string; // For optimistic locking
 }
 
 const defaultSchedule: Schedule[] = daysOfWeek.map((day) => ({
@@ -127,33 +128,51 @@ export default function TechniciansPage() {
     hasMasterFee: false,
   });
 
+  // Track request IDs for race condition handling
+  const techFetchRequestId = useRef(0);
+  const locationFetchRequestId = useRef(0);
+
   // Fetch locations
   const fetchLocations = useCallback(async () => {
+    const requestId = ++locationFetchRequestId.current;
+
     try {
       const response = await fetch("/api/locations");
       const data = await response.json();
-      if (data.locations) {
+
+      // Only update if this is still the latest request
+      if (requestId === locationFetchRequestId.current && data.locations) {
         setLocations(data.locations);
       }
     } catch (error) {
-      console.error("Error fetching locations:", error);
-      toast.error("Failed to load locations");
+      if (requestId === locationFetchRequestId.current) {
+        console.error("Error fetching locations:", error);
+        toast.error("Failed to load locations");
+      }
     }
   }, []);
 
   // Fetch technicians
   const fetchTechnicians = useCallback(async () => {
+    const requestId = ++techFetchRequestId.current;
+
     try {
       const response = await fetch("/api/technicians?activeOnly=false");
       const data = await response.json();
-      if (data.technicians) {
+
+      // Only update if this is still the latest request
+      if (requestId === techFetchRequestId.current && data.technicians) {
         setTechnicians(data.technicians);
       }
     } catch (error) {
-      console.error("Error fetching technicians:", error);
-      toast.error("Failed to load technicians");
+      if (requestId === techFetchRequestId.current) {
+        console.error("Error fetching technicians:", error);
+        toast.error("Failed to load technicians");
+      }
     } finally {
-      setIsLoading(false);
+      if (requestId === techFetchRequestId.current) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
@@ -225,8 +244,27 @@ export default function TechniciansPage() {
 
     setIsSaving(true);
 
+    // Store previous state for rollback
+    const previousTechnicians = [...technicians];
+
     try {
       if (editingTech) {
+        // Optimistic update for editing
+        const optimisticTech: Technician = {
+          ...editingTech,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          description: formData.description || null,
+          color: formData.color,
+          isActive: formData.isActive,
+          hasMasterFee: formData.hasMasterFee,
+          locations: locations.filter((l) => formData.locationIds.includes(l.id)),
+        };
+
+        setTechnicians((prev) =>
+          prev.map((t) => (t.id === editingTech.id ? optimisticTech : t))
+        );
+
         // Update existing technician
         const response = await fetch(`/api/technicians/${editingTech.id}`, {
           method: "PUT",
@@ -239,16 +277,33 @@ export default function TechniciansPage() {
             locationIds: formData.locationIds,
             isActive: formData.isActive,
             hasMasterFee: formData.hasMasterFee,
+            expectedUpdatedAt: editingTech.updatedAt, // For conflict detection
           }),
         });
 
         if (!response.ok) {
-          throw new Error("Failed to update technician");
+          const error = await response.json();
+          // Rollback on error
+          setTechnicians(previousTechnicians);
+
+          if (error.conflict) {
+            toast.error("This technician was modified by someone else. Please refresh and try again.");
+            await fetchTechnicians();
+          } else {
+            throw new Error(error.error || "Failed to update technician");
+          }
+          return;
         }
+
+        const data = await response.json();
+        // Update with server response (includes new updatedAt)
+        setTechnicians((prev) =>
+          prev.map((t) => (t.id === editingTech.id ? data.technician : t))
+        );
 
         toast.success("Technician updated successfully");
       } else {
-        // Create new technician
+        // Create new technician (no optimistic update for creates)
         const response = await fetch("/api/technicians", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -267,13 +322,15 @@ export default function TechniciansPage() {
           throw new Error("Failed to create technician");
         }
 
+        await fetchTechnicians();
         toast.success("Technician added successfully");
       }
 
-      await fetchTechnicians();
       setIsDialogOpen(false);
       resetForm();
     } catch (error) {
+      // Rollback on error
+      setTechnicians(previousTechnicians);
       console.error("Error saving technician:", error);
       toast.error("Failed to save technician");
     } finally {
@@ -312,6 +369,10 @@ export default function TechniciansPage() {
       return;
     }
 
+    // Optimistic delete
+    const previousTechnicians = [...technicians];
+    setTechnicians((prev) => prev.filter((t) => t.id !== id));
+
     try {
       const response = await fetch(`/api/technicians/${id}`, {
         method: "DELETE",
@@ -320,32 +381,61 @@ export default function TechniciansPage() {
       const data = await response.json();
 
       if (!response.ok) {
+        // Rollback on error
+        setTechnicians(previousTechnicians);
         toast.error(data.error || "Failed to delete technician");
         return;
       }
 
       toast.success("Technician deleted");
-      await fetchTechnicians();
     } catch (error) {
+      // Rollback on error
+      setTechnicians(previousTechnicians);
       console.error("Error deleting technician:", error);
       toast.error("Failed to delete technician");
     }
   };
 
   const toggleActive = async (tech: Technician) => {
+    // Optimistic update
+    const previousTechnicians = [...technicians];
+    const newActiveState = !tech.isActive;
+
+    setTechnicians((prev) =>
+      prev.map((t) => (t.id === tech.id ? { ...t, isActive: newActiveState } : t))
+    );
+
     try {
       const response = await fetch(`/api/technicians/${tech.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isActive: !tech.isActive }),
+        body: JSON.stringify({
+          isActive: newActiveState,
+          expectedUpdatedAt: tech.updatedAt,
+        }),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to update status");
+        // Rollback on error
+        setTechnicians(previousTechnicians);
+        const error = await response.json();
+        if (error.conflict) {
+          toast.error("This technician was modified by someone else. Refreshing...");
+          await fetchTechnicians();
+        } else {
+          throw new Error("Failed to update status");
+        }
+        return;
       }
 
-      await fetchTechnicians();
+      const data = await response.json();
+      // Update with server response
+      setTechnicians((prev) =>
+        prev.map((t) => (t.id === tech.id ? data.technician : t))
+      );
     } catch (error) {
+      // Rollback on error
+      setTechnicians(previousTechnicians);
       console.error("Error toggling active:", error);
       toast.error("Failed to update status");
     }
@@ -578,6 +668,7 @@ export default function TechniciansPage() {
 
       {/* Add/Edit Technician Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={(open) => {
+        if (isSaving) return; // Prevent closing while saving
         setIsDialogOpen(open);
         if (!open) resetForm();
       }}>
@@ -604,6 +695,7 @@ export default function TechniciansPage() {
                     setFormData((prev) => ({ ...prev, firstName: e.target.value }))
                   }
                   placeholder="Katie"
+                  disabled={isSaving}
                 />
               </div>
               <div className="space-y-2">
@@ -615,6 +707,7 @@ export default function TechniciansPage() {
                     setFormData((prev) => ({ ...prev, lastName: e.target.value }))
                   }
                   placeholder="M"
+                  disabled={isSaving}
                 />
               </div>
             </div>
@@ -629,6 +722,7 @@ export default function TechniciansPage() {
                 }
                 placeholder="Specializes in classic lashes and volume sets..."
                 rows={2}
+                disabled={isSaving}
               />
               <p className="text-xs text-muted-foreground">
                 This will be shown to clients during booking
@@ -644,6 +738,7 @@ export default function TechniciansPage() {
                       id={`loc-${loc.id}`}
                       checked={formData.locationIds.includes(loc.id)}
                       onCheckedChange={() => toggleLocationSelection(loc.id)}
+                      disabled={isSaving}
                     />
                     <label
                       htmlFor={`loc-${loc.id}`}
@@ -672,6 +767,7 @@ export default function TechniciansPage() {
                     }
                     className="w-10 h-10 rounded-lg border-2 border-gray-200 cursor-pointer overflow-hidden"
                     style={{ padding: 0 }}
+                    disabled={isSaving}
                   />
                 </div>
                 {/* Current color display */}
@@ -698,6 +794,7 @@ export default function TechniciansPage() {
                     style={{ backgroundColor: color.value }}
                     onClick={() => setFormData((prev) => ({ ...prev, color: color.value }))}
                     title={color.label}
+                    disabled={isSaving}
                   />
                 ))}
               </div>
@@ -710,6 +807,7 @@ export default function TechniciansPage() {
                 onCheckedChange={(checked) =>
                   setFormData((prev) => ({ ...prev, isActive: checked }))
                 }
+                disabled={isSaving}
               />
               <Label htmlFor="isActive">Active</Label>
             </div>
@@ -721,6 +819,7 @@ export default function TechniciansPage() {
                 onCheckedChange={(checked) =>
                   setFormData((prev) => ({ ...prev, hasMasterFee: checked }))
                 }
+                disabled={isSaving}
               />
               <div>
                 <Label htmlFor="hasMasterFee" className="cursor-pointer flex items-center gap-2">
@@ -735,7 +834,7 @@ export default function TechniciansPage() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isSaving}>
               Cancel
             </Button>
             <Button onClick={handleSubmit} disabled={isSaving}>
@@ -747,7 +846,10 @@ export default function TechniciansPage() {
       </Dialog>
 
       {/* Schedule Dialog */}
-      <Dialog open={isScheduleDialogOpen} onOpenChange={setIsScheduleDialogOpen}>
+      <Dialog open={isScheduleDialogOpen} onOpenChange={(open) => {
+        if (isSaving) return;
+        setIsScheduleDialogOpen(open);
+      }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>
@@ -776,6 +878,7 @@ export default function TechniciansPage() {
                     newSchedule[index].isWorking = checked;
                     setSchedule(newSchedule);
                   }}
+                  disabled={isSaving}
                 />
                 {day.isWorking ? (
                   <>
@@ -788,6 +891,7 @@ export default function TechniciansPage() {
                         setSchedule(newSchedule);
                       }}
                       className="w-32"
+                      disabled={isSaving}
                     />
                     <span className="text-muted-foreground">to</span>
                     <Input
@@ -799,6 +903,7 @@ export default function TechniciansPage() {
                         setSchedule(newSchedule);
                       }}
                       className="w-32"
+                      disabled={isSaving}
                     />
                   </>
                 ) : (
@@ -809,7 +914,7 @@ export default function TechniciansPage() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsScheduleDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setIsScheduleDialogOpen(false)} disabled={isSaving}>
               Cancel
             </Button>
             <Button onClick={handleSaveSchedule} disabled={isSaving}>
