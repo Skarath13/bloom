@@ -113,6 +113,7 @@ function CalendarContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const appointmentIdFromUrl = searchParams.get("apt");
+  const settingsOpenFromUrl = searchParams.get("settings") === "true";
 
   const [locations, setLocations] = useState<Location[]>([]);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
@@ -163,6 +164,18 @@ function CalendarContent() {
       params.set("apt", appointmentId);
     } else {
       params.delete("apt");
+    }
+    const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
+    router.replace(newUrl, { scroll: false });
+  }, [pathname, router, searchParams]);
+
+  // Update URL when settings modal is opened/closed
+  const handleSettingsOpenChange = useCallback((open: boolean) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (open) {
+      params.set("settings", "true");
+    } else {
+      params.delete("settings");
     }
     const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
     router.replace(newUrl, { scroll: false });
@@ -590,6 +603,8 @@ function CalendarContent() {
         selectedLocationIds={selectedLocationIds}
         selectedDate={selectedDate}
         multiLocationMode={multiLocationMode}
+        settingsOpen={settingsOpenFromUrl}
+        onSettingsOpenChange={handleSettingsOpenChange}
         onLocationToggle={handleLocationToggle}
         onDateChange={handleDateChange}
         onAppointmentClick={handleAppointmentClick}

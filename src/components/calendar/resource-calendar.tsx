@@ -79,6 +79,8 @@ interface ResourceCalendarProps {
   selectedLocationIds: string[];
   selectedDate?: Date; // Initial date from parent (e.g., from localStorage)
   multiLocationMode?: boolean;
+  settingsOpen?: boolean;
+  onSettingsOpenChange?: (open: boolean) => void;
   onLocationToggle: (locationId: string) => void;
   onDateChange: (date: Date) => void;
   onAppointmentClick?: (appointment: Appointment) => void;
@@ -221,6 +223,8 @@ export function ResourceCalendar({
   selectedLocationIds,
   selectedDate: initialDate,
   multiLocationMode = false,
+  settingsOpen: controlledSettingsOpen,
+  onSettingsOpenChange,
   onLocationToggle,
   onDateChange,
   onAppointmentClick,
@@ -234,7 +238,11 @@ export function ResourceCalendar({
   onMoveBlock,
 }: ResourceCalendarProps) {
   const [selectedDate, setSelectedDate] = useState<Date>(initialDate || new Date());
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [internalSettingsOpen, setInternalSettingsOpen] = useState(false);
+
+  // Use controlled state if provided, otherwise use internal state
+  const settingsOpen = controlledSettingsOpen ?? internalSettingsOpen;
+  const setSettingsOpen = onSettingsOpenChange ?? setInternalSettingsOpen;
 
   // Initialize viewRange from localStorage
   const [viewRange, setViewRange] = useState<ViewRange>(() => {
