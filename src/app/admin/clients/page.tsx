@@ -580,7 +580,7 @@ export default function ClientsPage() {
             className="pl-9"
           />
         </div>
-        <Tabs value={activeTab} onValueChange={handleTabChange}>
+        <Tabs id="client-status-tabs" value={activeTab} onValueChange={handleTabChange}>
           <TabsList>
             <TabsTrigger value="all">All</TabsTrigger>
             <TabsTrigger value="active">Active</TabsTrigger>
