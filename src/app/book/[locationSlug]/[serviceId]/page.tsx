@@ -6,90 +6,69 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { BookingSteps } from "@/components/booking/booking-steps";
+import { supabase, tables } from "@/lib/supabase";
 
-// Mock data
-const locationData: Record<string, { name: string }> = {
-  irvine: { name: "Irvine" },
-  tustin: { name: "Tustin" },
-  "santa-ana": { name: "Santa Ana" },
-  "costa-mesa": { name: "Costa Mesa" },
-  "newport-beach": { name: "Newport Beach" },
-};
+// Fetch location by slug
+async function getLocation(slug: string) {
+  const { data: location, error } = await supabase
+    .from(tables.locations)
+    .select("*")
+    .eq("slug", slug)
+    .eq("isActive", true)
+    .single();
 
-const servicesData: Record<string, { name: string; price: number; duration: number }> = {
-  "1": { name: "Natural Wet Set (New Client)", price: 75, duration: 90 },
-  "2": { name: "Natural Hybrid Set (New Client)", price: 75, duration: 90 },
-  "3": { name: "Natural Set (Hybrid)", price: 95, duration: 90 },
-  "4": { name: "Elegant Volume Set", price: 105, duration: 120 },
-  "5": { name: "Mega Volume Set", price: 125, duration: 150 },
-  "6": { name: "Super Mega Volume Set", price: 135, duration: 180 },
-  "7": { name: "Wispy Wet Set", price: 105, duration: 120 },
-  "8": { name: "Wispy Elegant Set", price: 115, duration: 120 },
-  "9": { name: "Anime/Manga Set", price: 125, duration: 150 },
-  "10": { name: "Natural/Elegant Fill (2 weeks)", price: 60, duration: 60 },
-  "11": { name: "Natural/Elegant Fill (3 weeks)", price: 70, duration: 75 },
-  "12": { name: "Natural/Elegant Fill (4 weeks)", price: 80, duration: 90 },
-  "13": { name: "Mega Volume Fill (2 weeks)", price: 70, duration: 75 },
-  "14": { name: "Mega Volume Fill (3 weeks)", price: 80, duration: 90 },
-  "15": { name: "Mega Volume Fill (4 weeks)", price: 90, duration: 105 },
-  "16": { name: "Lash Lift", price: 65, duration: 45 },
-  "17": { name: "Lash Lift + Tint", price: 75, duration: 60 },
-  "18": { name: "Brow Lamination + Tint", price: 75, duration: 60 },
-  "19": { name: "Brow Shaping", price: 35, duration: 30 },
-  "20": { name: "Permanent Eyeliner", price: 350, duration: 120 },
-  "21": { name: "Microblading Brows", price: 450, duration: 150 },
-  "22": { name: "Lip Blush", price: 500, duration: 150 },
-  "23": { name: "Lash Removal", price: 25, duration: 30 },
-};
+  if (error || !location) {
+    return null;
+  }
 
-// Technicians by location
-const techniciansByLocation: Record<string, Array<{
-  id: string;
-  firstName: string;
-  lastName: string;
-  specialty: string;
-  color: string;
-}>> = {
-  irvine: [
-    { id: "tech-irvine-0", firstName: "Angela", lastName: "L", specialty: "Volume & Mega Volume", color: "#E91E63" },
-    { id: "tech-irvine-1", firstName: "Celine", lastName: "T", specialty: "Natural & Wispy", color: "#9C27B0" },
-    { id: "tech-irvine-2", firstName: "Elena", lastName: "M", specialty: "Hybrid Sets", color: "#673AB7" },
-    { id: "tech-irvine-3", firstName: "Tammy", lastName: "N", specialty: "Lash Lifts", color: "#3F51B5" },
-    { id: "tech-irvine-4", firstName: "Fiona", lastName: "K", specialty: "All Styles", color: "#2196F3" },
-    { id: "tech-irvine-5", firstName: "Brenda", lastName: "S", specialty: "Volume Expert", color: "#00BCD4" },
-  ],
-  tustin: [
-    { id: "tech-tustin-0", firstName: "Alice", lastName: "W", specialty: "Natural Sets", color: "#009688" },
-    { id: "tech-tustin-1", firstName: "Amy", lastName: "C", specialty: "Wispy Styles", color: "#4CAF50" },
-    { id: "tech-tustin-2", firstName: "Helen", lastName: "L", specialty: "Volume", color: "#8BC34A" },
-    { id: "tech-tustin-3", firstName: "Emma", lastName: "R", specialty: "Mega Volume", color: "#CDDC39" },
-    { id: "tech-tustin-4", firstName: "Sandy", lastName: "P", specialty: "All Styles", color: "#FFC107" },
-    { id: "tech-tustin-5", firstName: "Maria", lastName: "G", specialty: "Fills Expert", color: "#FF9800" },
-    { id: "tech-tustin-6", firstName: "Wendy", lastName: "H", specialty: "Natural Look", color: "#FF5722" },
-    { id: "tech-tustin-7", firstName: "Katie", lastName: "Owner", specialty: "All Styles", color: "#1E1B4B" },
-    { id: "tech-tustin-8", firstName: "Gabby", lastName: "M", specialty: "Volume Sets", color: "#795548" },
-  ],
-  "santa-ana": [
-    { id: "tech-santa-ana-0", firstName: "Giana", lastName: "V", specialty: "Volume", color: "#E91E63" },
-    { id: "tech-santa-ana-1", firstName: "Macy", lastName: "L", specialty: "Natural Sets", color: "#9C27B0" },
-    { id: "tech-santa-ana-2", firstName: "Nancy", lastName: "T", specialty: "Wispy", color: "#673AB7" },
-    { id: "tech-santa-ana-3", firstName: "Rosy", lastName: "C", specialty: "All Styles", color: "#3F51B5" },
-    { id: "tech-santa-ana-4", firstName: "Zara", lastName: "K", specialty: "Mega Volume", color: "#2196F3" },
-    { id: "tech-santa-ana-5", firstName: "Mayra", lastName: "S", specialty: "Fills", color: "#00BCD4" },
-  ],
-  "costa-mesa": [
-    { id: "tech-costa-mesa-0", firstName: "Chloe", lastName: "A", specialty: "Natural", color: "#009688" },
-    { id: "tech-costa-mesa-1", firstName: "Lucy", lastName: "B", specialty: "Volume", color: "#4CAF50" },
-    { id: "tech-costa-mesa-2", firstName: "Melissa", lastName: "D", specialty: "Wispy", color: "#8BC34A" },
-    { id: "tech-costa-mesa-3", firstName: "Natalie", lastName: "F", specialty: "All Styles", color: "#CDDC39" },
-    { id: "tech-costa-mesa-4", firstName: "Trish", lastName: "J", specialty: "Mega Volume", color: "#FFC107" },
-    { id: "tech-costa-mesa-5", firstName: "Vivian", lastName: "Q", specialty: "Lash Lifts", color: "#FF9800" },
-  ],
-  "newport-beach": [
-    { id: "tech-newport-beach-0", firstName: "Katie", lastName: "Owner", specialty: "All Styles", color: "#1E1B4B" },
-    { id: "tech-newport-beach-1", firstName: "Katelyn", lastName: "R", specialty: "Volume & Natural", color: "#8B687A" },
-  ],
-};
+  return location;
+}
+
+// Fetch service by ID
+async function getService(serviceId: string) {
+  const { data: service, error } = await supabase
+    .from(tables.services)
+    .select("*")
+    .eq("id", serviceId)
+    .eq("isActive", true)
+    .single();
+
+  if (error || !service) {
+    return null;
+  }
+
+  return service;
+}
+
+// Fetch technicians for a location
+async function getTechnicians(locationId: string) {
+  // First get technician IDs that work at this location
+  const { data: techLocations, error: locError } = await supabase
+    .from(tables.technicianLocations)
+    .select("technicianId")
+    .eq("locationId", locationId);
+
+  if (locError || !techLocations || techLocations.length === 0) {
+    return [];
+  }
+
+  const techIds = techLocations.map((tl) => tl.technicianId);
+
+  // Fetch the technicians
+  const { data: technicians, error } = await supabase
+    .from(tables.technicians)
+    .select("*")
+    .in("id", techIds)
+    .eq("isActive", true)
+    .order("sortOrder", { ascending: true });
+
+  if (error) {
+    console.error("Failed to fetch technicians:", error);
+    return [];
+  }
+
+  return technicians || [];
+}
 
 interface PageProps {
   params: Promise<{ locationSlug: string; serviceId: string }>;
@@ -97,13 +76,14 @@ interface PageProps {
 
 export default async function TechnicianSelectionPage({ params }: PageProps) {
   const { locationSlug, serviceId } = await params;
-  const location = locationData[locationSlug];
-  const service = servicesData[serviceId];
-  const technicians = techniciansByLocation[locationSlug] || [];
+  const location = await getLocation(locationSlug);
+  const service = await getService(serviceId);
 
   if (!location || !service) {
     notFound();
   }
+
+  const technicians = await getTechnicians(location.id);
 
   return (
     <>
@@ -174,9 +154,9 @@ export default async function TechnicianSelectionPage({ params }: PageProps) {
                   </Avatar>
                   <div>
                     <CardTitle className="text-base">
-                      {tech.firstName} {tech.lastName}.
+                      {tech.firstName} {tech.lastName[0]}.
                     </CardTitle>
-                    <CardDescription>{tech.specialty}</CardDescription>
+                    <CardDescription>{tech.description || "Lash Specialist"}</CardDescription>
                   </div>
                 </div>
               </CardHeader>

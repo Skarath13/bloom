@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { format, addDays, startOfDay, setHours, setMinutes, isBefore, isToday } from "date-fns";
-import { ArrowLeft, Calendar as CalendarIcon, Clock } from "lucide-react";
+import { format, addDays, startOfDay, isBefore } from "date-fns";
+import { ArrowLeft, Calendar as CalendarIcon, Clock, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,31 +12,17 @@ import { Calendar } from "@/components/ui/calendar";
 import { BookingSteps } from "@/components/booking/booking-steps";
 import { cn } from "@/lib/utils";
 
-// Generate available time slots (9 AM - 6 PM, every 30 minutes)
-const generateTimeSlots = (date: Date) => {
-  const slots = [];
-  const now = new Date();
+interface TimeSlot {
+  time: string;
+  available: boolean;
+  technicianId?: string;
+}
 
-  for (let hour = 9; hour <= 18; hour++) {
-    for (let minute = 0; minute < 60; minute += 30) {
-      if (hour === 18 && minute > 0) break; // Last appointment at 6 PM
-      const time = setMinutes(setHours(startOfDay(date), hour), minute);
-
-      // Skip times that have already passed today
-      if (isToday(date) && isBefore(time, now)) continue;
-
-      // Randomly mark some as unavailable for demo
-      const isAvailable = Math.random() > 0.3;
-
-      slots.push({
-        time,
-        label: format(time, "h:mm a"),
-        available: isAvailable,
-      });
-    }
-  }
-  return slots;
-};
+interface BookingData {
+  location: { id: string; name: string } | null;
+  service: { id: string; name: string; price: number; durationMinutes: number } | null;
+  technician: { id: string; firstName: string; lastName: string } | null;
+}
 
 // Generate next 30 days
 const generateAvailableDates = () => {
@@ -56,40 +42,127 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
   const router = useRouter();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [selectedTechnicianId, setSelectedTechnicianId] = useState<string | null>(null);
   const [paramsData, setParamsData] = useState<{
     locationSlug: string;
     serviceId: string;
     technicianId: string;
   } | null>(null);
+  const [bookingData, setBookingData] = useState<BookingData>({
+    location: null,
+    service: null,
+    technician: null,
+  });
+  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
+  const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+
+  const availableDates = generateAvailableDates();
 
   // Resolve params
-  useState(() => {
+  useEffect(() => {
     params.then(setParamsData);
-  });
+  }, [params]);
 
-  const timeSlots = useMemo(() => generateTimeSlots(selectedDate), [selectedDate]);
-  const availableDates = useMemo(() => generateAvailableDates(), []);
+  // Fetch booking data (location, service, technician)
+  useEffect(() => {
+    if (!paramsData) return;
 
-  // Mock data
-  const location = paramsData?.locationSlug === "irvine" ? "Irvine" :
-    paramsData?.locationSlug === "tustin" ? "Tustin" :
-    paramsData?.locationSlug === "santa-ana" ? "Santa Ana" :
-    paramsData?.locationSlug === "costa-mesa" ? "Costa Mesa" :
-    paramsData?.locationSlug === "newport-beach" ? "Newport Beach" : "Location";
+    const fetchBookingData = async () => {
+      setIsLoadingData(true);
+      try {
+        // Fetch location by slug
+        const locRes = await fetch(`/api/locations`);
+        const { locations } = await locRes.json();
+        const location = locations?.find((l: { slug: string }) => l.slug === paramsData.locationSlug);
 
-  const service = "Elegant Volume Set";
-  const techName = paramsData?.technicianId === "any" ? "Any Available" : "Angela L.";
+        // Fetch service
+        const svcRes = await fetch(`/api/services/${paramsData.serviceId}`);
+        const { service } = await svcRes.json();
+
+        // Fetch technician if not "any"
+        let technician = null;
+        if (paramsData.technicianId !== "any") {
+          const techRes = await fetch(`/api/technicians/${paramsData.technicianId}`);
+          const techData = await techRes.json();
+          technician = techData.technician;
+        }
+
+        setBookingData({ location, service, technician });
+      } catch (error) {
+        console.error("Failed to fetch booking data:", error);
+      } finally {
+        setIsLoadingData(false);
+      }
+    };
+
+    fetchBookingData();
+  }, [paramsData]);
+
+  // Fetch availability when date or booking data changes
+  const fetchAvailability = useCallback(async (date: Date) => {
+    if (!bookingData.location || !bookingData.service || !paramsData) return;
+
+    setIsLoadingSlots(true);
+    try {
+      const dateStr = format(date, "yyyy-MM-dd");
+      const techId = paramsData.technicianId === "any" ? "any" : paramsData.technicianId;
+
+      const res = await fetch(
+        `/api/availability?locationId=${bookingData.location.id}&serviceId=${bookingData.service.id}&technicianId=${techId}&date=${dateStr}`
+      );
+      const data = await res.json();
+
+      setTimeSlots(data.slots || []);
+    } catch (error) {
+      console.error("Failed to fetch availability:", error);
+      setTimeSlots([]);
+    } finally {
+      setIsLoadingSlots(false);
+    }
+  }, [bookingData.location, bookingData.service, paramsData]);
+
+  // Fetch availability when date changes or data loads
+  useEffect(() => {
+    if (bookingData.location && bookingData.service) {
+      fetchAvailability(selectedDate);
+    }
+  }, [selectedDate, bookingData.location, bookingData.service, fetchAvailability]);
+
+  const locationName = bookingData.location?.name || "Location";
+  const serviceName = bookingData.service?.name || "Service";
+  const techName = paramsData?.technicianId === "any"
+    ? "Any Available"
+    : bookingData.technician
+      ? `${bookingData.technician.firstName} ${bookingData.technician.lastName[0]}.`
+      : "Technician";
+
+  const handleTimeSelect = (slot: TimeSlot) => {
+    setSelectedTime(slot.time);
+    // Store the technician ID for "any" selections
+    if (paramsData?.technicianId === "any" && slot.technicianId) {
+      setSelectedTechnicianId(slot.technicianId);
+    }
+  };
 
   const handleContinue = () => {
     if (!selectedTime || !paramsData) return;
 
-    // In a real app, this would save to context/state and navigate to checkout
-    const checkoutUrl = `/book/${paramsData.locationSlug}/${paramsData.serviceId}/${paramsData.technicianId}/checkout?date=${format(selectedDate, "yyyy-MM-dd")}&time=${encodeURIComponent(selectedTime)}`;
+    // Use the assigned technician ID if "any" was selected
+    const techId = paramsData.technicianId === "any" && selectedTechnicianId
+      ? selectedTechnicianId
+      : paramsData.technicianId;
+
+    const checkoutUrl = `/book/${paramsData.locationSlug}/${paramsData.serviceId}/${techId}/checkout?date=${format(selectedDate, "yyyy-MM-dd")}&time=${encodeURIComponent(selectedTime)}`;
     router.push(checkoutUrl);
   };
 
-  if (!paramsData) {
-    return <div className="text-center py-12">Loading...</div>;
+  if (!paramsData || isLoadingData) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
   }
 
   return (
@@ -105,8 +178,8 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
           </Button>
         </Link>
         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-          <Badge variant="secondary">{location}</Badge>
-          <Badge variant="outline">{service}</Badge>
+          <Badge variant="secondary">{locationName}</Badge>
+          <Badge variant="outline">{serviceName}</Badge>
           <Badge variant="outline">{techName}</Badge>
         </div>
       </div>
@@ -155,7 +228,11 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {timeSlots.length === 0 ? (
+            {isLoadingSlots ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : timeSlots.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">
                 No available times for this date. Please select another date.
               </p>
@@ -163,18 +240,18 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
               <div className="grid grid-cols-3 gap-2 max-h-[300px] overflow-y-auto custom-scrollbar">
                 {timeSlots.map((slot) => (
                   <Button
-                    key={slot.label}
-                    variant={selectedTime === slot.label ? "default" : "outline"}
+                    key={slot.time}
+                    variant={selectedTime === slot.time ? "default" : "outline"}
                     size="sm"
                     disabled={!slot.available}
-                    onClick={() => setSelectedTime(slot.label)}
+                    onClick={() => handleTimeSelect(slot)}
                     className={cn(
                       "text-xs",
                       !slot.available && "opacity-50 cursor-not-allowed",
-                      selectedTime === slot.label && "ring-2 ring-primary ring-offset-2"
+                      selectedTime === slot.time && "ring-2 ring-primary ring-offset-2"
                     )}
                   >
-                    {slot.label}
+                    {slot.time}
                   </Button>
                 ))}
               </div>

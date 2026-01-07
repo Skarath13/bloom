@@ -89,179 +89,114 @@ interface Appointment {
 }
 
 // ============================================================================
-// Mock Data (will be replaced by API calls)
+// API Functions
 // ============================================================================
 
-const mockClientsData: Client[] = [
-  {
-    id: "client-1",
-    firstName: "Jennifer",
-    lastName: "Smith",
-    phone: "9495551234",
-    email: "jennifer.smith@email.com",
-    phoneVerified: true,
-    isBlocked: false,
-    blockReason: null,
-    notes: "Prefers natural look. Sensitive eyes.",
-    createdAt: new Date("2024-01-15"),
-    lastVisitAt: new Date("2024-12-20"),
-    totalAppointments: 12,
-    noShows: 0,
-    cancellations: 1,
-    updatedAt: new Date("2024-12-20"),
-  },
-  {
-    id: "client-2",
-    firstName: "Michelle",
-    lastName: "Johnson",
-    phone: "9495555678",
-    email: "michelle.j@email.com",
-    phoneVerified: true,
-    isBlocked: false,
-    blockReason: null,
-    notes: "VIP client. Always tips well.",
-    createdAt: new Date("2023-06-01"),
-    lastVisitAt: new Date("2024-12-15"),
-    totalAppointments: 24,
-    noShows: 0,
-    cancellations: 0,
-    updatedAt: new Date("2024-12-15"),
-  },
-  {
-    id: "client-3",
-    firstName: "Amanda",
-    lastName: "Williams",
-    phone: "9495559012",
-    email: "amanda.w@email.com",
-    phoneVerified: true,
-    isBlocked: true,
-    blockReason: "Multiple no-shows without notice",
-    notes: null,
-    createdAt: new Date("2024-03-10"),
-    lastVisitAt: new Date("2024-09-01"),
-    totalAppointments: 5,
-    noShows: 3,
-    cancellations: 1,
-    updatedAt: new Date("2024-09-01"),
-  },
-  {
-    id: "client-4",
-    firstName: "Sarah",
-    lastName: "Davis",
-    phone: "9495553456",
-    email: null,
-    phoneVerified: true,
-    isBlocked: false,
-    blockReason: null,
-    notes: "Allergic to certain adhesives. Use sensitive formula.",
-    createdAt: new Date("2024-08-20"),
-    lastVisitAt: new Date("2024-12-18"),
-    totalAppointments: 4,
-    noShows: 0,
-    cancellations: 0,
-    updatedAt: new Date("2024-12-18"),
-  },
-  {
-    id: "client-5",
-    firstName: "Emily",
-    lastName: "Brown",
-    phone: "9495557890",
-    email: "emily.brown@email.com",
-    phoneVerified: false,
-    isBlocked: false,
-    blockReason: null,
-    notes: null,
-    createdAt: new Date("2024-12-01"),
-    lastVisitAt: null,
-    totalAppointments: 0,
-    noShows: 0,
-    cancellations: 0,
-    updatedAt: new Date("2024-12-01"),
-  },
-];
-
-const mockAppointments: Appointment[] = [
-  { id: "apt-1", date: new Date("2024-12-20"), service: "Elegant Volume Set", tech: "Katie M.", location: "Irvine", status: "COMPLETED" },
-  { id: "apt-2", date: new Date("2024-11-15"), service: "Volume Fill (2 weeks)", tech: "Katie M.", location: "Irvine", status: "COMPLETED" },
-  { id: "apt-3", date: new Date("2024-10-10"), service: "Natural Wet Set", tech: "Sarah J.", location: "Irvine", status: "COMPLETED" },
-];
-
-// ============================================================================
-// Mock API Functions (will be replaced with real API calls)
-// ============================================================================
-
-// Simulates network delay
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// In-memory store for mock data
-let clientsStore = [...mockClientsData];
-
-async function fetchClients(params: {
+async function fetchClientsFromAPI(params: {
   page: number;
   pageSize: number;
   search?: string;
   filter?: string;
 }): Promise<{ clients: Client[]; total: number }> {
-  await delay(300); // Simulate network
+  const searchParams = new URLSearchParams({
+    page: String(params.page),
+    pageSize: String(params.pageSize),
+  });
 
-  let filtered = [...clientsStore];
-
-  // Apply search
   if (params.search) {
-    const q = params.search.toLowerCase();
-    filtered = filtered.filter(
-      (c) =>
-        `${c.firstName} ${c.lastName}`.toLowerCase().includes(q) ||
-        c.phone.includes(params.search!.replace(/\D/g, "")) ||
-        c.email?.toLowerCase().includes(q)
-    );
+    searchParams.set("search", params.search);
+  }
+  if (params.filter) {
+    searchParams.set("filter", params.filter);
   }
 
-  // Apply filter
-  if (params.filter && params.filter !== "all") {
-    filtered = filtered.filter((c) => {
-      if (params.filter === "active") return !c.isBlocked && c.phoneVerified;
-      if (params.filter === "blocked") return c.isBlocked;
-      if (params.filter === "unverified") return !c.phoneVerified;
-      return true;
-    });
+  const res = await fetch(`/api/clients?${searchParams}`);
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.error || "Failed to fetch clients");
   }
 
-  const total = filtered.length;
-  const start = (params.page - 1) * params.pageSize;
-  const clients = filtered.slice(start, start + params.pageSize);
+  // Transform API response to match Client interface
+  const clients: Client[] = (data.clients || []).map((c: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    phone: string;
+    email: string | null;
+    phoneVerified: boolean;
+    isBlocked: boolean;
+    blockReason: string | null;
+    notes: string | null;
+    createdAt: string;
+    lastVisitAt: string | null;
+    updatedAt: string;
+    totalAppointments: number;
+    noShows: number;
+    cancellations: number;
+  }) => ({
+    ...c,
+    createdAt: new Date(c.createdAt),
+    lastVisitAt: c.lastVisitAt ? new Date(c.lastVisitAt) : null,
+    updatedAt: new Date(c.updatedAt),
+  }));
 
-  return { clients, total };
+  return { clients, total: data.total || 0 };
 }
 
-async function updateClient(
+async function updateClientAPI(
   id: string,
-  data: Partial<Client>,
-  expectedUpdatedAt: Date
-): Promise<{ client: Client; conflict: boolean }> {
-  await delay(400); // Simulate network
+  data: Partial<Client>
+): Promise<{ client: Client }> {
+  const res = await fetch(`/api/clients/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
 
-  const index = clientsStore.findIndex((c) => c.id === id);
-  if (index === -1) {
-    throw new Error("Client not found");
+  const responseData = await res.json();
+
+  if (!res.ok) {
+    throw new Error(responseData.error || "Failed to update client");
   }
 
-  const current = clientsStore[index];
-
-  // Check for conflict (optimistic locking)
-  if (current.updatedAt.getTime() !== expectedUpdatedAt.getTime()) {
-    return { client: current, conflict: true };
-  }
-
-  // Update the client
-  const updated: Client = {
-    ...current,
-    ...data,
-    updatedAt: new Date(),
+  // Transform API response to match Client interface
+  const client: Client = {
+    ...responseData.client,
+    createdAt: new Date(responseData.client.createdAt),
+    lastVisitAt: responseData.client.lastVisitAt ? new Date(responseData.client.lastVisitAt) : null,
+    updatedAt: new Date(responseData.client.updatedAt),
+    totalAppointments: responseData.client.totalAppointments || 0,
+    noShows: responseData.client.noShows || 0,
+    cancellations: responseData.client.cancellations || 0,
   };
 
-  clientsStore[index] = updated;
-  return { client: updated, conflict: false };
+  return { client };
+}
+
+async function fetchClientAppointments(clientId: string): Promise<Appointment[]> {
+  const res = await fetch(`/api/clients/${clientId}/appointments`);
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.error || "Failed to fetch appointments");
+  }
+
+  return (data.appointments || []).map((a: {
+    id: string;
+    startTime: string;
+    status: string;
+    bloom_services?: { name: string };
+    bloom_technicians?: { firstName: string; lastName: string };
+    bloom_locations?: { name: string };
+  }) => ({
+    id: a.id,
+    date: new Date(a.startTime),
+    service: a.bloom_services?.name || "Unknown Service",
+    tech: a.bloom_technicians ? `${a.bloom_technicians.firstName} ${a.bloom_technicians.lastName[0]}.` : "Unknown",
+    location: a.bloom_locations?.name || "Unknown Location",
+    status: a.status,
+  }));
 }
 
 // ============================================================================
@@ -295,6 +230,8 @@ export default function ClientsPage() {
     notes: "",
   });
   const [blockReason, setBlockReason] = useState("");
+  const [clientAppointments, setClientAppointments] = useState<Appointment[]>([]);
+  const [isLoadingAppointments, setIsLoadingAppointments] = useState(false);
 
   // For debouncing search
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -311,7 +248,7 @@ export default function ClientsPage() {
     setIsLoading(true);
 
     try {
-      const result = await fetchClients({
+      const result = await fetchClientsFromAPI({
         page: pagination.page,
         pageSize: pagination.pageSize,
         search: searchQuery || undefined,
@@ -338,6 +275,29 @@ export default function ClientsPage() {
   useEffect(() => {
     loadClients();
   }, [loadClients]);
+
+  // Fetch appointments when a client is selected
+  useEffect(() => {
+    if (!selectedClient) {
+      setClientAppointments([]);
+      return;
+    }
+
+    const loadAppointments = async () => {
+      setIsLoadingAppointments(true);
+      try {
+        const appointments = await fetchClientAppointments(selectedClient.id);
+        setClientAppointments(appointments);
+      } catch (error) {
+        console.error("Failed to fetch appointments:", error);
+        setClientAppointments([]);
+      } finally {
+        setIsLoadingAppointments(false);
+      }
+    };
+
+    loadAppointments();
+  }, [selectedClient?.id]);
 
   // Debounced search
   const handleSearchChange = (value: string) => {
@@ -454,7 +414,7 @@ export default function ClientsPage() {
     setIsEditing(false);
 
     try {
-      const result = await updateClient(
+      const result = await updateClientAPI(
         selectedClient.id,
         {
           firstName: editForm.firstName.trim(),
@@ -462,33 +422,15 @@ export default function ClientsPage() {
           phone: editForm.phone,
           email: editForm.email.trim() || null,
           notes: editForm.notes.trim() || null,
-        },
-        selectedClient.updatedAt
+        }
       );
 
-      if (result.conflict) {
-        // Conflict detected - rollback and show server state
-        setClients((prev) =>
-          prev.map((c) => (c.id === selectedClient.id ? result.client : c))
-        );
-        setSelectedClient(result.client);
-        setEditForm({
-          firstName: result.client.firstName,
-          lastName: result.client.lastName,
-          phone: result.client.phone,
-          email: result.client.email || "",
-          notes: result.client.notes || "",
-        });
-        toast.error("This client was modified by someone else. Please review and try again.");
-        setIsEditing(true);
-      } else {
-        // Success - update with server response (includes new updatedAt)
-        setClients((prev) =>
-          prev.map((c) => (c.id === selectedClient.id ? result.client : c))
-        );
-        setSelectedClient(result.client);
-        toast.success("Client updated");
-      }
+      // Success - update with server response (includes new updatedAt)
+      setClients((prev) =>
+        prev.map((c) => (c.id === selectedClient.id ? result.client : c))
+      );
+      setSelectedClient(result.client);
+      toast.success("Client updated");
     } catch (error) {
       // Rollback on error
       setClients(previousClients);
@@ -528,29 +470,20 @@ export default function ClientsPage() {
     );
 
     try {
-      const result = await updateClient(
+      const result = await updateClientAPI(
         selectedClient.id,
         {
           isBlocked: newBlockedStatus,
           blockReason: newBlockedStatus ? blockReason : null,
-        },
-        selectedClient.updatedAt
+        }
       );
 
-      if (result.conflict) {
-        setClients((prev) =>
-          prev.map((c) => (c.id === selectedClient.id ? result.client : c))
-        );
-        setSelectedClient(result.client);
-        toast.error("This client was modified by someone else. Please refresh and try again.");
-      } else {
-        setClients((prev) =>
-          prev.map((c) => (c.id === selectedClient.id ? result.client : c))
-        );
-        setSelectedClient(result.client);
-        toast.success(newBlockedStatus ? `${selectedClient.firstName} has been blocked` : `${selectedClient.firstName} has been unblocked`);
-        if (!newBlockedStatus) setBlockReason("");
-      }
+      setClients((prev) =>
+        prev.map((c) => (c.id === selectedClient.id ? result.client : c))
+      );
+      setSelectedClient(result.client);
+      toast.success(newBlockedStatus ? `${selectedClient.firstName} has been blocked` : `${selectedClient.firstName} has been unblocked`);
+      if (!newBlockedStatus) setBlockReason("");
     } catch (error) {
       setClients(previousClients);
       setSelectedClient(previousClient);
@@ -952,19 +885,27 @@ export default function ClientsPage() {
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Recent Appointments</Label>
                     <div className="space-y-2">
-                      {mockAppointments.slice(0, 3).map((apt) => (
-                        <div key={apt.id} className="flex items-center justify-between py-2 border-b last:border-0">
-                          <div>
-                            <div className="text-sm font-medium">{apt.service}</div>
+                      {isLoadingAppointments ? (
+                        <div className="flex items-center justify-center py-4">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        </div>
+                      ) : clientAppointments.length === 0 ? (
+                        <p className="text-sm text-muted-foreground py-2">No appointments found</p>
+                      ) : (
+                        clientAppointments.slice(0, 3).map((apt) => (
+                          <div key={apt.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                            <div>
+                              <div className="text-sm font-medium">{apt.service}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {apt.tech} · {apt.location}
+                              </div>
+                            </div>
                             <div className="text-xs text-muted-foreground">
-                              {apt.tech} · {apt.location}
+                              {format(apt.date, "MMM d, yyyy")}
                             </div>
                           </div>
-                          <div className="text-xs text-muted-foreground">
-                            {format(apt.date, "MMM d, yyyy")}
-                          </div>
-                        </div>
-                      ))}
+                        ))
+                      )}
                     </div>
                   </div>
 

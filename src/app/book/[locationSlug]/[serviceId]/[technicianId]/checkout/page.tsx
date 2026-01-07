@@ -52,23 +52,36 @@ export default function CheckoutPage({ params }: PageProps) {
     notes: "",
   });
 
+  const [locationId, setLocationId] = useState<string | null>(null);
+
   // Resolve params
   useEffect(() => {
     params.then(setParamsData);
   }, [params]);
 
+  // Fetch location ID by slug
+  useEffect(() => {
+    if (!paramsData) return;
+
+    const fetchLocation = async () => {
+      try {
+        const res = await fetch("/api/locations");
+        const { locations } = await res.json();
+        const location = locations?.find((l: { slug: string; id: string }) => l.slug === paramsData.locationSlug);
+        if (location) {
+          setLocationId(location.id);
+        }
+      } catch (error) {
+        console.error("Failed to fetch location:", error);
+      }
+    };
+
+    fetchLocation();
+  }, [paramsData]);
+
   const dateStr = searchParams.get("date");
   const timeStr = searchParams.get("time");
   const appointmentDate = dateStr ? parse(dateStr, "yyyy-MM-dd", new Date()) : new Date();
-
-  // Get location ID from slug
-  const locationMap: Record<string, string> = {
-    irvine: "loc_irvine",
-    tustin: "loc_tustin",
-    "santa-ana": "loc_santa_ana",
-    "costa-mesa": "loc_costa_mesa",
-    "newport-beach": "loc_newport_beach",
-  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -108,7 +121,12 @@ export default function CheckoutPage({ params }: PageProps) {
   const handleSubmitInfo = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!validateForm() || !paramsData || !dateStr || !timeStr) return;
+    if (!validateForm() || !paramsData || !dateStr || !timeStr || !locationId) {
+      if (!locationId) {
+        toast.error("Loading location data, please try again...");
+      }
+      return;
+    }
 
     setIsLoading(true);
 
@@ -123,7 +141,7 @@ export default function CheckoutPage({ params }: PageProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          locationId: locationMap[paramsData.locationSlug] || paramsData.locationSlug,
+          locationId: locationId,
           serviceId: paramsData.serviceId,
           technicianId: paramsData.technicianId === "any" ? null : paramsData.technicianId,
           startTime: startTime.toISOString(),

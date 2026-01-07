@@ -3,14 +3,24 @@ import { supabase, tables, generateId } from "@/lib/supabase";
 
 /**
  * GET /api/clients
- * List all clients with optional search
+ * List all clients with optional search, filter, and pagination
+ * Query params:
+ * - page: Page number (default 1)
+ * - pageSize: Number of items per page (default 10)
+ * - search: Search query (searches name, phone, email)
+ * - filter: Filter by status (all, active, blocked, unverified)
+ * - limit: Legacy param, same as pageSize
  */
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const limit = parseInt(searchParams.get("limit") || "50");
+    const page = parseInt(searchParams.get("page") || "1");
+    const pageSize = parseInt(searchParams.get("pageSize") || searchParams.get("limit") || "10");
+    const search = searchParams.get("search") || "";
+    const filter = searchParams.get("filter") || "all";
 
-    const { data: clients, error } = await supabase
+    // Build the query
+    let query = supabase
       .from(tables.clients)
       .select(`
         *,
@@ -20,19 +30,77 @@ export async function GET(request: NextRequest) {
           last4,
           isDefault
         )
-      `)
+      `, { count: "exact" });
+
+    // Apply search filter
+    if (search) {
+      const searchLower = search.toLowerCase();
+      const phoneDigits = search.replace(/\D/g, "");
+
+      // Use OR filter for name, phone, and email search
+      query = query.or(
+        `firstName.ilike.%${searchLower}%,lastName.ilike.%${searchLower}%,email.ilike.%${searchLower}%,phone.ilike.%${phoneDigits}%`
+      );
+    }
+
+    // Apply status filter
+    if (filter === "active") {
+      query = query.eq("isBlocked", false).eq("phoneVerified", true);
+    } else if (filter === "blocked") {
+      query = query.eq("isBlocked", true);
+    } else if (filter === "unverified") {
+      query = query.eq("phoneVerified", false);
+    }
+
+    // Apply ordering and pagination
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    query = query
       .order("createdAt", { ascending: false })
-      .limit(limit);
+      .range(from, to);
+
+    const { data: clients, error, count } = await query;
 
     if (error) throw error;
+
+    // Get appointment stats for each client
+    const clientIds = clients?.map((c) => c.id) || [];
+    let appointmentStats: Record<string, { total: number; noShows: number; cancellations: number }> = {};
+
+    if (clientIds.length > 0) {
+      const { data: appointments } = await supabase
+        .from(tables.appointments)
+        .select("clientId, status")
+        .in("clientId", clientIds);
+
+      // Calculate stats per client
+      appointmentStats = clientIds.reduce((acc, id) => {
+        const clientAppts = appointments?.filter((a) => a.clientId === id) || [];
+        acc[id] = {
+          total: clientAppts.length,
+          noShows: clientAppts.filter((a) => a.status === "NO_SHOW").length,
+          cancellations: clientAppts.filter((a) => a.status === "CANCELLED").length,
+        };
+        return acc;
+      }, {} as Record<string, { total: number; noShows: number; cancellations: number }>);
+    }
 
     // Transform to match expected shape
     const transformedClients = clients?.map((client) => ({
       ...client,
       paymentMethods: client.bloom_payment_methods || [],
+      totalAppointments: appointmentStats[client.id]?.total || 0,
+      noShows: appointmentStats[client.id]?.noShows || 0,
+      cancellations: appointmentStats[client.id]?.cancellations || 0,
     }));
 
-    return NextResponse.json({ clients: transformedClients });
+    return NextResponse.json({
+      clients: transformedClients,
+      total: count || 0,
+      page,
+      pageSize,
+    });
   } catch (error) {
     console.error("List clients error:", error);
     return NextResponse.json(

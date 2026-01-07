@@ -2,42 +2,26 @@ import Link from "next/link";
 import { MapPin } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BookingSteps } from "@/components/booking/booking-steps";
+import { supabase, tables } from "@/lib/supabase";
 
-// Locations (will come from database later via API)
-const locations = [
-  {
-    slug: "irvine",
-    name: "Irvine",
-    address: "15333 Culver Dr #220",
-    city: "Irvine, CA 92604",
-  },
-  {
-    slug: "tustin",
-    name: "Tustin",
-    address: "13112 Newport Ave #K",
-    city: "Tustin, CA 92780",
-  },
-  {
-    slug: "santa-ana",
-    name: "Santa Ana",
-    address: "3740 S Bristol St",
-    city: "Santa Ana, CA 92704",
-  },
-  {
-    slug: "costa-mesa",
-    name: "Costa Mesa",
-    address: "435 E 17th St #3",
-    city: "Costa Mesa, CA 92627",
-  },
-  {
-    slug: "newport-beach",
-    name: "Newport Beach",
-    address: "359 San Miguel Dr #107",
-    city: "Newport Beach, CA 92660",
-  },
-];
+// Fetch locations from database
+async function getLocations() {
+  const { data: locations, error } = await supabase
+    .from(tables.locations)
+    .select("*")
+    .eq("isActive", true)
+    .order("sortOrder", { ascending: true });
 
-export default function BookingPage() {
+  if (error) {
+    console.error("Failed to fetch locations:", error);
+    return [];
+  }
+
+  return locations || [];
+}
+
+export default async function BookingPage() {
+  const locations = await getLocations();
   return (
     <>
       <BookingSteps currentStep={1} />
@@ -59,7 +43,9 @@ export default function BookingPage() {
                 <CardDescription>{location.address}</CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground">{location.city}</p>
+                <p className="text-sm text-muted-foreground">
+                  {location.city}, {location.state} {location.zipCode}
+                </p>
               </CardContent>
             </Card>
           </Link>
