@@ -2,10 +2,8 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, Clock, ChevronRight, Sparkles } from "lucide-react";
+import { ArrowLeft, Clock, ChevronRight, Sparkles, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { useBooking } from "./booking-context";
 
@@ -17,6 +15,7 @@ interface Service {
   durationMinutes: number;
   price: number;
   depositAmount: number;
+  imageUrl?: string | null;
 }
 
 interface ServiceSelectorProps {
@@ -28,6 +27,14 @@ interface ServiceSelectorProps {
 
 // Popular services that get a badge
 const POPULAR_SERVICES = ["Classic Full Set", "Volume Full Set", "Hybrid Full Set", "Lash Fill"];
+
+// Format category name: LASH_EXTENSION -> Lash Extension
+function formatCategoryName(category: string): string {
+  return category
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
 
 export function ServiceSelector({
   locationSlug,
@@ -45,7 +52,6 @@ export function ServiceSelector({
     setLocation(locationId, locationName, locationSlug);
   }, [locationId, locationName, locationSlug, setLocation]);
 
-  // Scroll active category pill into view
   const handleCategoryClick = (category: string) => {
     setActiveCategory(category);
   };
@@ -55,26 +61,23 @@ export function ServiceSelector({
   // Handle no services at all
   if (categories.length === 0) {
     return (
-      <div className="space-y-4">
-        <div>
+      <div className="space-y-3">
+        <div className="flex items-center gap-3">
           <Link href="/book">
-            <Button variant="ghost" size="sm" className="-ml-2">
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              Back
+            <Button variant="ghost" size="sm" className="h-8 px-2">
+              <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-            <Badge variant="secondary" className="text-xs">{locationName}</Badge>
+          <div>
+            <h1 className="text-lg font-semibold leading-tight">Select a Service</h1>
+            <p className="text-xs text-muted-foreground">{locationName}</p>
           </div>
         </div>
-        <div className="text-center py-12">
-          <Clock className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-foreground">No Services Available</h2>
-          <p className="text-sm text-muted-foreground mt-2">
-            This location doesn't have any services yet.
-          </p>
+        <div className="text-center py-8">
+          <Clock className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+          <h2 className="text-base font-semibold">No Services Available</h2>
           <p className="text-xs text-muted-foreground mt-1">
-            Please try another location or check back later.
+            This location doesn't have any services yet.
           </p>
         </div>
       </div>
@@ -82,48 +85,39 @@ export function ServiceSelector({
   }
 
   return (
-    <div className="space-y-4">
-      {/* Back button and location info */}
-      <div>
+    <div className="space-y-3">
+      {/* Compact header with back button and title inline */}
+      <div className="flex items-center gap-3">
         <Link href="/book">
-          <Button variant="ghost" size="sm" className="-ml-2">
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            Back
+          <Button variant="ghost" size="sm" className="h-8 px-2">
+            <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-          <Badge variant="secondary" className="text-xs">{locationName}</Badge>
+        <div>
+          <h1 className="text-lg font-semibold leading-tight">Select a Service</h1>
+          <p className="text-xs text-muted-foreground">{locationName} · {categories.length} categories</p>
         </div>
       </div>
 
-      {/* Header */}
-      <div className="text-center">
-        <h2 className="text-xl font-semibold text-foreground">Select a Service</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          {categories.length === 1 ? "1 category" : `${categories.length} categories`} available
-        </p>
-      </div>
-
-      {/* Horizontal Scroll Category Pills */}
+      {/* Horizontal Scroll Category Pills - more compact */}
       <div
         ref={scrollContainerRef}
         className="overflow-x-auto scrollbar-hide -mx-4 px-4"
       >
-        <div className="flex gap-2 w-max pb-2">
+        <div className="flex gap-1.5 w-max py-1">
           {categories.map((category) => (
             <button
               key={category}
               onClick={() => handleCategoryClick(category)}
               className={cn(
-                "px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all",
-                "border-2",
+                "px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all",
                 activeCategory === category
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-card text-foreground border-border hover:border-primary/50"
+                  ? "bg-[#1E1B4B] text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               )}
             >
-              {category}
-              <span className="ml-1.5 text-xs opacity-70">
+              {formatCategoryName(category)}
+              <span className="ml-1 opacity-70">
                 ({servicesByCategory[category].length})
               </span>
             </button>
@@ -131,7 +125,7 @@ export function ServiceSelector({
         </div>
       </div>
 
-      {/* Services List */}
+      {/* Services List - compact cards with image placeholder */}
       <div className="space-y-2">
         {activeServices.map((service) => {
           const isPopular = POPULAR_SERVICES.some((p) =>
@@ -142,42 +136,50 @@ export function ServiceSelector({
             <Link
               key={service.id}
               href={`/book/${locationSlug}/${service.id}`}
+              className="block"
             >
-              <Card className="cursor-pointer transition-all hover:border-primary hover:shadow-md active:scale-[0.99]">
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-sm truncate">{service.name}</p>
+              <div className="flex items-center gap-3 p-2.5 rounded-xl bg-white border border-gray-100 hover:border-[#8B687A]/30 hover:shadow-sm transition-all active:scale-[0.99]">
+                {/* Service image placeholder */}
+                <div className="w-14 h-14 rounded-lg bg-gradient-to-br from-[#FDF2F2] to-[#EDCAC9] flex items-center justify-center flex-shrink-0 overflow-hidden">
+                  {service.imageUrl ? (
+                    <img
+                      src={service.imageUrl}
+                      alt={service.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <ImageIcon className="h-5 w-5 text-[#8B687A]/40" />
+                  )}
+                </div>
+
+                {/* Service info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-medium text-sm text-gray-900 truncate">{service.name}</p>
                         {isPopular && (
-                          <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100 text-[10px] flex-shrink-0">
-                            <Sparkles className="h-2.5 w-2.5 mr-0.5" />
-                            Popular
-                          </Badge>
+                          <Sparkles className="h-3 w-3 text-amber-500 flex-shrink-0" />
                         )}
                       </div>
-                      {service.description && (
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                          {service.description}
-                        </p>
-                      )}
-                      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs text-gray-500 flex items-center gap-0.5">
                           <Clock className="h-3 w-3" />
-                          {service.durationMinutes} min
-                        </span>
-                        <span className="text-[10px] text-muted-foreground/70">
-                          ${service.depositAmount} deposit
+                          {service.durationMinutes}min
                         </span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-base">${service.price}</span>
-                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
+
+                    {/* Price - more prominent */}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <div className="text-right">
+                        <span className="text-base font-bold text-[#1E1B4B]">${service.price}</span>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-gray-400" />
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </Link>
           );
         })}
@@ -185,11 +187,11 @@ export function ServiceSelector({
 
       {/* Empty state */}
       {activeServices.length === 0 && (
-        <Card className="p-8 text-center">
-          <p className="text-muted-foreground">
-            No services available in this category.
+        <div className="py-8 text-center">
+          <p className="text-sm text-muted-foreground">
+            No services in this category.
           </p>
-        </Card>
+        </div>
       )}
     </div>
   );

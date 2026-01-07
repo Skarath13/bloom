@@ -2,10 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { BookingLayoutWrapper } from "@/components/booking/booking-layout-wrapper";
 import { TechnicianGrid } from "@/components/booking/technician-grid";
 import { supabase, tables } from "@/lib/supabase";
+import { fisherYatesShuffle } from "@/lib/utils";
 
 // Fetch location by slug
 async function getLocation(slug: string) {
@@ -82,33 +82,29 @@ export default async function TechnicianSelectionPage({ params }: PageProps) {
   }
 
   const technicians = await getTechnicians(location.id);
+  // Randomize on the server to avoid hydration mismatch
+  const randomizedTechnicians = fisherYatesShuffle(technicians);
 
   return (
     <BookingLayoutWrapper currentStep={3}>
-      {/* Back button and selection info */}
-      <div className="mb-4">
+      {/* Compact header with back button and title inline */}
+      <div className="flex items-center gap-3 mb-3">
         <Link href={`/book/${locationSlug}`}>
-          <Button variant="ghost" size="sm" className="mb-2 -ml-2">
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            Back
+          <Button variant="ghost" size="sm" className="h-8 px-2">
+            <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <Badge variant="secondary" className="text-xs">{location.name}</Badge>
-          <Badge variant="outline" className="text-xs">{service.name}</Badge>
-          <span className="font-semibold text-primary">${service.price}</span>
+        <div>
+          <h1 className="text-lg font-semibold leading-tight">Choose Your Tech</h1>
+          <p className="text-xs text-muted-foreground">
+            {location.name} · {service.name} · <span className="font-semibold text-[#1E1B4B]">${service.price}</span>
+          </p>
         </div>
-      </div>
-
-      {/* Header */}
-      <div className="text-center mb-6">
-        <h2 className="text-xl font-semibold text-foreground">Choose Your Tech</h2>
-        <p className="text-sm text-muted-foreground mt-1">Select a technician or let us pick for you</p>
       </div>
 
       {/* Randomized Technician Grid */}
       <TechnicianGrid
-        technicians={technicians}
+        technicians={randomizedTechnicians}
         locationSlug={locationSlug}
         serviceId={serviceId}
         serviceName={service.name}
