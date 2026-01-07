@@ -700,7 +700,7 @@ export function ResourceCalendar({
           onDragCancel={handleDragCancel}
         >
         <div
-          className="flex-1 overflow-auto custom-scrollbar"
+          className={cn("flex-1 overflow-auto custom-scrollbar", isDragging && "cursor-grabbing")}
           ref={gridRef}
           onMouseMove={(e) => {
             handleGridMouseMove(e);
@@ -890,6 +890,8 @@ export function ResourceCalendar({
                           const block = event.originalData as TechnicianBlock;
                           const { top, height } = getBlockStyle(block);
                           const isBeingDragged = dragState.activeId === `block-${block.id}`;
+                          // Hide block if it has a pending move (it will be shown at the new position)
+                          const hasPendingBlockMove = pendingBlockMove?.block.id === block.id;
 
                           return (
                             <BlockCard
@@ -902,12 +904,14 @@ export function ResourceCalendar({
                               overlapPosition={overlapPosition}
                               onClick={() => onBlockClick?.(block)}
                               draggable={!!onMoveBlock && !isBeingDragged && !isMoving && !pendingBlockMove}
-                              isBeingDragged={isBeingDragged}
+                              isBeingDragged={isBeingDragged || hasPendingBlockMove}
                             />
                           );
                         } else {
                           const apt = event.originalData as Appointment;
                           const { top, height } = getAppointmentStyle(apt, selectedDate);
+                          // Hide appointment if it has a pending move (it will be shown at the new position)
+                          const hasPendingMove = pendingMove?.appointment.id === apt.id;
 
                           return (
                             <AppointmentCard
@@ -924,12 +928,13 @@ export function ResourceCalendar({
                               height={height}
                               overlapPosition={overlapPosition}
                               draggable={!!onMoveAppointment && !isMoving && !pendingMove}
-                              className="pointer-events-auto"
+                              className={cn("pointer-events-auto", hasPendingMove && "pointer-events-none")}
                               style={{
                                 top: `${top}px`,
                                 height: `${height - 2}px`,
                                 left: `calc(${left}% + 2px)`,
                                 width: `calc(${width}% - 5px)`,
+                                ...(hasPendingMove && { opacity: 0 }),
                               }}
                               onClick={() => onAppointmentClick?.(apt)}
                             />
@@ -939,6 +944,80 @@ export function ResourceCalendar({
                     </div>
                   ))}
                 </div>
+
+                {/* Pending move appointment - shown at new position while waiting for confirmation */}
+                {pendingMove && (() => {
+                  const techIndex = visibleTechnicians.findIndex(t => t.id === pendingMove.newTechId);
+                  if (techIndex === -1) return null;
+
+                  const columnWidth = 100 / visibleTechnicians.length;
+                  const duration = pendingMove.appointment.endTime.getTime() - pendingMove.appointment.startTime.getTime();
+                  const aptHeight = (duration / (1000 * 60)) * (PIXELS_PER_HOUR / 60);
+                  const topPx = ((pendingMove.newTime.getHours() - CALENDAR_START_HOUR) * 60 +
+                    pendingMove.newTime.getMinutes()) * (PIXELS_PER_HOUR / 60);
+                  const pendingTech = visibleTechnicians[techIndex];
+
+                  return (
+                    <div
+                      className="absolute rounded px-1.5 py-1 overflow-hidden pointer-events-none z-40"
+                      style={{
+                        backgroundColor: pendingTech?.color || "#888",
+                        top: `${topPx}px`,
+                        height: `${aptHeight - 2}px`,
+                        left: `calc(${techIndex * columnWidth}% + 2px)`,
+                        width: `calc(${columnWidth}% - 5px)`,
+                      }}
+                    >
+                      <div className="text-xs font-medium text-white truncate">
+                        {format(pendingMove.newTime, "h:mm a")}
+                      </div>
+                      {aptHeight > 30 && (
+                        <div className="text-xs text-white font-medium truncate">
+                          {pendingMove.appointment.clientName}
+                        </div>
+                      )}
+                      {aptHeight > 45 && (
+                        <div className="text-xs text-white/90 truncate">
+                          {pendingMove.appointment.serviceName}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Pending move block - shown at new position while API call is in progress */}
+                {pendingBlockMove && (() => {
+                  const techIndex = visibleTechnicians.findIndex(t => t.id === pendingBlockMove.newTechId);
+                  if (techIndex === -1) return null;
+
+                  const columnWidth = 100 / visibleTechnicians.length;
+                  const duration = new Date(pendingBlockMove.block.endTime).getTime() - new Date(pendingBlockMove.block.startTime).getTime();
+                  const blockHeight = (duration / (1000 * 60)) * (PIXELS_PER_HOUR / 60);
+                  const topPx = ((pendingBlockMove.newTime.getHours() - CALENDAR_START_HOUR) * 60 +
+                    pendingBlockMove.newTime.getMinutes()) * (PIXELS_PER_HOUR / 60);
+
+                  return (
+                    <div
+                      className="absolute rounded px-1.5 py-1 overflow-hidden pointer-events-none z-40"
+                      style={{
+                        backgroundColor: "#9E9E9E",
+                        top: `${topPx}px`,
+                        height: `${blockHeight}px`,
+                        left: `calc(${techIndex * columnWidth}% + 2px)`,
+                        width: `calc(${columnWidth}% - 5px)`,
+                      }}
+                    >
+                      <div className="text-xs font-medium text-white truncate">
+                        {format(pendingBlockMove.newTime, "h:mm a")}
+                      </div>
+                      {blockHeight > 30 && (
+                        <div className="text-xs text-white font-medium truncate">
+                          {pendingBlockMove.block.title}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Custom drag preview - positioned in grid, not following cursor */}
                 {dragState.activeAppointment && dragState.currentTechId && dragState.currentTime && (() => {
