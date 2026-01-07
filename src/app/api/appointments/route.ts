@@ -123,20 +123,19 @@ export async function GET(request: NextRequest) {
     }
 
     // Handle date filtering
-    // Dates are stored in UTC, query using ISO date strings with PST offset
+    // Column is "timestamp without time zone" - query using local time strings directly
     if (date) {
-      // Create start and end of day in PST (UTC-8)
-      const dayStart = new Date(`${date}T00:00:00-08:00`);
-      const dayEnd = new Date(`${date}T23:59:59.999-08:00`);
+      const dayStart = `${date}T00:00:00`;
+      const dayEnd = `${date}T23:59:59.999`;
       query = query
-        .gte("startTime", dayStart.toISOString())
-        .lte("startTime", dayEnd.toISOString());
+        .gte("startTime", dayStart)
+        .lte("startTime", dayEnd);
     } else if (startDate && endDate) {
-      const rangeStart = new Date(`${startDate}T00:00:00-08:00`);
-      const rangeEnd = new Date(`${endDate}T23:59:59.999-08:00`);
+      const rangeStart = `${startDate}T00:00:00`;
+      const rangeEnd = `${endDate}T23:59:59.999`;
       query = query
-        .gte("startTime", rangeStart.toISOString())
-        .lte("startTime", rangeEnd.toISOString());
+        .gte("startTime", rangeStart)
+        .lte("startTime", rangeEnd);
     }
 
     const { data: appointments, error } = await query as { data: AppointmentWithRelations[] | null; error: { message: string } | null };

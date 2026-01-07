@@ -97,6 +97,7 @@ export default function AppointmentsPage() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -104,6 +105,11 @@ export default function AppointmentsPage() {
   const [locationFilter, setLocationFilter] = useState("all");
   const [technicianFilter, setTechnicianFilter] = useState("all");
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 0 }));
+
+  // Fix hydration mismatch - Radix Select generates different IDs on server/client
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const weekEnd = useMemo(() => endOfWeek(weekStart, { weekStartsOn: 0 }), [weekStart]);
 
@@ -348,49 +354,53 @@ export default function AppointmentsPage() {
               />
             </div>
 
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[150px]">
-                <Filter className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                {statusOptions.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {mounted && (
+              <>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-[150px]">
+                    <Filter className="h-4 w-4 mr-2" />
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {statusOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-            <Select value={locationFilter} onValueChange={setLocationFilter}>
-              <SelectTrigger className="w-[150px]">
-                <MapPin className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Location" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Locations</SelectItem>
-                {locations.map((loc) => (
-                  <SelectItem key={loc.id} value={loc.id}>
-                    {loc.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                <Select value={locationFilter} onValueChange={setLocationFilter}>
+                  <SelectTrigger className="w-[150px]">
+                    <MapPin className="h-4 w-4 mr-2" />
+                    <SelectValue placeholder="Location" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Locations</SelectItem>
+                    {locations.map((loc) => (
+                      <SelectItem key={loc.id} value={loc.id}>
+                        {loc.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-            <Select value={technicianFilter} onValueChange={setTechnicianFilter}>
-              <SelectTrigger className="w-[150px]">
-                <User className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Technician" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Technicians</SelectItem>
-                {technicians.map((tech) => (
-                  <SelectItem key={tech.id} value={tech.id}>
-                    {tech.firstName} {tech.lastName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                <Select value={technicianFilter} onValueChange={setTechnicianFilter}>
+                  <SelectTrigger className="w-[150px]">
+                    <User className="h-4 w-4 mr-2" />
+                    <SelectValue placeholder="Technician" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Technicians</SelectItem>
+                    {technicians.map((tech) => (
+                      <SelectItem key={tech.id} value={tech.id}>
+                        {tech.firstName} {tech.lastName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </>
+            )}
           </div>
         </CardHeader>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
-import { Check, Sparkles } from "lucide-react";
+import { Check, CheckCheck, Sparkles, User, Play, X } from "lucide-react";
 import { useDraggable } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
 
@@ -87,9 +87,16 @@ export function AppointmentCard({
   // Ghost appearance for cancelled/no-show (reduced opacity)
   const isGhost = status === "CANCELLED" || status === "NO_SHOW";
 
-  const isPending = status === "PENDING";
-  const isConfirmed = status === "CONFIRMED";
-  const showCheckbox = isConfirmed;
+  // Status indicator config - all use card's bgColor for cohesive look
+  const statusIndicator = {
+    PENDING: "?",
+    CONFIRMED: "check",
+    CHECKED_IN: "user",
+    IN_PROGRESS: "play",
+    COMPLETED: "checkcheck",
+    CANCELLED: "x",
+    NO_SHOW: "x",
+  }[status] as string | undefined;
 
   // Determine what content to show based on card height
   const showServiceName = height > 40;
@@ -114,23 +121,30 @@ export function AppointmentCard({
       }}
       onClick={onClick}
     >
-      {/* Checkbox indicator for confirmed appointments - white box with colored check */}
-      {showCheckbox && (
+      {/* Status indicator - white box with icon matching card color */}
+      {statusIndicator && (
         <div className="absolute top-1 right-1 w-4 h-4 rounded bg-white flex items-center justify-center">
-          <Check className="h-3 w-3" style={{ color: bgColor }} strokeWidth={6} />
-        </div>
-      )}
-
-      {/* Question mark indicator for pending appointments - white box with colored ? */}
-      {isPending && (
-        <div className="absolute top-1 right-1 w-4 h-4 rounded bg-white flex items-center justify-center">
-          <span
-            className="text-[12px] font-black leading-none"
-            style={{
-              color: bgColor,
-              WebkitTextStroke: `0.5px ${bgColor}`,
-            }}
-          >?</span>
+          {statusIndicator === "?" && (
+            <span
+              className="text-[12px] leading-none"
+              style={{ color: bgColor, fontWeight: 900, WebkitTextStroke: `0.5px ${bgColor}` }}
+            >?</span>
+          )}
+          {statusIndicator === "check" && (
+            <Check className="h-3 w-3" style={{ color: bgColor }} strokeWidth={4.5} fill="none" />
+          )}
+          {statusIndicator === "checkcheck" && (
+            <CheckCheck className="h-3 w-3" style={{ color: bgColor }} strokeWidth={4} fill="none" />
+          )}
+          {statusIndicator === "user" && (
+            <User className="h-3 w-3" style={{ color: bgColor }} strokeWidth={4} fill="none" />
+          )}
+          {statusIndicator === "play" && (
+            <Play className="h-2.5 w-2.5" style={{ color: bgColor }} strokeWidth={4} fill="none" />
+          )}
+          {statusIndicator === "x" && (
+            <X className="h-3 w-3" style={{ color: bgColor }} strokeWidth={4} fill="none" />
+          )}
         </div>
       )}
 
