@@ -12,8 +12,15 @@ import {
 } from "@dnd-kit/core";
 import { MiniCalendar } from "./mini-calendar";
 import { CalendarHeader } from "./calendar-header";
-import { AppointmentCard, calculateOverlapPositions } from "./appointment-card";
+import { AppointmentCard } from "./appointment-card";
 import { BlockCard } from "./block-card";
+import {
+  calculateUnifiedOverlapPositions,
+  appointmentToCalendarEvent,
+  blockToCalendarEvent,
+  type CalendarEvent,
+  type OverlapPosition,
+} from "./overlap-utils";
 import { TimeIndicator } from "./time-indicator";
 import { MoveConfirmationModal } from "./move-confirmation-modal";
 import { CalendarSettingsDialog, ViewRange } from "./calendar-settings-dialog";
@@ -341,27 +348,6 @@ export function ResourceCalendar({
     );
   }, [appointments, selectedDate]);
 
-  // Group appointments by technician with overlap calculation
-  const appointmentsByTech = useMemo(() => {
-    const grouped: Record<string, Array<Appointment & { overlapPosition: { left: number; width: number } }>> = {};
-
-    visibleTechnicians.forEach((tech) => {
-      const techAppointments = dayAppointments.filter(
-        (apt) => apt.technicianId === tech.id
-      );
-
-      // Calculate overlap positions
-      const positions = calculateOverlapPositions(techAppointments);
-
-      grouped[tech.id] = techAppointments.map((apt) => ({
-        ...apt,
-        overlapPosition: positions.get(apt.id) || { left: 0, width: 100 },
-      }));
-    });
-
-    return grouped;
-  }, [dayAppointments, visibleTechnicians]);
-
   // Filter blocks for selected date
   const dayBlocks = useMemo(() => {
     return blocks.filter((block) =>
@@ -369,18 +355,33 @@ export function ResourceCalendar({
     );
   }, [blocks, selectedDate]);
 
-  // Group blocks by technician
-  const blocksByTech = useMemo(() => {
-    const grouped: Record<string, TechnicianBlock[]> = {};
+  // Unified events by technician with overlap calculation (appointments + blocks together)
+  const eventsByTech = useMemo(() => {
+    const grouped: Record<string, {
+      events: CalendarEvent[];
+      positions: Map<string, OverlapPosition>;
+    }> = {};
 
     visibleTechnicians.forEach((tech) => {
-      grouped[tech.id] = dayBlocks.filter(
-        (block) => block.technicianId === tech.id
-      );
+      // Convert appointments to CalendarEvents
+      const techAppointments = dayAppointments
+        .filter((apt) => apt.technicianId === tech.id)
+        .map(appointmentToCalendarEvent);
+
+      // Convert blocks to CalendarEvents
+      const techBlocks = dayBlocks
+        .filter((block) => block.technicianId === tech.id)
+        .map(blockToCalendarEvent);
+
+      // Combine and calculate unified overlap positions
+      const allEvents = [...techAppointments, ...techBlocks];
+      const positions = calculateUnifiedOverlapPositions(allEvents);
+
+      grouped[tech.id] = { events: allEvents, positions };
     });
 
     return grouped;
-  }, [dayBlocks, visibleTechnicians]);
+  }, [dayAppointments, dayBlocks, visibleTechnicians]);
 
   // DnD hook for drag-and-drop functionality
   const {
@@ -865,7 +866,7 @@ export function ResourceCalendar({
                 />
               )}
 
-              {/* Personal events/blocks overlay */}
+              {/* Unified events overlay (appointments + blocks with shared overlap calculation) */}
               <div
                 className="absolute top-0 bottom-0 pointer-events-none"
                 style={{ left: TIME_COLUMN_WIDTH, right: 0 }}
@@ -876,69 +877,59 @@ export function ResourceCalendar({
                       key={tech.id}
                       className="relative min-w-0 flex-1"
                     >
-                      {blocksByTech[tech.id]?.map((block) => {
-                        const { top, height } = getBlockStyle(block);
-                        // Hide the original block if it's being dragged
-                        const isBeingDragged = dragState.activeId === `block-${block.id}`;
+                      {eventsByTech[tech.id]?.events.map((event) => {
+                        const overlapPosition = eventsByTech[tech.id].positions.get(event.id);
+                        const { left, width } = overlapPosition || { left: 0, width: 100, zIndex: 10, isDominant: true };
 
-                        return (
-                          <BlockCard
-                            key={block.id}
-                            block={block}
-                            style={{
-                              top: `${top}px`,
-                              height: `${height}px`,
-                            }}
-                            onClick={() => onBlockClick?.(block)}
-                            draggable={!!onMoveBlock && !isBeingDragged && !isMoving && !pendingBlockMove}
-                            isBeingDragged={isBeingDragged}
-                          />
-                        );
-                      })}
-                    </div>
-                  ))}
-                </div>
-              </div>
+                        if (event.type === "block") {
+                          const block = event.originalData as TechnicianBlock;
+                          const { top, height } = getBlockStyle(block);
+                          const isBeingDragged = dragState.activeId === `block-${block.id}`;
 
-              {/* Appointments overlay */}
-              <div
-                className="absolute top-0 bottom-0 pointer-events-none"
-                style={{ left: TIME_COLUMN_WIDTH, right: 0 }}
-              >
-                <div className="flex h-full">
-                  {visibleTechnicians.map((tech) => (
-                    <div
-                      key={tech.id}
-                      className="relative min-w-0 flex-1"
-                    >
-                      {appointmentsByTech[tech.id]?.map((apt) => {
-                        const { top, height, spansNextDay } = getAppointmentStyle(apt, selectedDate);
-                        const { left, width } = apt.overlapPosition;
+                          return (
+                            <BlockCard
+                              key={block.id}
+                              block={block}
+                              style={{
+                                top: `${top}px`,
+                                height: `${height}px`,
+                              }}
+                              overlapPosition={overlapPosition}
+                              onClick={() => onBlockClick?.(block)}
+                              draggable={!!onMoveBlock && !isBeingDragged && !isMoving && !pendingBlockMove}
+                              isBeingDragged={isBeingDragged}
+                            />
+                          );
+                        } else {
+                          const apt = event.originalData as Appointment;
+                          const { top, height } = getAppointmentStyle(apt, selectedDate);
 
-                        return (
-                          <AppointmentCard
-                            key={apt.id}
-                            id={apt.id}
-                            startTime={new Date(apt.startTime)}
-                            endTime={new Date(apt.endTime)}
-                            clientName={apt.clientName}
-                            serviceName={apt.serviceName}
-                            serviceCategory={apt.serviceCategory}
-                            status={apt.status}
-                            techColor={tech.color}
-                            technicianId={tech.id}
-                            height={height}
-                            draggable={!!onMoveAppointment && !isMoving && !pendingMove}
-                            className="pointer-events-auto"
-                            style={{
-                              top: `${top}px`,
-                              height: `${height - 2}px`, // 2px bottom gap between adjacent appointments
-                              left: `calc(${left}% + 2px)`,
-                              width: `calc(${width}% - 5px)`, // 1px extra for gap between side-by-side appointments
-                            }}
-                            onClick={() => onAppointmentClick?.(apt)}
-                          />
-                        );
+                          return (
+                            <AppointmentCard
+                              key={apt.id}
+                              id={apt.id}
+                              startTime={new Date(apt.startTime)}
+                              endTime={new Date(apt.endTime)}
+                              clientName={apt.clientName}
+                              serviceName={apt.serviceName}
+                              serviceCategory={apt.serviceCategory}
+                              status={apt.status}
+                              techColor={tech.color}
+                              technicianId={tech.id}
+                              height={height}
+                              overlapPosition={overlapPosition}
+                              draggable={!!onMoveAppointment && !isMoving && !pendingMove}
+                              className="pointer-events-auto"
+                              style={{
+                                top: `${top}px`,
+                                height: `${height - 2}px`,
+                                left: `calc(${left}% + 2px)`,
+                                width: `calc(${width}% - 5px)`,
+                              }}
+                              onClick={() => onAppointmentClick?.(apt)}
+                            />
+                          );
+                        }
                       })}
                     </div>
                   ))}

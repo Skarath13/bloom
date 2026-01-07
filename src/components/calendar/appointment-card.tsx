@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import { Check, CheckCheck, Sparkles, User, Play, X } from "lucide-react";
 import { useDraggable } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
+import type { OverlapPosition } from "./overlap-utils";
 
 // Default color palette for technicians (15 distinct earth tones/pastels)
 export const TECH_COLOR_PALETTE = [
@@ -43,6 +44,7 @@ interface AppointmentCardProps {
   className?: string;
   draggable?: boolean; // Enable drag and drop
   technicianId?: string; // Required for drag data
+  overlapPosition?: OverlapPosition; // For unified overlap handling
 }
 
 export function AppointmentCard({
@@ -61,6 +63,7 @@ export function AppointmentCard({
   className,
   draggable = false,
   technicianId,
+  overlapPosition,
 }: AppointmentCardProps) {
   // Drag and drop hook
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -80,6 +83,9 @@ export function AppointmentCard({
     },
     disabled: !draggable || isPersonalEvent,
   });
+
+  // Use z-index from overlap position or style
+  const effectiveZIndex = overlapPosition?.zIndex ?? (style?.zIndex as number | undefined) ?? 10;
 
   // Determine background color - personal events are gray, appointments use tech color
   const bgColor = isPersonalEvent ? PERSONAL_EVENT_COLOR : (techColor || TECH_COLOR_PALETTE[0]);
@@ -109,7 +115,6 @@ export function AppointmentCard({
       {...(draggable ? attributes : {})}
       className={cn(
         "absolute rounded px-1.5 py-1 overflow-hidden cursor-pointer",
-        "transition-all hover:brightness-110",
         isDragging && "opacity-0 pointer-events-none",
         draggable && "touch-none",
         className
@@ -118,6 +123,7 @@ export function AppointmentCard({
         backgroundColor: bgColor,
         opacity: isGhost ? 0.5 : isDragging ? 0 : 1,
         ...style,
+        zIndex: effectiveZIndex,
       }}
       onClick={onClick}
     >

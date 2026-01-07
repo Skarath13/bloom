@@ -3,6 +3,7 @@
 import { useDraggable } from "@dnd-kit/core";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import type { OverlapPosition } from "./overlap-utils";
 
 interface TechnicianBlock {
   id: string;
@@ -19,6 +20,7 @@ interface BlockCardProps {
     top: string;
     height: string;
   };
+  overlapPosition?: OverlapPosition;
   onClick?: () => void;
   draggable?: boolean;
   isBeingDragged?: boolean;
@@ -27,6 +29,7 @@ interface BlockCardProps {
 export function BlockCard({
   block,
   style,
+  overlapPosition,
   onClick,
   draggable = true,
   isBeingDragged = false,
@@ -40,21 +43,27 @@ export function BlockCard({
   // Hide if being dragged (either from local isDragging or parent's isBeingDragged)
   const shouldHide = isDragging || isBeingDragged;
 
+  // Calculate left/width from overlap position (fallback to full width)
+  const left = overlapPosition?.left ?? 0;
+  const width = overlapPosition?.width ?? 100;
+  const zIndex = overlapPosition?.zIndex ?? 10;
+
   return (
     <div
       ref={setNodeRef}
       {...(draggable ? listeners : {})}
       {...(draggable ? attributes : {})}
       className={cn(
-        "absolute rounded px-1.5 py-1 overflow-hidden cursor-pointer transition-all hover:brightness-110 pointer-events-auto",
+        "absolute rounded px-1.5 py-1 overflow-hidden cursor-pointer pointer-events-auto",
         shouldHide && "opacity-0 pointer-events-none",
         draggable && "touch-none"
       )}
       style={{
         top: style.top,
         height: style.height,
-        left: "2px",
-        right: "2px",
+        left: `calc(${left}% + 2px)`,
+        width: `calc(${width}% - ${width < 100 ? 4 : 4}px)`,
+        zIndex,
         backgroundColor: "#9E9E9E",
         opacity: shouldHide ? 0 : 1,
       }}
