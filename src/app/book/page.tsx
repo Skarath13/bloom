@@ -5,7 +5,7 @@ import { supabase, tables } from "@/lib/supabase";
 async function getLocations() {
   const { data: locations, error } = await supabase
     .from(tables.locations)
-    .select("id, name, slug, address, city, state, zipCode, phone")
+    .select("id, name, slug, address, city, state, zipCode, phone, latitude, longitude")
     .eq("isActive", true)
     .order("sortOrder", { ascending: true });
 

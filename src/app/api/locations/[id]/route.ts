@@ -52,6 +52,8 @@ export async function PUT(
     if (body.phone !== undefined) updateData.phone = body.phone.replace(/\D/g, "");
     if (body.operatingHours !== undefined) updateData.operatingHours = body.operatingHours;
     if (body.isActive !== undefined) updateData.isActive = body.isActive;
+    if (body.latitude !== undefined) updateData.latitude = body.latitude;
+    if (body.longitude !== undefined) updateData.longitude = body.longitude;
 
     const { data: location, error } = await supabase
       .from(tables.locations)

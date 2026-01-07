@@ -14,6 +14,8 @@ interface Location {
   state: string;
   zipCode: string;
   phone: string;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 interface RadialLocationSelectorProps {
@@ -184,11 +186,11 @@ const POSITIONS: Record<number, Array<{ left: string; top: string }>> = {
     { left: "20%", top: "50%" },
   ],
   5: [
-    { left: "50%", top: "12%" },     // Top
-    { left: "85%", top: "38%" },     // Top-right
-    { left: "72%", top: "80%" },     // Bottom-right
-    { left: "28%", top: "80%" },     // Bottom-left
-    { left: "15%", top: "38%" },     // Top-left
+    { left: "50%", top: "8%" },      // Top
+    { left: "88%", top: "38%" },     // Top-right
+    { left: "73%", top: "82%" },     // Bottom-right
+    { left: "27%", top: "82%" },     // Bottom-left
+    { left: "12%", top: "38%" },     // Top-left
   ],
 };
 
@@ -200,21 +202,52 @@ function getPosition(index: number, total: number): { left: string; top: string 
 function LocationButton({ location }: { location: Location }) {
   const displayName = location.city;
 
+  // Use coordinates if available (cleaner, no business labels), otherwise use address
+  const hasCoords = location.latitude && location.longitude;
+
+  // Free Google Maps embed URL (no API key needed)
+  // Using coordinates avoids business label text on pins, satellite view (t=k)
+  const mapEmbedUrl = hasCoords
+    ? `https://maps.google.com/maps?q=${location.latitude},${location.longitude}&z=13&t=k&output=embed`
+    : `https://maps.google.com/maps?q=${encodeURIComponent(`${location.address}, ${location.city}, ${location.state} ${location.zipCode}`)}&z=13&t=k&output=embed`;
+
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center",
-        "w-[115px] h-[115px] rounded-full",
+        "relative flex flex-col items-center justify-center",
+        "w-[135px] h-[135px] rounded-full",
         "bg-card border-2 border-border shadow-lg",
         "hover:border-primary hover:shadow-xl hover:scale-105",
         "transition-all duration-200 cursor-pointer",
-        "active:scale-95"
+        "active:scale-95",
+        "overflow-hidden"
       )}
     >
-      <MapPin className="h-6 w-6 text-primary mb-1" />
-      <span className="text-sm font-medium text-foreground text-center leading-tight px-2 line-clamp-2">
-        {displayName}
-      </span>
+      {/* Map background */}
+      <div className="absolute inset-0 rounded-full overflow-hidden">
+        <iframe
+          src={mapEmbedUrl}
+          className="w-[270px] h-[270px] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+          style={{ border: 0 }}
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+          title={`Map of ${location.name}`}
+        />
+        {/* Overlay gradient for text readability */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
+      </div>
+
+      {/* Content overlay */}
+      <div className="relative z-10 flex flex-col items-center justify-center mt-14">
+        <span
+          className="text-base font-bold text-white text-center leading-tight px-2 line-clamp-2"
+          style={{
+            textShadow: "-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 0 4px #000"
+          }}
+        >
+          {displayName}
+        </span>
+      </div>
     </div>
   );
 }
