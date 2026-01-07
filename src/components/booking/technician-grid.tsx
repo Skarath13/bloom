@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Star, Users, ChevronRight } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Users, ChevronRight, User } from "lucide-react";
 import { useBooking } from "./booking-context";
 
 interface Technician {
@@ -11,6 +10,8 @@ interface Technician {
   lastName: string;
   description: string | null;
   color: string;
+  imageUrl?: string | null;
+  badges?: string[] | null;
 }
 
 interface TechnicianGridProps {
@@ -37,7 +38,7 @@ export function TechnicianGrid({
   const handleTechnicianClick = (tech: Technician | null, isAny: boolean) => {
     // Save service info when selecting technician
     setService(serviceId, serviceName, servicePrice, serviceDuration, depositAmount);
-    setTechnician(tech?.id || null, tech ? `${tech.firstName} ${tech.lastName[0]}.` : null, isAny);
+    setTechnician(tech?.id || null, tech ? `${tech.firstName} ${tech.lastName[0]}` : null, isAny);
   };
 
   // Empty state - no technicians at all
@@ -73,7 +74,7 @@ export function TechnicianGrid({
               </span>
             </div>
             <p className="text-xs text-gray-500">
-              Fastest booking · first available
+              Fastest Booking · First Available
             </p>
           </div>
           <ChevronRight className="h-4 w-4 text-gray-400" />
@@ -99,27 +100,35 @@ export function TechnicianGrid({
             className="block"
           >
             <div className="flex items-center gap-3 p-2.5 rounded-xl bg-white border border-gray-100 hover:border-[#8B687A]/30 hover:shadow-sm transition-all active:scale-[0.99]">
-              <Avatar
-                className="h-10 w-10 flex-shrink-0"
-                style={{ backgroundColor: tech.color }}
-              >
-                <AvatarFallback className="text-white font-medium text-xs">
-                  {tech.firstName[0]}{tech.lastName[0]}
-                </AvatarFallback>
-              </Avatar>
+              {/* Technician photo placeholder */}
+              <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#FDF2F2] to-[#EDCAC9] flex items-center justify-center flex-shrink-0 overflow-hidden">
+                {tech.imageUrl ? (
+                  <img
+                    src={tech.imageUrl}
+                    alt={`${tech.firstName} ${tech.lastName[0]}.`}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <User className="h-5 w-5 text-[#8B687A]/50" />
+                )}
+              </div>
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm text-gray-900">
-                  {tech.firstName} {tech.lastName[0]}.
-                </p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-xs text-gray-500 truncate">
-                    {tech.description || "Lash Specialist"}
-                  </span>
-                  <span className="flex items-center gap-0.5 flex-shrink-0">
-                    <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                    <span className="text-[10px] text-gray-500">5.0</span>
-                  </span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className="font-medium text-sm text-gray-900">
+                    {tech.firstName} {tech.lastName[0]}
+                  </p>
+                  {tech.badges?.slice(0, 3).map((badge) => (
+                    <span
+                      key={badge}
+                      className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-rose-50 text-[#8B687A] capitalize"
+                    >
+                      {badge}
+                    </span>
+                  ))}
                 </div>
+                <p className="text-xs text-gray-500 truncate mt-0.5">
+                  {tech.description || "Licensed Lash Technician"}
+                </p>
               </div>
               <ChevronRight className="h-4 w-4 text-gray-400" />
             </div>

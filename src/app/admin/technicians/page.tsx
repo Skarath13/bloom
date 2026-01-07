@@ -94,6 +94,7 @@ interface Technician {
   color: string;
   isActive: boolean;
   hasMasterFee: boolean;
+  badges: string[] | null;
   locations: Location[];
   schedules?: Schedule[];
   updatedAt?: string; // For optimistic locking
@@ -122,6 +123,7 @@ export default function TechniciansPage() {
     firstName: "",
     lastName: "",
     description: "",
+    badges: "" as string,
     locationIds: [] as string[],
     color: "#7CB342",
     isActive: true,
@@ -186,6 +188,7 @@ export default function TechniciansPage() {
       firstName: "",
       lastName: "",
       description: "",
+      badges: "",
       locationIds: [],
       color: "#7CB342",
       isActive: true,
@@ -200,6 +203,7 @@ export default function TechniciansPage() {
       firstName: tech.firstName,
       lastName: tech.lastName,
       description: tech.description || "",
+      badges: tech.badges?.join(", ") || "",
       locationIds: tech.locations.map((l) => l.id),
       color: tech.color,
       isActive: tech.isActive,
@@ -249,12 +253,18 @@ export default function TechniciansPage() {
 
     try {
       if (editingTech) {
+        // Parse badges from comma-separated string
+        const badgesArray = formData.badges
+          ? formData.badges.split(",").map((b) => b.trim()).filter(Boolean)
+          : [];
+
         // Optimistic update for editing
         const optimisticTech: Technician = {
           ...editingTech,
           firstName: formData.firstName,
           lastName: formData.lastName,
           description: formData.description || null,
+          badges: badgesArray.length > 0 ? badgesArray : null,
           color: formData.color,
           isActive: formData.isActive,
           hasMasterFee: formData.hasMasterFee,
@@ -273,6 +283,7 @@ export default function TechniciansPage() {
             firstName: formData.firstName,
             lastName: formData.lastName,
             description: formData.description || null,
+            badges: badgesArray.length > 0 ? badgesArray : null,
             color: formData.color,
             locationIds: formData.locationIds,
             isActive: formData.isActive,
@@ -303,6 +314,11 @@ export default function TechniciansPage() {
 
         toast.success("Technician updated successfully");
       } else {
+        // Parse badges for new technicians too
+        const newBadgesArray = formData.badges
+          ? formData.badges.split(",").map((b) => b.trim()).filter(Boolean)
+          : [];
+
         // Create new technician (no optimistic update for creates)
         const response = await fetch("/api/technicians", {
           method: "POST",
@@ -311,6 +327,7 @@ export default function TechniciansPage() {
             firstName: formData.firstName,
             lastName: formData.lastName,
             description: formData.description || null,
+            badges: newBadgesArray.length > 0 ? newBadgesArray : null,
             color: formData.color,
             locationIds: formData.locationIds,
             isActive: formData.isActive,
@@ -726,6 +743,22 @@ export default function TechniciansPage() {
               />
               <p className="text-xs text-muted-foreground">
                 This will be shown to clients during booking
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="badges">Badges</Label>
+              <Input
+                id="badges"
+                value={formData.badges}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, badges: e.target.value }))
+                }
+                placeholder="natural, volume, gentle"
+                disabled={isSaving}
+              />
+              <p className="text-xs text-muted-foreground">
+                Comma-separated specialty badges (max 3 shown)
               </p>
             </div>
 

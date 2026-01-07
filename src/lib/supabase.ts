@@ -92,10 +92,11 @@ export interface Database {
           sortOrder: number;
           locationId: string;
           hasMasterFee: boolean;
+          badges: string[] | null;
           createdAt: string;
           updatedAt: string;
         };
-        Insert: Omit<Database["appointments"]["Tables"]["bloom_technicians"]["Row"], "id" | "createdAt" | "updatedAt">;
+        Insert: Omit<Database["appointments"]["Tables"]["bloom_technicians"]["Row"], "id" | "createdAt" | "updatedAt" | "badges"> & { badges?: string[] | null };
         Update: Partial<Database["appointments"]["Tables"]["bloom_technicians"]["Insert"]>;
       };
       bloom_technician_locations: {

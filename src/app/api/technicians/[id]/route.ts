@@ -22,6 +22,7 @@ export async function GET(
         defaultBufferMinutes,
         isActive,
         hasMasterFee,
+        badges,
         sortOrder,
         locationId,
         createdAt,
@@ -66,6 +67,7 @@ export async function GET(
       defaultBufferMinutes: tech.defaultBufferMinutes,
       isActive: tech.isActive,
       hasMasterFee: tech.hasMasterFee || false,
+      badges: tech.badges || null,
       sortOrder: tech.sortOrder,
       locationId: tech.locationId,
       createdAt: tech.createdAt,
@@ -93,7 +95,7 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { firstName, lastName, description, color, locationIds, isActive, hasMasterFee } = body;
+    const { firstName, lastName, description, badges, color, locationIds, isActive, hasMasterFee } = body;
 
     // Build update object with only provided fields
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -104,6 +106,7 @@ export async function PUT(
     if (firstName !== undefined) updateData.firstName = firstName;
     if (lastName !== undefined) updateData.lastName = lastName;
     if (description !== undefined) updateData.description = description;
+    if (badges !== undefined) updateData.badges = badges;
     if (color !== undefined) updateData.color = color;
     if (isActive !== undefined) updateData.isActive = isActive;
     if (hasMasterFee !== undefined) updateData.hasMasterFee = hasMasterFee;

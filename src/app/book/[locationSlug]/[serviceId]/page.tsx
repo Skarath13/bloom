@@ -56,7 +56,7 @@ async function getTechnicians(locationId: string) {
   // Fetch the technicians - no sorting, will be randomized client-side
   const { data: technicians, error } = await supabase
     .from(tables.technicians)
-    .select("id, firstName, lastName, description, color")
+    .select("id, firstName, lastName, description, color, badges")
     .in("id", techIds)
     .eq("isActive", true);
 

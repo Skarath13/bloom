@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
         defaultBufferMinutes,
         isActive,
         hasMasterFee,
+        badges,
         sortOrder,
         locationId,
         createdAt,
@@ -84,6 +85,7 @@ export async function GET(request: NextRequest) {
       defaultBufferMinutes: tech.defaultBufferMinutes,
       isActive: tech.isActive,
       hasMasterFee: tech.hasMasterFee || false,
+      badges: tech.badges || null,
       sortOrder: tech.sortOrder,
       locationId: tech.locationId,
       createdAt: tech.createdAt,
@@ -108,7 +110,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { firstName, lastName, description, color, locationIds, isActive = true, hasMasterFee = false } = body;
+    const { firstName, lastName, description, badges, color, locationIds, isActive = true, hasMasterFee = false } = body;
 
     if (!firstName || !lastName) {
       return NextResponse.json(
@@ -135,6 +137,7 @@ export async function POST(request: NextRequest) {
         firstName,
         lastName,
         description: description || null,
+        badges: badges || null,
         color: color || "#7CB342",
         isActive,
         hasMasterFee,
