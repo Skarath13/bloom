@@ -202,49 +202,39 @@ function getPosition(index: number, total: number): { left: string; top: string 
 function LocationButton({ location }: { location: Location }) {
   const displayName = location.city;
 
-  // Use coordinates if available (cleaner, no business labels), otherwise use address
-  const hasCoords = location.latitude && location.longitude;
-
-  // Free Google Maps embed URL (no API key needed)
-  // Using coordinates avoids business label text on pins, satellite view (t=k)
-  const mapEmbedUrl = hasCoords
-    ? `https://maps.google.com/maps?q=${location.latitude},${location.longitude}&z=13&t=k&output=embed`
-    : `https://maps.google.com/maps?q=${encodeURIComponent(`${location.address}, ${location.city}, ${location.state} ${location.zipCode}`)}&z=13&t=k&output=embed`;
-
   return (
     <div
       className={cn(
         "relative flex flex-col items-center justify-center",
         "w-[135px] h-[135px] rounded-full",
-        "bg-card border-2 border-border shadow-lg",
+        "bg-gradient-to-br from-slate-200 via-slate-300 to-slate-400",
+        "border-2 border-border shadow-lg",
         "hover:border-primary hover:shadow-xl hover:scale-105",
         "transition-all duration-200 cursor-pointer",
         "active:scale-95",
         "overflow-hidden"
       )}
     >
-      {/* Map background */}
-      <div className="absolute inset-0 rounded-full overflow-hidden">
-        <iframe
-          src={mapEmbedUrl}
-          className="w-[270px] h-[270px] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-          style={{ border: 0 }}
-          loading="lazy"
-          referrerPolicy="no-referrer-when-downgrade"
-          title={`Map of ${location.name}`}
-        />
-        {/* Overlay gradient for text readability */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
+      {/* Subtle map-like pattern overlay */}
+      <div className="absolute inset-0 opacity-30">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_40%,rgba(255,255,255,0.4)_0%,transparent_50%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_60%,rgba(0,0,0,0.1)_0%,transparent_40%)]" />
       </div>
 
-      {/* Content overlay */}
-      <div className="relative z-10 flex flex-col items-center justify-center mt-14">
-        <span
-          className="text-base font-bold text-white text-center leading-tight px-2 line-clamp-2"
-          style={{
-            textShadow: "-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 0 4px #000"
-          }}
-        >
+      {/* Map pin icon */}
+      <div className="relative z-10 flex flex-col items-center justify-center">
+        <div className="w-8 h-8 mb-1">
+          <svg viewBox="0 0 24 24" fill="none" className="w-full h-full drop-shadow-md">
+            <path
+              d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"
+              fill="#EA4335"
+              stroke="#B91C1C"
+              strokeWidth="0.5"
+            />
+            <circle cx="12" cy="9" r="2.5" fill="#B91C1C" />
+          </svg>
+        </div>
+        <span className="text-base font-bold text-slate-800 text-center leading-tight px-2 line-clamp-2">
           {displayName}
         </span>
       </div>
