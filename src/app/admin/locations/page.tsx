@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Pencil, Trash2, MapPin, Phone, Clock, Users } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Plus, Pencil, Trash2, MapPin, Phone, Clock, Users, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,19 +25,30 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 
-// Days of week
+// Days of week mapping
 const daysOfWeek = [
-  { value: 0, label: "Sunday", short: "Sun" },
-  { value: 1, label: "Monday", short: "Mon" },
-  { value: 2, label: "Tuesday", short: "Tue" },
-  { value: 3, label: "Wednesday", short: "Wed" },
-  { value: 4, label: "Thursday", short: "Thu" },
-  { value: 5, label: "Friday", short: "Fri" },
-  { value: 6, label: "Saturday", short: "Sat" },
+  { value: 0, key: "sunday", label: "Sunday", short: "Sun" },
+  { value: 1, key: "monday", label: "Monday", short: "Mon" },
+  { value: 2, key: "tuesday", label: "Tuesday", short: "Tue" },
+  { value: 3, key: "wednesday", label: "Wednesday", short: "Wed" },
+  { value: 4, key: "thursday", label: "Thursday", short: "Thu" },
+  { value: 5, key: "friday", label: "Friday", short: "Fri" },
+  { value: 6, key: "saturday", label: "Saturday", short: "Sat" },
 ];
 
-interface OperatingHours {
+// Database format for operating hours
+interface DBOperatingHours {
+  [key: string]: {
+    open: string | null;
+    close: string | null;
+    isOpen: boolean;
+  };
+}
+
+// UI format for operating hours
+interface UIOperatingHours {
   dayOfWeek: number;
+  key: string;
   isOpen: boolean;
   openTime: string;
   closeTime: string;
@@ -52,100 +63,55 @@ interface Location {
   state: string;
   zipCode: string;
   phone: string;
-  email?: string;
   isActive: boolean;
-  operatingHours: OperatingHours[];
-  technicianCount: number;
+  operatingHours: DBOperatingHours;
+  technicianCount?: number;
 }
 
-const defaultOperatingHours: OperatingHours[] = daysOfWeek.map((day) => ({
+// Convert DB format to UI format
+function dbToUIHours(dbHours: DBOperatingHours): UIOperatingHours[] {
+  return daysOfWeek.map((day) => {
+    const hours = dbHours[day.key] || { open: "09:00", close: "19:00", isOpen: day.value !== 0 };
+    return {
+      dayOfWeek: day.value,
+      key: day.key,
+      isOpen: hours.isOpen,
+      openTime: hours.open || "09:00",
+      closeTime: hours.close || "19:00",
+    };
+  });
+}
+
+// Convert UI format to DB format
+function uiToDBHours(uiHours: UIOperatingHours[]): DBOperatingHours {
+  const dbHours: DBOperatingHours = {};
+  uiHours.forEach((hour) => {
+    dbHours[hour.key] = {
+      open: hour.isOpen ? hour.openTime : null,
+      close: hour.isOpen ? hour.closeTime : null,
+      isOpen: hour.isOpen,
+    };
+  });
+  return dbHours;
+}
+
+const defaultUIHours: UIOperatingHours[] = daysOfWeek.map((day) => ({
   dayOfWeek: day.value,
+  key: day.key,
   isOpen: day.value !== 0, // Closed on Sunday by default
   openTime: "09:00",
   closeTime: "19:00",
 }));
 
-// Mock locations
-const initialLocations: Location[] = [
-  {
-    id: "loc-1",
-    name: "Irvine",
-    slug: "irvine",
-    address: "15333 Culver Dr #220",
-    city: "Irvine",
-    state: "CA",
-    zipCode: "92604",
-    phone: "9495551111",
-    email: "irvine@elegantlashes.com",
-    isActive: true,
-    operatingHours: defaultOperatingHours,
-    technicianCount: 8,
-  },
-  {
-    id: "loc-2",
-    name: "Tustin",
-    slug: "tustin",
-    address: "13112 Newport Ave #K",
-    city: "Tustin",
-    state: "CA",
-    zipCode: "92780",
-    phone: "9495552222",
-    email: "tustin@elegantlashes.com",
-    isActive: true,
-    operatingHours: defaultOperatingHours,
-    technicianCount: 6,
-  },
-  {
-    id: "loc-3",
-    name: "Santa Ana",
-    slug: "santa-ana",
-    address: "3740 S Bristol St",
-    city: "Santa Ana",
-    state: "CA",
-    zipCode: "92704",
-    phone: "9495553333",
-    email: "santaana@elegantlashes.com",
-    isActive: true,
-    operatingHours: defaultOperatingHours,
-    technicianCount: 5,
-  },
-  {
-    id: "loc-4",
-    name: "Costa Mesa",
-    slug: "costa-mesa",
-    address: "435 E 17th St #3",
-    city: "Costa Mesa",
-    state: "CA",
-    zipCode: "92627",
-    phone: "9495554444",
-    email: "costamesa@elegantlashes.com",
-    isActive: true,
-    operatingHours: defaultOperatingHours,
-    technicianCount: 6,
-  },
-  {
-    id: "loc-5",
-    name: "Newport Beach",
-    slug: "newport-beach",
-    address: "359 San Miguel Dr #107",
-    city: "Newport Beach",
-    state: "CA",
-    zipCode: "92660",
-    phone: "9495555555",
-    email: "newport@elegantlashes.com",
-    isActive: true,
-    operatingHours: defaultOperatingHours,
-    technicianCount: 5,
-  },
-];
-
 export default function LocationsPage() {
-  const [locations, setLocations] = useState<Location[]>(initialLocations);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isHoursDialogOpen, setIsHoursDialogOpen] = useState(false);
   const [editingLocation, setEditingLocation] = useState<Location | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
-  const [operatingHours, setOperatingHours] = useState<OperatingHours[]>(defaultOperatingHours);
+  const [operatingHours, setOperatingHours] = useState<UIOperatingHours[]>(defaultUIHours);
   const [formData, setFormData] = useState({
     name: "",
     slug: "",
@@ -154,9 +120,28 @@ export default function LocationsPage() {
     state: "CA",
     zipCode: "",
     phone: "",
-    email: "",
     isActive: true,
   });
+
+  // Fetch locations from API
+  const fetchLocations = useCallback(async () => {
+    try {
+      const response = await fetch("/api/locations?activeOnly=false&includeTechnicianCount=true");
+      const data = await response.json();
+      if (data.locations) {
+        setLocations(data.locations);
+      }
+    } catch (error) {
+      console.error("Error fetching locations:", error);
+      toast.error("Failed to load locations");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchLocations();
+  }, [fetchLocations]);
 
   const resetForm = () => {
     setFormData({
@@ -167,14 +152,17 @@ export default function LocationsPage() {
       state: "CA",
       zipCode: "",
       phone: "",
-      email: "",
       isActive: true,
     });
     setEditingLocation(null);
   };
 
   const formatPhone = (phone: string) => {
-    return phone.replace(/(\d{3})(\d{3})(\d{4})/, "($1) $2-$3");
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length === 10) {
+      return digits.replace(/(\d{3})(\d{3})(\d{4})/, "($1) $2-$3");
+    }
+    return phone;
   };
 
   const generateSlug = (name: string) => {
@@ -191,7 +179,6 @@ export default function LocationsPage() {
       state: location.state,
       zipCode: location.zipCode,
       phone: location.phone,
-      email: location.email || "",
       isActive: location.isActive,
     });
     setIsDialogOpen(true);
@@ -199,93 +186,148 @@ export default function LocationsPage() {
 
   const handleHours = (location: Location) => {
     setSelectedLocation(location);
-    setOperatingHours([...location.operatingHours]);
+    setOperatingHours(dbToUIHours(location.operatingHours));
     setIsHoursDialogOpen(true);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.name || !formData.address || !formData.city || !formData.phone) {
       toast.error("Please fill in all required fields");
       return;
     }
 
-    if (editingLocation) {
-      setLocations((prev) =>
-        prev.map((l) =>
-          l.id === editingLocation.id
-            ? {
-                ...l,
-                name: formData.name,
-                slug: formData.slug || generateSlug(formData.name),
-                address: formData.address,
-                city: formData.city,
-                state: formData.state,
-                zipCode: formData.zipCode,
-                phone: formData.phone.replace(/\D/g, ""),
-                email: formData.email || undefined,
-                isActive: formData.isActive,
-              }
-            : l
-        )
-      );
-      toast.success("Location updated successfully");
-    } else {
-      const newLocation: Location = {
-        id: `loc-${Date.now()}`,
-        name: formData.name,
-        slug: formData.slug || generateSlug(formData.name),
-        address: formData.address,
-        city: formData.city,
-        state: formData.state,
-        zipCode: formData.zipCode,
-        phone: formData.phone.replace(/\D/g, ""),
-        email: formData.email || undefined,
-        isActive: formData.isActive,
-        operatingHours: defaultOperatingHours,
-        technicianCount: 0,
-      };
-      setLocations((prev) => [...prev, newLocation]);
-      toast.success("Location added successfully");
-    }
+    setIsSaving(true);
 
-    setIsDialogOpen(false);
-    resetForm();
+    try {
+      if (editingLocation) {
+        // Update existing location
+        const response = await fetch(`/api/locations/${editingLocation.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: formData.name,
+            slug: formData.slug || generateSlug(formData.name),
+            address: formData.address,
+            city: formData.city,
+            state: formData.state,
+            zipCode: formData.zipCode,
+            phone: formData.phone,
+            isActive: formData.isActive,
+          }),
+        });
+
+        if (!response.ok) throw new Error("Failed to update location");
+        toast.success("Location updated successfully");
+      } else {
+        // Create new location
+        const response = await fetch("/api/locations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: formData.name,
+            slug: formData.slug || generateSlug(formData.name),
+            address: formData.address,
+            city: formData.city,
+            state: formData.state,
+            zipCode: formData.zipCode,
+            phone: formData.phone,
+            isActive: formData.isActive,
+          }),
+        });
+
+        if (!response.ok) throw new Error("Failed to create location");
+        toast.success("Location added successfully");
+      }
+
+      await fetchLocations();
+      setIsDialogOpen(false);
+      resetForm();
+    } catch (error) {
+      console.error("Error saving location:", error);
+      toast.error(editingLocation ? "Failed to update location" : "Failed to add location");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleSaveHours = () => {
+  const handleSaveHours = async () => {
     if (!selectedLocation) return;
 
-    setLocations((prev) =>
-      prev.map((l) =>
-        l.id === selectedLocation.id
-          ? { ...l, operatingHours: operatingHours }
-          : l
-      )
-    );
-    toast.success("Operating hours saved");
-    setIsHoursDialogOpen(false);
+    setIsSaving(true);
+
+    try {
+      const response = await fetch(`/api/locations/${selectedLocation.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          operatingHours: uiToDBHours(operatingHours),
+        }),
+      });
+
+      if (!response.ok) throw new Error("Failed to update hours");
+
+      toast.success("Operating hours saved");
+      await fetchLocations();
+      setIsHoursDialogOpen(false);
+    } catch (error) {
+      console.error("Error saving hours:", error);
+      toast.error("Failed to save operating hours");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     const location = locations.find((l) => l.id === id);
-    if (location && location.technicianCount > 0) {
+    if (location && (location.technicianCount || 0) > 0) {
       toast.error("Cannot delete location with assigned technicians");
       return;
     }
-    if (confirm("Are you sure you want to delete this location?")) {
-      setLocations((prev) => prev.filter((l) => l.id !== id));
+
+    if (!confirm("Are you sure you want to delete this location?")) return;
+
+    try {
+      const response = await fetch(`/api/locations/${id}`, {
+        method: "DELETE",
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to delete location");
+      }
+
       toast.success("Location deleted");
+      await fetchLocations();
+    } catch (error) {
+      console.error("Error deleting location:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to delete location");
     }
   };
 
-  const toggleActive = (id: string) => {
-    setLocations((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, isActive: !l.isActive } : l))
-    );
+  const toggleActive = async (id: string) => {
+    const location = locations.find((l) => l.id === id);
+    if (!location) return;
+
+    try {
+      const response = await fetch(`/api/locations/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: !location.isActive }),
+      });
+
+      if (!response.ok) throw new Error("Failed to update location");
+
+      await fetchLocations();
+    } catch (error) {
+      console.error("Error toggling location:", error);
+      toast.error("Failed to update location status");
+    }
   };
 
-  const getHoursSummary = (hours: OperatingHours[]) => {
-    const openDays = hours.filter((h) => h.isOpen);
+  const getHoursSummary = (hours: DBOperatingHours) => {
+    const uiHours = dbToUIHours(hours);
+    const openDays = uiHours.filter((h) => h.isOpen);
     if (openDays.length === 0) return "Closed";
     if (openDays.length === 7) return "Open daily";
 
@@ -308,7 +350,15 @@ export default function LocationsPage() {
     return `${displayHour}:${minutes} ${ampm}`;
   };
 
-  const totalTechnicians = locations.reduce((sum, l) => sum + l.technicianCount, 0);
+  const totalTechnicians = locations.reduce((sum, l) => sum + (l.technicianCount || 0), 0);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -399,7 +449,7 @@ export default function LocationsPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-muted-foreground" />
-                  {location.technicianCount} technicians
+                  {location.technicianCount || 0} technicians
                 </div>
               </div>
 
@@ -435,6 +485,14 @@ export default function LocationsPage() {
           </Card>
         ))}
       </div>
+
+      {locations.length === 0 && (
+        <Card>
+          <CardContent className="py-8 text-center text-muted-foreground">
+            No locations found. Add your first location to get started.
+          </CardContent>
+        </Card>
+      )}
 
       {/* Add/Edit Location Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={(open) => {
@@ -531,30 +589,16 @@ export default function LocationsPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone *</Label>
-                <Input
-                  id="phone"
-                  value={formData.phone}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, phone: e.target.value }))
-                  }
-                  placeholder="(949) 555-5555"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, email: e.target.value }))
-                  }
-                  placeholder="location@elegantlashes.com"
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone *</Label>
+              <Input
+                id="phone"
+                value={formData.phone}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, phone: e.target.value }))
+                }
+                placeholder="(949) 555-5555"
+              />
             </div>
 
             <div className="flex items-center gap-2">
@@ -573,7 +617,8 @@ export default function LocationsPage() {
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit}>
+            <Button onClick={handleSubmit} disabled={isSaving}>
+              {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {editingLocation ? "Update" : "Add"} Location
             </Button>
           </DialogFooter>
@@ -651,7 +696,10 @@ export default function LocationsPage() {
             <Button variant="outline" onClick={() => setIsHoursDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveHours}>Save Hours</Button>
+            <Button onClick={handleSaveHours} disabled={isSaving}>
+              {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save Hours
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
