@@ -1,7 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase, tables } from "@/lib/supabase";
-import { send24HourReminder, send2HourReminder } from "@/lib/twilio";
+import {
+  send48HourConfirmationRequest,
+  send24HourReminder,
+  send12HourReminder,
+  send6HourFinalWarning,
+} from "@/lib/twilio";
 import { addHours, addMinutes } from "date-fns";
+
+/**
+ * Appointment Reminder Cron Job
+ *
+ * Runs every 15 minutes via Vercel Cron to send appointment reminders.
+ *
+ * Reminder Flow:
+ * - 48h before: First reminder + set status to PENDING (awaiting confirmation)
+ * - 24h before: Second reminder (if still PENDING)
+ * - 12h before: Third reminder (if still PENDING)
+ * - 6h before: Final warning with cancellation threat (if still PENDING)
+ *
+ * Only sends to appointments that are not CANCELLED or NO_SHOW.
+ * Uses atomic claim pattern to prevent duplicate sends in concurrent requests.
+ */
 
 // Vercel Cron security - verify the request is from Vercel
 function isAuthorized(request: NextRequest): boolean {
@@ -19,22 +39,18 @@ function isAuthorized(request: NextRequest): boolean {
 interface AppointmentWithRelations {
   id: string;
   startTime: string;
+  status: string;
   bloom_clients: {
     phone: string;
     firstName: string;
   };
-  bloom_services: {
-    name: string;
-  };
-  bloom_technicians: {
-    firstName: string;
-    lastName: string;
-  };
-  bloom_locations: {
-    name: string;
-    address: string;
-    city: string;
-  };
+}
+
+interface ReminderResult {
+  sent: number;
+  failed: number;
+  skipped: number;
+  statusChanged?: number;
 }
 
 export async function GET(request: NextRequest) {
@@ -44,33 +60,117 @@ export async function GET(request: NextRequest) {
 
   try {
     const now = new Date();
-    const results = {
+    const results: Record<string, ReminderResult> = {
+      reminder48h: { sent: 0, failed: 0, skipped: 0, statusChanged: 0 },
       reminder24h: { sent: 0, failed: 0, skipped: 0 },
-      reminder2h: { sent: 0, failed: 0, skipped: 0 },
+      reminder12h: { sent: 0, failed: 0, skipped: 0 },
+      reminder6h: { sent: 0, failed: 0, skipped: 0 },
     };
 
-    // 24-hour reminders: Find appointments between 23-25 hours from now
+    // ================================================================
+    // 48-HOUR REMINDERS
+    // First confirmation request - sets status to PENDING
+    // Window: 47-49 hours from now
+    // ================================================================
+    const reminder48hStart = addHours(now, 47);
+    const reminder48hEnd = addHours(now, 49);
+
+    // Find appointments that haven't had 48h reminder sent yet
+    // Exclude CANCELLED and NO_SHOW (they shouldn't get reminders)
+    // Also exclude appointments already confirmed (smsConfirmedAt is set - e.g., booked within 6h)
+    const { data: appointments48h } = await supabase
+      .from(tables.appointments)
+      .select(
+        `
+        id,
+        startTime,
+        status,
+        bloom_clients (phone, firstName)
+      `
+      )
+      .gte("startTime", reminder48hStart.toISOString())
+      .lte("startTime", reminder48hEnd.toISOString())
+      .not("status", "in", '("CANCELLED","NO_SHOW")')
+      .eq("reminder48hSent", false)
+      .is("smsConfirmedAt", null);
+
+    for (const apt of (appointments48h ||
+      []) as unknown as AppointmentWithRelations[]) {
+      // ATOMIC: Mark as sent AND set status to PENDING BEFORE sending
+      // This prevents double-send race conditions
+      const { data: claimed, error: claimError } = await supabase
+        .from(tables.appointments)
+        // @ts-expect-error - Supabase types don't resolve dynamic table names correctly
+        .update({
+          reminder48hSent: true,
+          status: "PENDING", // KEY: Set to PENDING at 48h mark
+          updatedAt: new Date().toISOString(),
+        })
+        .eq("id", apt.id)
+        .eq("reminder48hSent", false) // Only update if still false
+        .select("id")
+        .single();
+
+      if (claimError || !claimed) {
+        // Another process already claimed this reminder
+        results.reminder48h.skipped++;
+        continue;
+      }
+
+      // Now safe to send - we own this reminder
+      const result = await send48HourConfirmationRequest({
+        phone: apt.bloom_clients.phone,
+        clientName: apt.bloom_clients.firstName,
+        dateTime: new Date(apt.startTime),
+      });
+
+      if (result.success) {
+        results.reminder48h.sent++;
+        results.reminder48h.statusChanged!++;
+      } else {
+        // SMS failed - rollback the flag AND status so it can be retried
+        await supabase
+          .from(tables.appointments)
+          // @ts-expect-error - Supabase types don't resolve dynamic table names correctly
+          .update({
+            reminder48hSent: false,
+            status: apt.status, // Restore original status
+            updatedAt: new Date().toISOString(),
+          })
+          .eq("id", apt.id);
+        console.error(
+          `Failed 48h reminder for appointment ${apt.id}:`,
+          result.error
+        );
+        results.reminder48h.failed++;
+      }
+    }
+
+    // ================================================================
+    // 24-HOUR REMINDERS
+    // Second reminder - only for PENDING (unconfirmed) appointments
+    // Window: 23-25 hours from now
+    // ================================================================
     const reminder24hStart = addHours(now, 23);
     const reminder24hEnd = addHours(now, 25);
 
     const { data: appointments24h } = await supabase
       .from(tables.appointments)
-      .select(`
+      .select(
+        `
         id,
         startTime,
-        bloom_clients (phone, firstName),
-        bloom_services (name),
-        bloom_technicians (firstName, lastName),
-        bloom_locations (name, address, city)
-      `)
+        bloom_clients (phone, firstName)
+      `
+      )
       .gte("startTime", reminder24hStart.toISOString())
       .lte("startTime", reminder24hEnd.toISOString())
-      .eq("status", "CONFIRMED")
+      .eq("status", "PENDING") // Only unconfirmed
       .eq("reminder24hSent", false);
 
-    for (const apt of (appointments24h || []) as unknown as AppointmentWithRelations[]) {
-      // ATOMIC: Mark as sent BEFORE sending to prevent double-send race condition
-      // Only proceed if we successfully claim this reminder
+    for (const apt of (appointments24h ||
+      []) as unknown as AppointmentWithRelations[]) {
+      // ATOMIC: Mark as sent BEFORE sending
       const { data: claimed, error: claimError } = await supabase
         .from(tables.appointments)
         // @ts-expect-error - Supabase types don't resolve dynamic table names correctly
@@ -79,30 +179,26 @@ export async function GET(request: NextRequest) {
           updatedAt: new Date().toISOString(),
         })
         .eq("id", apt.id)
-        .eq("reminder24hSent", false) // Only update if still false
+        .eq("reminder24hSent", false)
+        .eq("status", "PENDING") // Double-check still pending
         .select("id")
         .single();
 
       if (claimError || !claimed) {
-        // Another process already claimed this reminder
         results.reminder24h.skipped++;
         continue;
       }
 
-      // Now safe to send - we own this reminder
       const result = await send24HourReminder({
         phone: apt.bloom_clients.phone,
         clientName: apt.bloom_clients.firstName,
-        serviceName: apt.bloom_services.name,
-        technicianName: `${apt.bloom_technicians.firstName} ${apt.bloom_technicians.lastName.charAt(0)}.`,
-        locationName: apt.bloom_locations.name,
         dateTime: new Date(apt.startTime),
       });
 
       if (result.success) {
         results.reminder24h.sent++;
       } else {
-        // SMS failed - rollback the flag so it can be retried
+        // Rollback
         await supabase
           .from(tables.appointments)
           // @ts-expect-error - Supabase types don't resolve dynamic table names correctly
@@ -111,73 +207,145 @@ export async function GET(request: NextRequest) {
             updatedAt: new Date().toISOString(),
           })
           .eq("id", apt.id);
-        console.error(`Failed 24h reminder for appointment ${apt.id}:`, result.error);
+        console.error(
+          `Failed 24h reminder for appointment ${apt.id}:`,
+          result.error
+        );
         results.reminder24h.failed++;
       }
     }
 
-    // 2-hour reminders: Find appointments between 1.75-2.25 hours from now
-    const reminder2hStart = addMinutes(now, 105); // 1h 45m
-    const reminder2hEnd = addMinutes(now, 135); // 2h 15m
+    // ================================================================
+    // 12-HOUR REMINDERS
+    // Third reminder - only for PENDING (unconfirmed) appointments
+    // Window: 11.5-12.5 hours from now
+    // ================================================================
+    const reminder12hStart = addMinutes(now, 690); // 11.5 hours
+    const reminder12hEnd = addMinutes(now, 750); // 12.5 hours
 
-    const { data: appointments2h } = await supabase
+    const { data: appointments12h } = await supabase
       .from(tables.appointments)
-      .select(`
+      .select(
+        `
         id,
         startTime,
-        bloom_clients (phone, firstName),
-        bloom_services (name),
-        bloom_locations (name, address, city)
-      `)
-      .gte("startTime", reminder2hStart.toISOString())
-      .lte("startTime", reminder2hEnd.toISOString())
-      .eq("status", "CONFIRMED")
-      .eq("reminder2hSent", false);
+        bloom_clients (phone, firstName)
+      `
+      )
+      .gte("startTime", reminder12hStart.toISOString())
+      .lte("startTime", reminder12hEnd.toISOString())
+      .eq("status", "PENDING")
+      .eq("reminder12hSent", false);
 
-    for (const apt of (appointments2h || []) as unknown as AppointmentWithRelations[]) {
-      // ATOMIC: Mark as sent BEFORE sending to prevent double-send race condition
+    for (const apt of (appointments12h ||
+      []) as unknown as AppointmentWithRelations[]) {
       const { data: claimed, error: claimError } = await supabase
         .from(tables.appointments)
         // @ts-expect-error - Supabase types don't resolve dynamic table names correctly
         .update({
-          reminder2hSent: true,
+          reminder12hSent: true,
           updatedAt: new Date().toISOString(),
         })
         .eq("id", apt.id)
-        .eq("reminder2hSent", false) // Only update if still false
+        .eq("reminder12hSent", false)
+        .eq("status", "PENDING")
         .select("id")
         .single();
 
       if (claimError || !claimed) {
-        // Another process already claimed this reminder
-        results.reminder2h.skipped++;
+        results.reminder12h.skipped++;
         continue;
       }
 
-      // Now safe to send - we own this reminder
-      const result = await send2HourReminder({
+      const result = await send12HourReminder({
         phone: apt.bloom_clients.phone,
         clientName: apt.bloom_clients.firstName,
-        serviceName: apt.bloom_services.name,
-        locationName: apt.bloom_locations.name,
-        locationAddress: `${apt.bloom_locations.address}, ${apt.bloom_locations.city}`,
         dateTime: new Date(apt.startTime),
       });
 
       if (result.success) {
-        results.reminder2h.sent++;
+        results.reminder12h.sent++;
       } else {
-        // SMS failed - rollback the flag so it can be retried
         await supabase
           .from(tables.appointments)
           // @ts-expect-error - Supabase types don't resolve dynamic table names correctly
           .update({
-            reminder2hSent: false,
+            reminder12hSent: false,
             updatedAt: new Date().toISOString(),
           })
           .eq("id", apt.id);
-        console.error(`Failed 2h reminder for appointment ${apt.id}:`, result.error);
-        results.reminder2h.failed++;
+        console.error(
+          `Failed 12h reminder for appointment ${apt.id}:`,
+          result.error
+        );
+        results.reminder12h.failed++;
+      }
+    }
+
+    // ================================================================
+    // 6-HOUR FINAL WARNING
+    // Last chance reminder with cancellation threat
+    // Window: 5.5-6.5 hours from now
+    // ================================================================
+    const reminder6hStart = addMinutes(now, 330); // 5.5 hours
+    const reminder6hEnd = addMinutes(now, 390); // 6.5 hours
+
+    const { data: appointments6h } = await supabase
+      .from(tables.appointments)
+      .select(
+        `
+        id,
+        startTime,
+        bloom_clients (phone, firstName)
+      `
+      )
+      .gte("startTime", reminder6hStart.toISOString())
+      .lte("startTime", reminder6hEnd.toISOString())
+      .eq("status", "PENDING")
+      .eq("reminder6hSent", false);
+
+    for (const apt of (appointments6h ||
+      []) as unknown as AppointmentWithRelations[]) {
+      const { data: claimed, error: claimError } = await supabase
+        .from(tables.appointments)
+        // @ts-expect-error - Supabase types don't resolve dynamic table names correctly
+        .update({
+          reminder6hSent: true,
+          updatedAt: new Date().toISOString(),
+        })
+        .eq("id", apt.id)
+        .eq("reminder6hSent", false)
+        .eq("status", "PENDING")
+        .select("id")
+        .single();
+
+      if (claimError || !claimed) {
+        results.reminder6h.skipped++;
+        continue;
+      }
+
+      const result = await send6HourFinalWarning({
+        phone: apt.bloom_clients.phone,
+        clientName: apt.bloom_clients.firstName,
+        dateTime: new Date(apt.startTime),
+      });
+
+      if (result.success) {
+        results.reminder6h.sent++;
+      } else {
+        await supabase
+          .from(tables.appointments)
+          // @ts-expect-error - Supabase types don't resolve dynamic table names correctly
+          .update({
+            reminder6hSent: false,
+            updatedAt: new Date().toISOString(),
+          })
+          .eq("id", apt.id);
+        console.error(
+          `Failed 6h warning for appointment ${apt.id}:`,
+          result.error
+        );
+        results.reminder6h.failed++;
       }
     }
 

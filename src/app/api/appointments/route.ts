@@ -4,6 +4,8 @@ import {
   createAppointmentWithCheck,
   AppointmentConflictError,
 } from "@/lib/appointments";
+import { sendBookingConfirmation } from "@/lib/twilio";
+import { differenceInHours } from "date-fns";
 
 interface PaymentMethod {
   id: string;
@@ -221,13 +223,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check if appointment is within 6 hours - auto-confirm if so (no time for reminder flow)
+    const appointmentStartTime = new Date(startTime);
+    const hoursUntilAppointment = differenceInHours(appointmentStartTime, new Date());
+    const isWithin6Hours = hoursUntilAppointment < 6;
+
     // Create appointment with conflict checking
     const appointment = await createAppointmentWithCheck({
       clientId,
       technicianId,
       locationId,
       serviceId,
-      startTime: new Date(startTime),
+      startTime: appointmentStartTime,
       endTime: new Date(endTime),
       status: status as "PENDING" | "CONFIRMED",
       notes: notes || null,
@@ -235,6 +242,33 @@ export async function POST(request: NextRequest) {
       bookedBy: bookedBy || "Admin",
       depositAmount: service.depositAmount,
     });
+
+    // If within 6 hours, update to auto-confirm (skip SMS confirmation flow)
+    if (isWithin6Hours && appointment.id) {
+      await supabase
+        .from(tables.appointments)
+        // @ts-expect-error - Supabase types don't resolve dynamic table names correctly
+        .update({
+          smsConfirmedAt: new Date().toISOString(),
+          smsConfirmedBy: "auto",
+          updatedAt: new Date().toISOString(),
+        })
+        .eq("id", appointment.id);
+    }
+
+    // Send booking confirmation SMS
+    if (appointment.client?.phone) {
+      try {
+        await sendBookingConfirmation({
+          phone: appointment.client.phone,
+          clientName: appointment.client.firstName || "there",
+          dateTime: appointmentStartTime,
+        });
+      } catch (smsError) {
+        console.error("Failed to send booking confirmation SMS:", smsError);
+        // Don't fail the booking if SMS fails
+      }
+    }
 
     return NextResponse.json({
       success: true,

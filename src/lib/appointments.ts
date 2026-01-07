@@ -351,8 +351,13 @@ export async function createAppointmentWithCheck({
       noShowFeeCharged: false,
       noShowFeeAmount: null,
       noShowChargedAt: null,
+      reminder48hSent: false,
       reminder24hSent: false,
+      reminder12hSent: false,
+      reminder6hSent: false,
       reminder2hSent: false,
+      smsConfirmedAt: null,
+      smsConfirmedBy: null,
       confirmedAt: status === "CONFIRMED" ? now : null,
       cancelledAt: null,
       cancellationReason: null,
@@ -513,7 +518,14 @@ export async function updateAppointmentWithCheck({
   if (data.technicianId !== undefined) updateData.technicianId = data.technicianId;
   if (data.startTime !== undefined) updateData.startTime = formatLocalDateTime(data.startTime);
   if (data.endTime !== undefined) updateData.endTime = formatLocalDateTime(data.endTime);
-  if (data.status !== undefined) updateData.status = data.status;
+  if (data.status !== undefined) {
+    updateData.status = data.status;
+    // Set confirmation tracking when status changes to CONFIRMED (manual confirmation)
+    if (data.status === "CONFIRMED" && current.status === "PENDING") {
+      updateData.smsConfirmedAt = new Date().toISOString();
+      updateData.smsConfirmedBy = "admin";
+    }
+  }
   if (data.notes !== undefined) updateData.notes = data.notes;
 
   // Update with a WHERE on the expected updatedAt

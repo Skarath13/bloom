@@ -95,7 +95,21 @@ STRIPE_SECRET_KEY=sk_...
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_...
 TWILIO_ACCOUNT_SID=...
 TWILIO_AUTH_TOKEN=...
+TWILIO_WEBHOOK_URL=https://[your-domain]/api/webhooks/twilio
 ```
+
+## TODO: Twilio Webhook Setup
+
+Configure incoming SMS webhook in Twilio Console:
+1. Go to https://console.twilio.com
+2. Navigate to Phone Numbers → Manage → Active Numbers
+3. Click on your phone number
+4. Under "Messaging Configuration":
+   - Set "A message comes in" webhook URL to: `https://[your-domain]/api/webhooks/twilio`
+   - Method: POST
+5. Save changes
+
+This enables clients to confirm appointments by replying "C", "confirm", "yes", etc.
 
 ## API Routes
 

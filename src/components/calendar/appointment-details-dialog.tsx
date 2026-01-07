@@ -46,6 +46,8 @@ interface Appointment {
   noShowChargedAt?: Date;
   createdAt?: Date;
   bookedBy?: string;
+  smsConfirmedAt?: Date;
+  smsConfirmedBy?: string;
   client?: {
     id: string;
     firstName: string;
@@ -135,11 +137,11 @@ interface AppointmentDetailsDialogProps {
 }
 
 const statusLabels: Record<string, string> = {
-  PENDING: "Pending",
-  CONFIRMED: "Appointment Confirmed",
+  PENDING: "Awaiting Confirmation",
+  CONFIRMED: "Confirmed",
   CHECKED_IN: "Checked In",
   IN_PROGRESS: "In Progress",
-  COMPLETED: "Completed",
+  COMPLETED: "Completed", // Legacy - computed for past appointments
   CANCELLED: "Cancelled",
   NO_SHOW: "No Show",
 };
@@ -546,9 +548,27 @@ export function AppointmentDetailsDialog({
             <div className="mb-10">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-normal text-gray-900">Client Information</h3>
-                <span className={cn("text-sm font-medium", statusColors[appointment.status])}>
-                  {statusLabels[appointment.status]}
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className={cn("text-sm font-medium", statusColors[appointment.status])}>
+                    {statusLabels[appointment.status]}
+                  </span>
+                  {appointment.status === "PENDING" && (
+                    <button
+                      onClick={async () => {
+                        await onSave({ status: "CONFIRMED", notes: editingNotes });
+                      }}
+                      disabled={saving}
+                      className="text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 px-2 py-1 rounded transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      Manually Confirm
+                    </button>
+                  )}
+                  {appointment.status === "CONFIRMED" && appointment.smsConfirmedAt && (
+                    <span className="text-xs text-gray-500">
+                      via {appointment.smsConfirmedBy === "client" ? "SMS" : "admin"}
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="border border-gray-300 rounded-lg overflow-hidden">

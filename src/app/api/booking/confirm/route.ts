@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase, tables, generateId } from "@/lib/supabase";
 import { getPaymentMethodDetails, setDefaultPaymentMethod } from "@/lib/stripe";
+import { sendBookingConfirmation } from "@/lib/twilio";
+import { differenceInHours } from "date-fns";
 
 export async function POST(request: NextRequest) {
   try {
@@ -85,17 +87,45 @@ export async function POST(request: NextRequest) {
         });
     }
 
+    // Check if appointment is within 6 hours - auto-confirm if so (no time for reminder flow)
+    const hoursUntilAppointment = differenceInHours(
+      new Date(appointment.startTime),
+      new Date()
+    );
+    const isWithin6Hours = hoursUntilAppointment < 6;
+
     // Update appointment status to CONFIRMED
+    // If within 6 hours, also set smsConfirmedAt/By to skip reminder flow
     const { error: updateError } = await supabase
       .from(tables.appointments)
+      // @ts-expect-error - Supabase types don't resolve dynamic table names correctly
       .update({
         status: "CONFIRMED",
         confirmedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
+        // Auto-confirm if within 6 hours (skip SMS confirmation flow)
+        ...(isWithin6Hours && {
+          smsConfirmedAt: new Date().toISOString(),
+          smsConfirmedBy: "auto",
+        }),
       })
       .eq("id", appointmentId);
 
     if (updateError) throw updateError;
+
+    // Send booking confirmation SMS
+    if (client?.phone) {
+      try {
+        await sendBookingConfirmation({
+          phone: client.phone,
+          clientName: client.firstName || "there",
+          dateTime: new Date(appointment.startTime),
+        });
+      } catch (smsError) {
+        console.error("Failed to send booking confirmation SMS:", smsError);
+        // Don't fail the booking if SMS fails
+      }
+    }
 
     // Get the updated appointment with relations
     const { data: updatedAppointment } = await supabase

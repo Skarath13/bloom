@@ -49,38 +49,23 @@ export async function sendVerificationCode(
   }
 }
 
-// Send appointment confirmation SMS
-export async function sendAppointmentConfirmation({
+// Send appointment booking confirmation SMS (sent immediately when booked)
+export async function sendBookingConfirmation({
   phone,
   clientName,
-  serviceName,
-  technicianName,
-  locationName,
   dateTime,
-  depositAmount,
 }: {
   phone: string;
   clientName: string;
-  serviceName: string;
-  technicianName: string;
-  locationName: string;
   dateTime: Date;
-  depositAmount: number;
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const formattedPhone = formatPhoneE164(phone);
     const formattedDate = formatDateTime(dateTime);
 
-    const message = `Hi ${clientName}! Your appointment at Elegant Lashes is confirmed.
+    const message = `Hi ${clientName}! Your appointment at Elegant Lashes is booked for ${formattedDate}.
 
-${serviceName}
-with ${technicianName}
-${locationName}
-${formattedDate}
-
-Deposit paid: $${depositAmount}
-
-Need to reschedule? Reply HELP or call us.`;
+Need to reschedule? Call us anytime.`;
 
     await client.messages.create({
       body: message,
@@ -90,7 +75,7 @@ Need to reschedule? Reply HELP or call us.`;
 
     return { success: true };
   } catch (error) {
-    console.error("Failed to send confirmation SMS:", error);
+    console.error("Failed to send booking confirmation SMS:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to send SMS",
@@ -102,30 +87,19 @@ Need to reschedule? Reply HELP or call us.`;
 export async function send24HourReminder({
   phone,
   clientName,
-  serviceName,
-  technicianName,
-  locationName,
   dateTime,
 }: {
   phone: string;
   clientName: string;
-  serviceName: string;
-  technicianName: string;
-  locationName: string;
   dateTime: Date;
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const formattedPhone = formatPhoneE164(phone);
     const formattedDate = formatDateTime(dateTime);
 
-    const message = `Reminder: Hi ${clientName}! You have an appointment tomorrow.
+    const message = `Hi ${clientName}! Reminder: You have an appointment tomorrow on ${formattedDate}.
 
-${serviceName}
-with ${technicianName}
-${locationName}
-${formattedDate}
-
-Reply CONFIRM to confirm or call us to reschedule.`;
+Please reply C to confirm, or call us to reschedule.`;
 
     await client.messages.create({
       body: message,
@@ -277,8 +251,8 @@ export async function sendCancellationNotification({
   }
 }
 
-// Helper: Format phone to E.164
-function formatPhoneE164(phone: string): string {
+// Helper: Format phone to E.164 (exported for webhook use)
+export function formatPhoneE164(phone: string): string {
   // Remove all non-digit characters
   const digits = phone.replace(/\D/g, "");
 
@@ -315,4 +289,186 @@ function formatTime(date: Date): string {
     minute: "2-digit",
     hour12: true,
   });
+}
+
+// ============================================
+// SMS Confirmation System Functions
+// ============================================
+
+// Send 48-hour confirmation request (first reminder, sets PENDING)
+export async function send48HourConfirmationRequest({
+  phone,
+  clientName,
+  dateTime,
+}: {
+  phone: string;
+  clientName: string;
+  dateTime: Date;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const formattedPhone = formatPhoneE164(phone);
+    const formattedDate = formatDateTime(dateTime);
+
+    const message = `Hi ${clientName}! Reminder: You have an upcoming appointment at Elegant Lashes on ${formattedDate}.
+
+Please reply C to confirm your appointment, or call us to reschedule.`;
+
+    await client.messages.create({
+      body: message,
+      from: fromNumber,
+      to: formattedPhone,
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to send 48h confirmation request SMS:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to send SMS",
+    };
+  }
+}
+
+// Send 12-hour reminder (third reminder, if not confirmed)
+export async function send12HourReminder({
+  phone,
+  clientName,
+  dateTime,
+}: {
+  phone: string;
+  clientName: string;
+  dateTime: Date;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const formattedPhone = formatPhoneE164(phone);
+    const time = formatTime(dateTime);
+
+    const message = `Hi ${clientName}! Your appointment is in 12 hours at ${time}.
+
+Haven't confirmed yet? Reply C to confirm now, or call us to reschedule.`;
+
+    await client.messages.create({
+      body: message,
+      from: fromNumber,
+      to: formattedPhone,
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to send 12h reminder SMS:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to send SMS",
+    };
+  }
+}
+
+// Send 6-hour final warning (if not confirmed)
+export async function send6HourFinalWarning({
+  phone,
+  clientName,
+  dateTime,
+}: {
+  phone: string;
+  clientName: string;
+  dateTime: Date;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const formattedPhone = formatPhoneE164(phone);
+    const time = formatTime(dateTime);
+
+    const message = `FINAL REMINDER: Hi ${clientName}, your appointment is in 6 hours at ${time}.
+
+We haven't received your confirmation. Please reply C to confirm NOW or your spot may be given to the waitlist.
+
+Questions? Call us directly.`;
+
+    await client.messages.create({
+      body: message,
+      from: fromNumber,
+      to: formattedPhone,
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to send 6h final warning SMS:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to send SMS",
+    };
+  }
+}
+
+// Send confirmation acknowledgment (when client replies to confirm)
+export async function sendConfirmationAcknowledgment({
+  phone,
+  clientName,
+  dateTime,
+}: {
+  phone: string;
+  clientName: string;
+  dateTime: Date;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const formattedPhone = formatPhoneE164(phone);
+    const formattedDate = formatDateTime(dateTime);
+
+    const message = `Thanks ${clientName}! Your appointment on ${formattedDate} is confirmed. See you then!`;
+
+    await client.messages.create({
+      body: message,
+      from: fromNumber,
+      to: formattedPhone,
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to send confirmation acknowledgment SMS:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to send SMS",
+    };
+  }
+}
+
+// Parse confirmation intent from incoming SMS body
+export function parseConfirmationIntent(
+  body: string
+): "confirm" | "unknown" {
+  const normalized = body.trim().toLowerCase();
+  const confirmPatterns = [
+    "c",
+    "y",
+    "yes",
+    "confirm",
+    "confirmed",
+    "ok",
+    "okay",
+    "yep",
+    "yup",
+    "sure",
+    "yes!",
+    "yea",
+    "yeah",
+  ];
+  return confirmPatterns.includes(normalized) ? "confirm" : "unknown";
+}
+
+// Validate Twilio webhook signature
+export function validateTwilioSignature(
+  signature: string,
+  url: string,
+  params: Record<string, string>
+): boolean {
+  try {
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    if (!authToken) {
+      console.warn("TWILIO_AUTH_TOKEN not set for signature validation");
+      return false;
+    }
+    return twilio.validateRequest(authToken, signature, url, params);
+  } catch (error) {
+    console.error("Error validating Twilio signature:", error);
+    return false;
+  }
 }
