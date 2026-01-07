@@ -18,6 +18,7 @@ interface CalendarHeaderProps {
   onNextDay: () => void;
   locations: Location[];
   selectedLocationIds: string[];
+  multiLocationMode?: boolean;
   onLocationToggle: (locationId: string) => void;
   onScheduleClick?: () => void;
   onSettingsClick?: () => void;
@@ -30,6 +31,7 @@ export function CalendarHeader({
   onNextDay,
   locations,
   selectedLocationIds,
+  multiLocationMode = false,
   onLocationToggle,
   onScheduleClick,
   onSettingsClick,
@@ -72,7 +74,7 @@ export function CalendarHeader({
           </Button>
         </div>
 
-        {/* Location toggle pills - iOS style */}
+        {/* Location pills */}
         <div className="flex items-center gap-2">
           {locations.map((location) => {
             const isSelected = selectedLocationIds.includes(location.id);
@@ -87,19 +89,21 @@ export function CalendarHeader({
                 )}
                 onClick={() => onLocationToggle(location.id)}
               >
-                {/* Toggle indicator */}
-                <span
-                  className={cn(
-                    "w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all duration-200",
-                    isSelected
-                      ? "border-white bg-white"
-                      : "border-gray-400"
-                  )}
-                >
-                  {isSelected && (
-                    <Check className="w-3 h-3 text-[#1E1B4B]" />
-                  )}
-                </span>
+                {/* Toggle indicator - only shown in multi-location mode */}
+                {multiLocationMode && (
+                  <span
+                    className={cn(
+                      "w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all duration-200",
+                      isSelected
+                        ? "border-white bg-white"
+                        : "border-gray-400"
+                    )}
+                  >
+                    {isSelected && (
+                      <Check className="w-3 h-3 text-[#1E1B4B]" />
+                    )}
+                  </span>
+                )}
                 {location.name}
               </button>
             );

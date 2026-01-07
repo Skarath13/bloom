@@ -105,6 +105,7 @@ interface TechnicianBlock {
 const STORAGE_KEYS = {
   locationIds: "bloom_calendar_locationIds",
   date: "bloom_calendar_date",
+  multiLocationMode: "bloom_calendar_multiLocationMode",
 };
 
 function CalendarContent() {
@@ -141,6 +142,10 @@ function CalendarContent() {
       if (!isNaN(parsed.getTime())) return parsed;
     }
     return new Date();
+  });
+  const [multiLocationMode, setMultiLocationMode] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem(STORAGE_KEYS.multiLocationMode) === "true";
   });
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [saving, setSaving] = useState(false);
@@ -415,18 +420,29 @@ function CalendarContent() {
 
   const handleLocationToggle = (locationId: string) => {
     let newIds: string[];
-    if (selectedLocationIds.includes(locationId)) {
-      // Don't allow deselecting if it's the last one
-      if (selectedLocationIds.length > 1) {
-        newIds = selectedLocationIds.filter((id) => id !== locationId);
+    if (multiLocationMode) {
+      // Multi-select mode: toggle locations on/off
+      if (selectedLocationIds.includes(locationId)) {
+        // Don't allow deselecting if it's the last one
+        if (selectedLocationIds.length > 1) {
+          newIds = selectedLocationIds.filter((id) => id !== locationId);
+        } else {
+          return; // Don't deselect the last one
+        }
       } else {
-        return; // Don't deselect the last one
+        newIds = [...selectedLocationIds, locationId];
       }
     } else {
-      newIds = [...selectedLocationIds, locationId];
+      // Single-select mode (default): just select the clicked location
+      newIds = [locationId];
     }
     setSelectedLocationIds(newIds);
     localStorage.setItem(STORAGE_KEYS.locationIds, JSON.stringify(newIds));
+  };
+
+  const handleMultiLocationModeChange = (enabled: boolean) => {
+    setMultiLocationMode(enabled);
+    localStorage.setItem(STORAGE_KEYS.multiLocationMode, String(enabled));
   };
 
   const handleDateChange = (date: Date) => {
@@ -573,6 +589,7 @@ function CalendarContent() {
         blocks={blocks}
         selectedLocationIds={selectedLocationIds}
         selectedDate={selectedDate}
+        multiLocationMode={multiLocationMode}
         onLocationToggle={handleLocationToggle}
         onDateChange={handleDateChange}
         onAppointmentClick={handleAppointmentClick}
@@ -581,6 +598,7 @@ function CalendarContent() {
         onScheduleClick={() => setScheduleDialogOpen(true)}
         onMoveAppointment={handleMoveAppointment}
         onMoveBlock={handleMoveBlock}
+        onMultiLocationModeChange={handleMultiLocationModeChange}
       />
 
       {/* Appointment details dialog - Square style */}

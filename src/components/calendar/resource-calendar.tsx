@@ -78,6 +78,7 @@ interface ResourceCalendarProps {
   blocks?: TechnicianBlock[];
   selectedLocationIds: string[];
   selectedDate?: Date; // Initial date from parent (e.g., from localStorage)
+  multiLocationMode?: boolean;
   onLocationToggle: (locationId: string) => void;
   onDateChange: (date: Date) => void;
   onAppointmentClick?: (appointment: Appointment) => void;
@@ -86,6 +87,7 @@ interface ResourceCalendarProps {
   onScheduleClick?: () => void;
   onSettingsClick?: () => void;
   onMoreClick?: () => void;
+  onMultiLocationModeChange?: (enabled: boolean) => void;
   onMoveAppointment?: (
     appointmentId: string,
     newTechnicianId: string,
@@ -218,6 +220,7 @@ export function ResourceCalendar({
   blocks = [],
   selectedLocationIds,
   selectedDate: initialDate,
+  multiLocationMode = false,
   onLocationToggle,
   onDateChange,
   onAppointmentClick,
@@ -226,6 +229,7 @@ export function ResourceCalendar({
   onScheduleClick,
   onSettingsClick,
   onMoreClick,
+  onMultiLocationModeChange,
   onMoveAppointment,
   onMoveBlock,
 }: ResourceCalendarProps) {
@@ -680,6 +684,7 @@ export function ResourceCalendar({
           onNextDay={handleNextDay}
           locations={locations}
           selectedLocationIds={selectedLocationIds}
+          multiLocationMode={multiLocationMode}
           onLocationToggle={onLocationToggle}
           onScheduleClick={onScheduleClick}
           onSettingsClick={() => setSettingsOpen(true)}
@@ -1051,6 +1056,8 @@ export function ResourceCalendar({
         viewRange={viewRange}
         onViewRangeChange={handleViewRangeChange}
         selectedStaffCount={selectedTechIds.length}
+        multiLocationMode={multiLocationMode}
+        onMultiLocationModeChange={onMultiLocationModeChange}
       />
 
     </div>
