@@ -155,6 +155,8 @@ export interface Database {
           operatingHours: Record<string, unknown>;
           isActive: boolean;
           sortOrder: number;
+          latitude: number | null;
+          longitude: number | null;
           createdAt: string;
           updatedAt: string;
         };

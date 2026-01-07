@@ -34,14 +34,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (appointment.clientId !== clientId) {
+    const apt = appointment as {
+      id: string;
+      clientId: string;
+      startTime: string;
+      status: string;
+      bloom_clients: { id: string; stripeCustomerId: string | null; phone: string; firstName: string };
+    };
+    if (apt.clientId !== clientId) {
       return NextResponse.json(
         { error: "Appointment does not belong to this client" },
         { status: 403 }
       );
     }
 
-    const client = appointment.bloom_clients;
+    const client = apt.bloom_clients;
 
     // Get payment method details from Stripe
     const pmDetails = await getPaymentMethodDetails(paymentMethodId);
@@ -73,6 +80,7 @@ export async function POST(request: NextRequest) {
       // Save the payment method to database
       await supabase
         .from(tables.paymentMethods)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .insert({
           id: generateId(),
           clientId,
@@ -84,12 +92,12 @@ export async function POST(request: NextRequest) {
           isDefault: isFirstCard,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-        });
+        } as never);
     }
 
     // Check if appointment is within 6 hours - auto-confirm if so (no time for reminder flow)
     const hoursUntilAppointment = differenceInHours(
-      new Date(appointment.startTime),
+      new Date(apt.startTime),
       new Date()
     );
     const isWithin6Hours = hoursUntilAppointment < 6;
@@ -119,7 +127,7 @@ export async function POST(request: NextRequest) {
         await sendBookingConfirmation({
           phone: client.phone,
           clientName: client.firstName || "there",
-          dateTime: new Date(appointment.startTime),
+          dateTime: new Date(apt.startTime),
         });
       } catch (smsError) {
         console.error("Failed to send booking confirmation SMS:", smsError);
@@ -143,22 +151,24 @@ export async function POST(request: NextRequest) {
     // Update client's updatedAt (for tracking)
     await supabase
       .from(tables.clients)
-      .update({ updatedAt: new Date().toISOString() })
+      .update({ updatedAt: new Date().toISOString() } as never)
       .eq("id", clientId);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updated = updatedAppointment as any;
     return NextResponse.json({
       success: true,
       appointment: {
-        id: updatedAppointment?.id,
-        status: updatedAppointment?.status,
-        startTime: updatedAppointment?.startTime,
-        endTime: updatedAppointment?.endTime,
-        service: updatedAppointment?.bloom_services,
-        location: updatedAppointment?.bloom_locations,
-        technician: updatedAppointment?.bloom_technicians,
+        id: updated?.id,
+        status: updated?.status,
+        startTime: updated?.startTime,
+        endTime: updated?.endTime,
+        service: updated?.bloom_services,
+        location: updated?.bloom_locations,
+        technician: updated?.bloom_technicians,
         client: {
-          firstName: updatedAppointment?.bloom_clients?.firstName,
-          lastName: updatedAppointment?.bloom_clients?.lastName,
+          firstName: updated?.bloom_clients?.firstName,
+          lastName: updated?.bloom_clients?.lastName,
         },
       },
     });

@@ -120,7 +120,7 @@ export default function AdminDashboard() {
 
         // Calculate today's deposits total
         const depositsTotal = todayDepositsRes.data?.reduce(
-          (sum, apt) => sum + (apt.depositAmount || 0),
+          (sum: number, apt: { depositAmount: number }) => sum + (apt.depositAmount || 0),
           0
         ) || 0;
 

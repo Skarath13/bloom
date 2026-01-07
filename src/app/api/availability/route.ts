@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Service not found" }, { status: 404 });
     }
 
-    const serviceDuration = service.durationMinutes;
+    const serviceDuration = (service as { durationMinutes: number }).durationMinutes;
 
     // Get technicians for the location (or specific technician)
     let techQuery = supabase
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
     if (techError) throw techError;
 
     // Get schedules for these technicians
-    const techIds = technicians?.map((t) => t.id) || [];
+    const techIds = technicians?.map((t: { id: string }) => t.id) || [];
     const { data: schedules } = await supabase
       .from(tables.technicianSchedules)
       .select("*")
@@ -86,10 +86,13 @@ export async function GET(request: NextRequest) {
     const { data: existingAppointments } = await apptQuery;
 
     // Map schedules and blocks to technicians
-    const techsWithData = technicians?.map((tech) => ({
+    interface TechnicianRow { id: string; [key: string]: unknown }
+    interface ScheduleRow { technicianId: string; isWorking: boolean; startTime: string; endTime: string; [key: string]: unknown }
+    interface BlockRow { id: string; technicianId: string; recurrenceRule: string | null; startTime: string | null; endTime: string | null; recurrenceExceptions?: Array<{ date: string; type: string }>; [key: string]: unknown }
+    const techsWithData = (technicians as TechnicianRow[] | null)?.map((tech) => ({
       ...tech,
-      schedules: schedules?.filter((s) => s.technicianId === tech.id) || [],
-      blocks: blocks?.filter((b) => b.technicianId === tech.id) || [],
+      schedules: (schedules as ScheduleRow[] | null)?.filter((s) => s.technicianId === tech.id) || [],
+      blocks: (blocks as BlockRow[] | null)?.filter((b) => b.technicianId === tech.id) || [],
     })) || [];
 
     // Generate time slots (9 AM to 6 PM, every 15 minutes)
@@ -169,7 +172,8 @@ export async function GET(request: NextRequest) {
           if (blocked) continue;
 
           // Check for conflicting appointments
-          const hasConflict = existingAppointments?.some((apt) => {
+          interface AppointmentRow { technicianId: string; startTime: string; endTime: string }
+          const hasConflict = (existingAppointments as AppointmentRow[] | null)?.some((apt) => {
             if (apt.technicianId !== tech.id) return false;
 
             const aptStart = new Date(apt.startTime);

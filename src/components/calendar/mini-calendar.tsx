@@ -80,7 +80,7 @@ export function MiniCalendar({ selectedDate, onDateSelect }: MiniCalendarProps) 
     <div className="p-4">
       {/* Month header */}
       <div className="flex items-center justify-between mb-4">
-        <button className="flex items-center gap-1 text-lg font-semibold hover:bg-gray-100 rounded px-2 py-1">
+        <button className="flex items-center gap-1 text-lg font-semibold hover:bg-gray-100 rounded px-2 py-1 cursor-pointer">
           {format(currentMonth, "MMM yyyy")}
           <ChevronDown className="h-4 w-4" />
         </button>
