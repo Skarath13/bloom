@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { format, parse } from "date-fns";
-import { ArrowLeft, Calendar, Clock, MapPin, EyeClosed, User, Shield } from "lucide-react";
+import { ArrowLeft, Calendar, Clock, MapPin, User, Shield, Lock, ChevronDown, CheckCircle } from "lucide-react";
 import { Elements } from "@stripe/react-stripe-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,10 +12,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { BookingSteps } from "@/components/booking/booking-steps";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { BookingLayoutWrapper } from "@/components/booking/booking-layout-wrapper";
+import { useBooking } from "@/components/booking/booking-context";
 import { CardPaymentForm } from "@/components/booking/card-payment-form";
 import { getStripe } from "@/lib/stripe-client";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface PageProps {
   params: Promise<{ locationSlug: string; serviceId: string; technicianId: string }>;
@@ -35,6 +38,7 @@ interface BookingData {
 export default function CheckoutPage({ params }: PageProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { setClientInfo, state: bookingState, resetBooking } = useBooking();
   const [paramsData, setParamsData] = useState<{
     locationSlug: string;
     serviceId: string;
@@ -44,12 +48,13 @@ export default function CheckoutPage({ params }: PageProps) {
   const [step, setStep] = useState<"info" | "payment">("info");
   const [isLoading, setIsLoading] = useState(false);
   const [bookingData, setBookingData] = useState<BookingData | null>(null);
+  const [showSummary, setShowSummary] = useState(false);
   const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
-    phone: "",
-    email: "",
-    notes: "",
+    firstName: bookingState.clientFirstName || "",
+    lastName: bookingState.clientLastName || "",
+    phone: bookingState.clientPhone || "",
+    email: bookingState.clientEmail || "",
+    notes: bookingState.notes || "",
   });
 
   const [locationId, setLocationId] = useState<string | null>(null);
@@ -58,6 +63,19 @@ export default function CheckoutPage({ params }: PageProps) {
   useEffect(() => {
     params.then(setParamsData);
   }, [params]);
+
+  // Restore form data from booking state on mount
+  useEffect(() => {
+    if (bookingState.clientFirstName) {
+      setFormData({
+        firstName: bookingState.clientFirstName,
+        lastName: bookingState.clientLastName,
+        phone: bookingState.clientPhone,
+        email: bookingState.clientEmail,
+        notes: bookingState.notes,
+      });
+    }
+  }, [bookingState]);
 
   // Fetch location ID by slug
   useEffect(() => {
@@ -128,15 +146,16 @@ export default function CheckoutPage({ params }: PageProps) {
       return;
     }
 
+    // Save to booking context
+    setClientInfo(formData.firstName, formData.lastName, formData.phone, formData.email, formData.notes);
+
     setIsLoading(true);
 
     try {
-      // Parse the selected time and date to create appointment start time
       const [hours, minutes] = timeStr.split(":").map(Number);
       const startTime = new Date(appointmentDate);
       startTime.setHours(hours, minutes, 0, 0);
 
-      // Create the booking and get Setup Intent
       const response = await fetch("/api/booking/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -178,7 +197,6 @@ export default function CheckoutPage({ params }: PageProps) {
     if (!bookingData) return;
 
     try {
-      // Confirm the booking with the payment method
       const response = await fetch("/api/booking/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -195,6 +213,9 @@ export default function CheckoutPage({ params }: PageProps) {
         throw new Error(data.error || "Failed to confirm booking");
       }
 
+      // Clear booking state after successful booking
+      resetBooking();
+
       toast.success("Booking confirmed!");
       router.push(`/book/confirmation?booking=${bookingData.appointmentId}`);
     } catch (error) {
@@ -209,108 +230,138 @@ export default function CheckoutPage({ params }: PageProps) {
   };
 
   if (!paramsData) {
-    return <div className="text-center py-12">Loading...</div>;
+    return (
+      <BookingLayoutWrapper currentStep={5}>
+        <div className="text-center py-12">Loading...</div>
+      </BookingLayoutWrapper>
+    );
+  }
+
+  // Guard against missing date/time params
+  if (!dateStr || !timeStr) {
+    return (
+      <BookingLayoutWrapper currentStep={5}>
+        <div className="text-center py-12 space-y-4">
+          <p className="text-muted-foreground">Missing appointment date or time.</p>
+          <Link href={`/book/${paramsData.locationSlug}/${paramsData.serviceId}/${paramsData.technicianId}`}>
+            <Button variant="outline">Go Back to Select Time</Button>
+          </Link>
+        </div>
+      </BookingLayoutWrapper>
+    );
   }
 
   const displayData = bookingData?.appointment || {
-    service: { name: "Service", durationMinutes: 0, price: 0 },
-    location: { name: paramsData.locationSlug },
-    technician: { firstName: paramsData.technicianId === "any" ? "Any" : "", lastName: paramsData.technicianId === "any" ? "Available" : "" },
+    service: { name: bookingState.serviceName || "Service", durationMinutes: bookingState.serviceDuration || 0, price: bookingState.servicePrice || 0 },
+    location: { name: bookingState.locationName || paramsData.locationSlug },
+    technician: { firstName: paramsData.technicianId === "any" ? "Any" : (bookingState.technicianName?.split(" ")[0] || ""), lastName: paramsData.technicianId === "any" ? "Available" : (bookingState.technicianName?.split(" ")[1] || "") },
   };
 
   return (
-    <>
-      <BookingSteps currentStep={5} />
-
-      {/* Back button */}
-      <div className="mb-6">
-        {step === "info" ? (
-          <Link href={`/book/${paramsData.locationSlug}/${paramsData.serviceId}/${paramsData.technicianId}`}>
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Change Time
+    <BookingLayoutWrapper currentStep={5}>
+      <div className="space-y-4">
+        {/* Back button */}
+        <div>
+          {step === "info" ? (
+            <Link href={`/book/${paramsData.locationSlug}/${paramsData.serviceId}/${paramsData.technicianId}`}>
+              <Button variant="ghost" size="sm" className="-ml-2">
+                <ArrowLeft className="h-4 w-4 mr-1" />
+                Back
+              </Button>
+            </Link>
+          ) : (
+            <Button variant="ghost" size="sm" className="-ml-2" onClick={() => setStep("info")}>
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              Edit Info
             </Button>
-          </Link>
-        ) : (
-          <Button variant="ghost" size="sm" onClick={() => setStep("info")}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Edit Information
-          </Button>
-        )}
-      </div>
+          )}
+        </div>
 
-      <div className="text-center mb-8">
-        <h2 className="text-2xl font-semibold text-foreground">
-          {step === "info" ? "Complete Your Booking" : "Save Card for No-Show Protection"}
-        </h2>
-        <p className="text-muted-foreground mt-1">
-          {step === "info"
-            ? "Enter your details to continue"
-            : "Your card will be saved but not charged unless you no-show"}
-        </p>
-      </div>
+        {/* Header */}
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-foreground">
+            {step === "info" ? "Almost Done!" : "Save Your Card"}
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            {step === "info"
+              ? "Enter your details to complete booking"
+              : "Card saved for no-show protection only"}
+          </p>
+        </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Booking Summary */}
-        <Card className="lg:col-span-1 h-fit lg:sticky lg:top-24">
-          <CardHeader>
-            <CardTitle>Booking Summary</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-start gap-3">
-              <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
-              <div>
-                <p className="font-medium">{displayData.location.name}</p>
-                <p className="text-sm text-muted-foreground">Location</p>
+        {/* Mobile: Collapsible Summary */}
+        <div className="lg:hidden">
+          <Collapsible open={showSummary} onOpenChange={setShowSummary}>
+            <Card>
+              <CollapsibleTrigger asChild>
+                <CardHeader className="cursor-pointer py-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm">Booking Summary</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">${Number(displayData.service.price).toFixed(0)}</span>
+                      <ChevronDown className={cn("h-4 w-4 transition-transform", showSummary && "rotate-180")} />
+                    </div>
+                  </div>
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent className="pt-0 pb-4 space-y-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Service</span>
+                    <span>{displayData.service.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Location</span>
+                    <span>{displayData.location.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Date & Time</span>
+                    <span>{format(appointmentDate, "MMM d")} at {timeStr}</span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between font-medium text-green-700">
+                    <span className="flex items-center gap-1">
+                      <Shield className="h-3 w-3" />
+                      Due Today
+                    </span>
+                    <span>$0.00</span>
+                  </div>
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
+        </div>
+
+        {/* Desktop: Full Summary Sidebar */}
+        <div className="hidden lg:grid lg:grid-cols-3 lg:gap-6">
+          <Card className="lg:col-span-1 h-fit lg:sticky lg:top-24">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Booking Summary</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="flex items-start gap-3">
+                <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                <div>
+                  <p className="font-medium">{displayData.location.name}</p>
+                </div>
               </div>
-            </div>
-
-            <div className="flex items-start gap-3">
-              <EyeClosed className="h-5 w-5 text-muted-foreground mt-0.5" />
-              <div>
-                <p className="font-medium">{displayData.service.name}</p>
-                <p className="text-sm text-muted-foreground">{displayData.service.durationMinutes} minutes</p>
+              <div className="flex items-start gap-3">
+                <Calendar className="h-4 w-4 text-muted-foreground mt-0.5" />
+                <div>
+                  <p className="font-medium">{format(appointmentDate, "EEE, MMM d")} at {timeStr}</p>
+                </div>
               </div>
-            </div>
-
-            <div className="flex items-start gap-3">
-              <User className="h-5 w-5 text-muted-foreground mt-0.5" />
-              <div>
-                <p className="font-medium">
-                  {displayData.technician.firstName} {displayData.technician.lastName}
-                </p>
-                <p className="text-sm text-muted-foreground">Technician</p>
+              <div className="flex items-start gap-3">
+                <User className="h-4 w-4 text-muted-foreground mt-0.5" />
+                <div>
+                  <p className="font-medium">{displayData.technician.firstName} {displayData.technician.lastName}</p>
+                </div>
               </div>
-            </div>
-
-            <div className="flex items-start gap-3">
-              <Calendar className="h-5 w-5 text-muted-foreground mt-0.5" />
-              <div>
-                <p className="font-medium">{format(appointmentDate, "EEEE, MMMM d, yyyy")}</p>
-                <p className="text-sm text-muted-foreground">Date</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3">
-              <Clock className="h-5 w-5 text-muted-foreground mt-0.5" />
-              <div>
-                <p className="font-medium">{timeStr || "Time"}</p>
-                <p className="text-sm text-muted-foreground">Time</p>
-              </div>
-            </div>
-
-            <Separator />
-
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
+              <Separator />
+              <div className="flex justify-between">
                 <span>Service Price</span>
                 <span>${Number(displayData.service.price).toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-sm text-muted-foreground">
-                <span>Due at appointment</span>
-                <span>${Number(displayData.service.price).toFixed(2)}</span>
-              </div>
-              <Separator />
               <div className="flex justify-between font-medium text-green-700">
                 <span className="flex items-center gap-1">
                   <Shield className="h-4 w-4" />
@@ -318,68 +369,83 @@ export default function CheckoutPage({ params }: PageProps) {
                 </span>
                 <span>$0.00</span>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        {/* Form / Payment */}
-        <Card className="lg:col-span-2">
+          {/* Form placeholder for grid */}
+          <div className="lg:col-span-2" />
+        </div>
+
+        {/* Form / Payment - Full width on mobile */}
+        <Card>
           {step === "info" ? (
             <>
-              <CardHeader>
-                <CardTitle>Your Information</CardTitle>
-                <CardDescription>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Your Information</CardTitle>
+                <CardDescription className="text-xs">
                   We&apos;ll send appointment reminders to your phone
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleSubmitInfo} className="space-y-6">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="firstName">First Name *</Label>
+                {/* Almost Done Encouragement */}
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-green-800 flex items-center">
+                    <CheckCircle className="h-4 w-4 mr-2 flex-shrink-0" />
+                    You&apos;re almost done! Just add your details.
+                  </p>
+                </div>
+
+                <form onSubmit={handleSubmitInfo} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="firstName" className="text-xs">First Name *</Label>
                       <Input
                         id="firstName"
                         name="firstName"
-                        placeholder="Enter your first name"
+                        placeholder="Jane"
                         value={formData.firstName}
                         onChange={handleInputChange}
                         required
                         disabled={isLoading}
+                        className="h-12 text-base"
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="lastName">Last Name *</Label>
+                    <div className="space-y-1">
+                      <Label htmlFor="lastName" className="text-xs">Last Name *</Label>
                       <Input
                         id="lastName"
                         name="lastName"
-                        placeholder="Enter your last name"
+                        placeholder="Doe"
                         value={formData.lastName}
                         onChange={handleInputChange}
                         required
                         disabled={isLoading}
+                        className="h-12 text-base"
                       />
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone Number *</Label>
+                  <div className="space-y-1">
+                    <Label htmlFor="phone" className="text-xs">Phone Number *</Label>
                     <Input
                       id="phone"
                       name="phone"
                       type="tel"
+                      inputMode="numeric"
                       placeholder="(555) 555-5555"
                       value={formData.phone}
                       onChange={handlePhoneChange}
                       required
                       disabled={isLoading}
+                      className="h-12 text-base"
                     />
-                    <p className="text-xs text-muted-foreground">
-                      We&apos;ll send SMS reminders 24 hours and 2 hours before your appointment
+                    <p className="text-[10px] text-muted-foreground">
+                      For appointment reminders
                     </p>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email (Optional)</Label>
+                  <div className="space-y-1">
+                    <Label htmlFor="email" className="text-xs">Email (Optional)</Label>
                     <Input
                       id="email"
                       name="email"
@@ -388,35 +454,37 @@ export default function CheckoutPage({ params }: PageProps) {
                       value={formData.email}
                       onChange={handleInputChange}
                       disabled={isLoading}
+                      className="h-12 text-base"
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="notes">Special Requests (Optional)</Label>
+                  <div className="space-y-1">
+                    <Label htmlFor="notes" className="text-xs">Special Requests (Optional)</Label>
                     <Textarea
                       id="notes"
                       name="notes"
-                      placeholder="Any allergies, preferences, or special requests..."
+                      placeholder="Allergies, preferences..."
                       value={formData.notes}
                       onChange={handleInputChange}
                       disabled={isLoading}
-                      rows={3}
+                      rows={2}
+                      className="text-base"
                     />
                   </div>
 
-                  <Separator />
-
-                  {/* Policy Notice */}
-                  <div className="bg-muted/50 rounded-lg p-4 text-sm">
-                    <h4 className="font-medium mb-2">No-Show Protection Policy</h4>
-                    <p className="text-muted-foreground">
-                      A card is required to book but will <strong>not be charged</strong> unless
-                      you no-show or cancel within 6 hours of your appointment. In that case,
-                      a $25 fee may be charged.
-                    </p>
+                  {/* Trust indicators */}
+                  <div className="flex items-center justify-center gap-4 py-2 text-[10px] text-muted-foreground">
+                    <span className="flex items-center">
+                      <Lock className="h-3 w-3 mr-1" />
+                      Secure
+                    </span>
+                    <span className="flex items-center">
+                      <Shield className="h-3 w-3 mr-1" />
+                      256-bit SSL
+                    </span>
                   </div>
 
-                  <Button type="submit" size="lg" className="w-full" disabled={isLoading}>
+                  <Button type="submit" className="w-full h-12 text-base" disabled={isLoading}>
                     {isLoading ? "Processing..." : "Continue to Card"}
                   </Button>
                 </form>
@@ -424,13 +492,23 @@ export default function CheckoutPage({ params }: PageProps) {
             </>
           ) : (
             <>
-              <CardHeader>
-                <CardTitle>Card on File</CardTitle>
-                <CardDescription>
-                  Your card is saved for no-show protection only
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Card on File</CardTitle>
+                <CardDescription className="text-xs">
+                  Saved for no-show protection only - not charged today
                 </CardDescription>
               </CardHeader>
               <CardContent>
+                {/* Reassurance */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-blue-800 font-medium mb-1">
+                    Your card will NOT be charged today
+                  </p>
+                  <p className="text-xs text-blue-700">
+                    We only save it for no-show protection. Pay in-store after your service.
+                  </p>
+                </div>
+
                 {bookingData?.clientSecret && (
                   <Elements
                     stripe={getStripe()}
@@ -439,7 +517,7 @@ export default function CheckoutPage({ params }: PageProps) {
                       appearance: {
                         theme: "stripe",
                         variables: {
-                          colorPrimary: "#1E1B4B",
+                          colorPrimary: "#1A1A1A",
                           borderRadius: "8px",
                         },
                       },
@@ -458,6 +536,6 @@ export default function CheckoutPage({ params }: PageProps) {
           )}
         </Card>
       </div>
-    </>
+    </BookingLayoutWrapper>
   );
 }

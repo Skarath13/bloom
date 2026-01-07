@@ -259,3 +259,44 @@
   background: transparent !important;
   border: none !important;
 }
+
+/* Mobile-first utilities */
+.h-screen-mobile {
+  height: 100dvh;
+}
+
+.min-h-screen-mobile {
+  min-height: 100dvh;
+}
+
+.safe-area-inset-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.safe-area-inset-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* Hide scrollbar utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse,
+  .animate-bounce,
+  .animate-spin {
+    animation: none;
+  }
+}
+
+/* Brand gradient for booking pages */
+.bg-brand-gradient {
+  background: linear-gradient(135deg, #FDFBFB 0%, #F5F0F0 100%);
+}

@@ -1,15 +1,17 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { format, addDays, startOfDay, isBefore } from "date-fns";
-import { ArrowLeft, Calendar as CalendarIcon, Clock, Loader2 } from "lucide-react";
+import { format, addDays, startOfDay, isBefore, isSameDay } from "date-fns";
+import { ArrowLeft, Clock, Loader2, ChevronDown, Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
-import { BookingSteps } from "@/components/booking/booking-steps";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { BookingLayoutWrapper } from "@/components/booking/booking-layout-wrapper";
+import { useBooking } from "@/components/booking/booking-context";
 import { cn } from "@/lib/utils";
 
 interface TimeSlot {
@@ -24,7 +26,17 @@ interface BookingData {
   technician: { id: string; firstName: string; lastName: string } | null;
 }
 
-// Generate next 30 days
+// Generate next 7 days for quick selection pills
+const generateQuickDates = () => {
+  const dates = [];
+  const today = new Date();
+  for (let i = 0; i < 7; i++) {
+    dates.push(addDays(today, i));
+  }
+  return dates;
+};
+
+// Generate next 30 days for calendar
 const generateAvailableDates = () => {
   const dates = [];
   const today = new Date();
@@ -40,9 +52,11 @@ interface PageProps {
 
 export default function DateTimeSelectionPage({ params }: PageProps) {
   const router = useRouter();
+  const { setTechnician, setDateTime } = useBooking();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<string | null>(null);
+  const [showFullCalendar, setShowFullCalendar] = useState(false);
   const [paramsData, setParamsData] = useState<{
     locationSlug: string;
     serviceId: string;
@@ -57,6 +71,10 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
 
+  // Abort controller ref for cancelling in-flight availability requests
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const quickDates = generateQuickDates();
   const availableDates = generateAvailableDates();
 
   // Resolve params
@@ -71,16 +89,13 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
     const fetchBookingData = async () => {
       setIsLoadingData(true);
       try {
-        // Fetch location by slug
         const locRes = await fetch(`/api/locations`);
         const { locations } = await locRes.json();
         const location = locations?.find((l: { slug: string }) => l.slug === paramsData.locationSlug);
 
-        // Fetch service
         const svcRes = await fetch(`/api/services/${paramsData.serviceId}`);
         const { service } = await svcRes.json();
 
-        // Fetch technician if not "any"
         let technician = null;
         if (paramsData.technicianId !== "any") {
           const techRes = await fetch(`/api/technicians/${paramsData.technicianId}`);
@@ -89,6 +104,13 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
         }
 
         setBookingData({ location, service, technician });
+
+        // Update booking context
+        if (technician) {
+          setTechnician(technician.id, `${technician.firstName} ${technician.lastName[0]}.`, false);
+        } else {
+          setTechnician(null, null, true);
+        }
       } catch (error) {
         console.error("Failed to fetch booking data:", error);
       } finally {
@@ -97,11 +119,20 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
     };
 
     fetchBookingData();
-  }, [paramsData]);
+  }, [paramsData, setTechnician]);
 
   // Fetch availability when date or booking data changes
   const fetchAvailability = useCallback(async (date: Date) => {
     if (!bookingData.location || !bookingData.service || !paramsData) return;
+
+    // Cancel any in-flight request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Create new abort controller for this request
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     setIsLoadingSlots(true);
     try {
@@ -109,20 +140,27 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
       const techId = paramsData.technicianId === "any" ? "any" : paramsData.technicianId;
 
       const res = await fetch(
-        `/api/availability?locationId=${bookingData.location.id}&serviceId=${bookingData.service.id}&technicianId=${techId}&date=${dateStr}`
+        `/api/availability?locationId=${bookingData.location.id}&serviceId=${bookingData.service.id}&technicianId=${techId}&date=${dateStr}`,
+        { signal: controller.signal }
       );
       const data = await res.json();
 
       setTimeSlots(data.slots || []);
     } catch (error) {
+      // Ignore abort errors - they're expected when cancelling requests
+      if (error instanceof Error && error.name === "AbortError") {
+        return;
+      }
       console.error("Failed to fetch availability:", error);
       setTimeSlots([]);
     } finally {
-      setIsLoadingSlots(false);
+      // Only set loading false if this is still the current request
+      if (abortControllerRef.current === controller) {
+        setIsLoadingSlots(false);
+      }
     }
   }, [bookingData.location, bookingData.service, paramsData]);
 
-  // Fetch availability when date changes or data loads
   useEffect(() => {
     if (bookingData.location && bookingData.service) {
       fetchAvailability(selectedDate);
@@ -137,9 +175,14 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
       ? `${bookingData.technician.firstName} ${bookingData.technician.lastName[0]}.`
       : "Technician";
 
+  const handleDateSelect = (date: Date) => {
+    setSelectedDate(date);
+    setSelectedTime(null);
+    setShowFullCalendar(false);
+  };
+
   const handleTimeSelect = (slot: TimeSlot) => {
     setSelectedTime(slot.time);
-    // Store the technician ID for "any" selections
     if (paramsData?.technicianId === "any" && slot.technicianId) {
       setSelectedTechnicianId(slot.technicianId);
     }
@@ -148,7 +191,9 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
   const handleContinue = () => {
     if (!selectedTime || !paramsData) return;
 
-    // Use the assigned technician ID if "any" was selected
+    // Save to booking context
+    setDateTime(selectedDate, selectedTime);
+
     const techId = paramsData.technicianId === "any" && selectedTechnicianId
       ? selectedTechnicianId
       : paramsData.technicianId;
@@ -159,72 +204,117 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
 
   if (!paramsData || isLoadingData) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
+      <BookingLayoutWrapper currentStep={4}>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </BookingLayoutWrapper>
     );
   }
 
+  const availableCount = timeSlots.filter((s) => s.available).length;
+
   return (
-    <>
-      <BookingSteps currentStep={4} />
-
-      {/* Back button and selection info */}
-      <div className="mb-6">
-        <Link href={`/book/${paramsData.locationSlug}/${paramsData.serviceId}`}>
-          <Button variant="ghost" size="sm" className="mb-2">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Change Technician
-          </Button>
-        </Link>
-        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-          <Badge variant="secondary">{locationName}</Badge>
-          <Badge variant="outline">{serviceName}</Badge>
-          <Badge variant="outline">{techName}</Badge>
+    <BookingLayoutWrapper currentStep={4} showFooter={false}>
+      <div className="pb-24">
+        {/* Back button and selection info */}
+        <div className="mb-4">
+          <Link href={`/book/${paramsData.locationSlug}/${paramsData.serviceId}`}>
+            <Button variant="ghost" size="sm" className="-ml-2">
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              Back
+            </Button>
+          </Link>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-1">
+            <Badge variant="secondary" className="text-xs">{locationName}</Badge>
+            <Badge variant="outline" className="text-xs">{serviceName}</Badge>
+            <Badge variant="outline" className="text-xs">{techName}</Badge>
+          </div>
         </div>
-      </div>
 
-      <div className="text-center mb-8">
-        <h2 className="text-2xl font-semibold text-foreground">Select Date & Time</h2>
-        <p className="text-muted-foreground mt-1">Choose your preferred appointment time</p>
-      </div>
+        {/* Header */}
+        <div className="text-center mb-4">
+          <h2 className="text-xl font-semibold text-foreground">Pick a Time</h2>
+          <p className="text-sm text-muted-foreground mt-1">Select your preferred date and time</p>
+        </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Calendar */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <CalendarIcon className="h-5 w-5" />
-              Select Date
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Calendar
-              mode="single"
-              selected={selectedDate}
-              onSelect={(date) => {
-                if (date) {
-                  setSelectedDate(date);
-                  setSelectedTime(null); // Reset time when date changes
-                }
-              }}
-              disabled={(date) => {
-                const today = startOfDay(new Date());
-                return isBefore(date, today) || !availableDates.some(d =>
-                  startOfDay(d).getTime() === startOfDay(date).getTime()
+        {/* Quick Date Pills - Horizontal Scroll */}
+        <div className="mb-4">
+          <div className="overflow-x-auto scrollbar-hide -mx-4 px-4">
+            <div className="flex gap-2 w-max pb-2">
+              {quickDates.map((date) => {
+                const isSelected = isSameDay(date, selectedDate);
+                const isToday = isSameDay(date, new Date());
+                return (
+                  <button
+                    key={date.toISOString()}
+                    onClick={() => handleDateSelect(date)}
+                    className={cn(
+                      "flex flex-col items-center py-2 px-3 rounded-xl transition-all min-w-[56px]",
+                      "border-2",
+                      isSelected
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-card border-border hover:border-primary/50"
+                    )}
+                  >
+                    <span className="text-[10px] uppercase tracking-wide font-medium">
+                      {format(date, "EEE")}
+                    </span>
+                    <span className="text-lg font-bold">
+                      {format(date, "d")}
+                    </span>
+                    {isToday && (
+                      <span className="text-[8px] uppercase">Today</span>
+                    )}
+                  </button>
                 );
-              }}
-              className="rounded-md border"
-            />
-          </CardContent>
-        </Card>
+              })}
+            </div>
+          </div>
+
+          {/* Full Calendar Toggle */}
+          <Collapsible open={showFullCalendar} onOpenChange={setShowFullCalendar}>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm" className="w-full mt-2 text-xs text-muted-foreground">
+                <CalendarIcon className="h-3 w-3 mr-1" />
+                {showFullCalendar ? "Hide calendar" : "Show full calendar"}
+                <ChevronDown className={cn("h-3 w-3 ml-1 transition-transform", showFullCalendar && "rotate-180")} />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <Card className="mt-2">
+                <CardContent className="p-3">
+                  <Calendar
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={(date) => date && handleDateSelect(date)}
+                    disabled={(date) => {
+                      const today = startOfDay(new Date());
+                      return isBefore(date, today) || !availableDates.some(d =>
+                        startOfDay(d).getTime() === startOfDay(date).getTime()
+                      );
+                    }}
+                    className="mx-auto"
+                  />
+                </CardContent>
+              </Card>
+            </CollapsibleContent>
+          </Collapsible>
+        </div>
 
         {/* Time Slots */}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              Available Times for {format(selectedDate, "MMM d")}
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                {format(selectedDate, "EEEE, MMM d")}
+              </span>
+              {!isLoadingSlots && availableCount > 0 && (
+                <Badge variant="secondary" className="text-xs">
+                  {availableCount} available
+                </Badge>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -233,11 +323,11 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>
             ) : timeSlots.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                No available times for this date. Please select another date.
+              <p className="text-sm text-muted-foreground text-center py-6">
+                No available times. Try another date.
               </p>
             ) : (
-              <div className="grid grid-cols-3 gap-2 max-h-[300px] overflow-y-auto custom-scrollbar">
+              <div className="grid grid-cols-4 gap-2">
                 {timeSlots.map((slot) => (
                   <Button
                     key={slot.time}
@@ -246,9 +336,9 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
                     disabled={!slot.available}
                     onClick={() => handleTimeSelect(slot)}
                     className={cn(
-                      "text-xs",
-                      !slot.available && "opacity-50 cursor-not-allowed",
-                      selectedTime === slot.time && "ring-2 ring-primary ring-offset-2"
+                      "text-xs h-10",
+                      !slot.available && "opacity-40",
+                      selectedTime === slot.time && "ring-2 ring-offset-1 ring-primary"
                     )}
                   >
                     {slot.time}
@@ -256,47 +346,29 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
                 ))}
               </div>
             )}
-
-            {/* Legend */}
-            <div className="flex items-center gap-4 mt-4 text-xs text-muted-foreground">
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded border bg-card"></div>
-                <span>Available</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded bg-primary"></div>
-                <span>Selected</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded border opacity-50"></div>
-                <span>Unavailable</span>
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Continue Button */}
-      <div className="mt-8 flex justify-end">
-        <Button
-          size="lg"
-          disabled={!selectedTime}
-          onClick={handleContinue}
-          className="px-8"
-        >
-          Continue to Checkout
-        </Button>
-      </div>
-
-      {/* Selection Summary */}
-      {selectedTime && (
-        <div className="mt-6 p-4 bg-card rounded-lg border text-center">
-          <p className="text-sm text-muted-foreground">Your appointment</p>
-          <p className="text-lg font-semibold">
-            {format(selectedDate, "EEEE, MMMM d, yyyy")} at {selectedTime}
-          </p>
+      {/* Sticky Footer */}
+      <div className="fixed bottom-0 left-0 right-0 bg-card border-t p-4 safe-area-inset-bottom">
+        <div className="max-w-2xl mx-auto">
+          {selectedTime ? (
+            <>
+              <p className="text-sm text-center text-muted-foreground mb-2">
+                {format(selectedDate, "EEE, MMM d")} at {selectedTime}
+              </p>
+              <Button className="w-full h-12" onClick={handleContinue}>
+                Continue to Checkout
+              </Button>
+            </>
+          ) : (
+            <Button className="w-full h-12" disabled>
+              Select a time to continue
+            </Button>
+          )}
         </div>
-      )}
-    </>
+      </div>
+    </BookingLayoutWrapper>
   );
 }
