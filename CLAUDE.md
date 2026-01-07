@@ -111,33 +111,16 @@ Configure incoming SMS webhook in Twilio Console:
 
 This enables clients to confirm appointments by replying "C", "confirm", "yes", etc.
 
-## TODO: Database Data Setup
+## Database Data Setup (Completed)
 
-For the booking flow to work, the following tables need data:
+All required tables have been populated:
 
-- [ ] **bloom_locations** - At least one active location
-  - Required fields: `name`, `slug`, `address`, `city`, `state`, `zipCode`, `isActive=true`
-  - The `slug` is used in URLs (e.g., "irvine", "tustin")
-
-- [ ] **bloom_services** - Services offered
-  - Required fields: `name`, `category`, `durationMinutes`, `price`, `depositAmount`, `isActive=true`
-  - Categories group services in the booking UI (e.g., "Lash Extensions", "Lash Fills")
-
-- [ ] **bloom_service_locations** - Link services to locations
-  - Junction table: `serviceId`, `locationId`
-  - Each service must be linked to at least one location to appear in booking
-
-- [ ] **bloom_technicians** - Technicians/staff
-  - Required fields: `firstName`, `lastName`, `color`, `isActive=true`
-
-- [ ] **bloom_technician_locations** - Link technicians to locations
-  - Junction table: `technicianId`, `locationId`
-  - Each technician must be linked to at least one location
-
-- [ ] **bloom_technician_schedules** - Working hours
-  - Required for each technician: 7 rows (one per day of week 0-6)
-  - Fields: `technicianId`, `dayOfWeek`, `startTime`, `endTime`, `isWorking`
-  - Example: `dayOfWeek=1, startTime="09:00", endTime="19:00", isWorking=true`
+- [x] **bloom_locations** - 5 active locations (Irvine, Tustin, Santa Ana, Costa Mesa, Newport Beach)
+- [x] **bloom_services** - 48 services configured
+- [x] **bloom_service_locations** - 240 service-location links (all services linked to all locations)
+- [x] **bloom_technicians** - 29 technicians configured
+- [x] **bloom_technician_locations** - 29 technician-location links
+- [x] **bloom_technician_schedules** - All technicians have 7-day schedules configured
 
 ## API Routes
 
