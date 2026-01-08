@@ -4,9 +4,10 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format, addDays, startOfDay, isBefore, isSameDay } from "date-fns";
-import { ArrowLeft, Clock, Loader2, ChevronDown, Calendar as CalendarIcon } from "lucide-react";
+import { ArrowLeft, Clock, ChevronDown, Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Calendar } from "@/components/ui/calendar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { BookingLayoutWrapper } from "@/components/booking/booking-layout-wrapper";
@@ -255,9 +256,48 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
   if (!paramsData || isLoadingData || isCheckingDates || !selectedDate) {
     return (
       <BookingLayoutWrapper currentStep={4}>
-        <div className="flex flex-col items-center justify-center py-12 gap-2">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">Finding available times...</p>
+        <div className="space-y-3">
+          {/* Header skeleton */}
+          <div className="flex items-center gap-3 mb-3">
+            <Skeleton className="h-11 w-16 rounded-full" />
+            <Skeleton className="h-6 w-28" />
+          </div>
+
+          {/* Date pills skeleton */}
+          <div className="mb-2">
+            <div className="overflow-x-auto scrollbar-hide -mx-4 px-4">
+              <div className="flex gap-1.5 w-max pb-1">
+                {[...Array(7)].map((_, i) => (
+                  <Skeleton key={i} className="min-h-[44px] min-w-[44px] rounded-lg" />
+                ))}
+              </div>
+            </div>
+            {/* Calendar button skeleton */}
+            <Skeleton className="w-full mt-2 h-11 rounded-md" />
+          </div>
+
+          {/* Time slots card skeleton */}
+          <Card className="py-0 gap-0">
+            <CardContent className="p-3">
+              {/* Date header skeleton */}
+              <div className="flex items-center gap-1.5 mb-2">
+                <Skeleton className="h-3.5 w-3.5 rounded" />
+                <Skeleton className="h-4 w-24" />
+              </div>
+
+              {/* Time slots grid skeleton - 3 rows of 4 */}
+              <div className="grid grid-cols-4 gap-1.5">
+                {[...Array(12)].map((_, i) => (
+                  <Skeleton key={i} className="h-11 rounded-md" />
+                ))}
+              </div>
+
+              {/* Continue button skeleton */}
+              <div className="pt-3 mt-3 border-t">
+                <Skeleton className="w-full h-12 rounded-md" />
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </BookingLayoutWrapper>
     );
@@ -361,8 +401,10 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
               {format(selectedDate, "EEE, MMM d")}
             </div>
             {isLoadingSlots ? (
-              <div className="flex items-center justify-center py-6">
-                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              <div className="grid grid-cols-4 gap-1.5">
+                {[...Array(12)].map((_, i) => (
+                  <Skeleton key={i} className="h-11 rounded-md" />
+                ))}
               </div>
             ) : timeSlots.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">
