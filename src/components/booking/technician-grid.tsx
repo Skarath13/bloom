@@ -129,17 +129,27 @@ function TechnicianCard({ tech, locationSlug, serviceId, onSelect }: TechnicianC
         )}
       </div>
 
-      {/* Expandable description panel */}
+      {/* Expandable description panel - uses CSS Grid for GPU-accelerated animation */}
       {hasDescription && (
         <div
-          className={`overflow-hidden transition-all duration-300 ease-out ${
-            expanded ? "max-h-40 opacity-100" : "max-h-0 opacity-0"
-          }`}
+          className="grid transition-[grid-template-rows] duration-200 ease-out"
+          style={{
+            gridTemplateRows: expanded ? "1fr" : "0fr",
+          }}
         >
-          <div className="px-4 pb-3 pt-0 border-t border-gray-100">
-            <p className="text-[13px] text-gray-600 leading-relaxed pt-2.5">
-              {tech.description}
-            </p>
+          <div className="overflow-hidden">
+            <div
+              className="px-4 pb-3 pt-2.5 border-t border-gray-100"
+              style={{
+                opacity: expanded ? 1 : 0,
+                transition: "opacity 150ms ease-out",
+                transitionDelay: expanded ? "50ms" : "0ms",
+              }}
+            >
+              <p className="text-[13px] text-gray-600 leading-relaxed">
+                {tech.description}
+              </p>
+            </div>
           </div>
         </div>
       )}
@@ -200,8 +210,8 @@ export function TechnicianGrid({
               Fastest Booking · First Available
             </p>
           </div>
-          <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center">
-            <ChevronRight className="h-4 w-4 text-gray-400" />
+          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+            <ChevronRight className="h-5 w-5 text-gray-500" />
           </div>
         </div>
       </Link>
