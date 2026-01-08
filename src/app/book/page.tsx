@@ -1,4 +1,4 @@
-import { RadialLocationSelector } from "@/components/booking/radial-location-selector";
+import { GridLocationSelector } from "@/components/booking/grid-location-selector";
 import { supabase, tables } from "@/lib/supabase";
 
 // Fetch locations from database
@@ -20,5 +20,5 @@ async function getLocations() {
 export default async function BookingPage() {
   const locations = await getLocations();
 
-  return <RadialLocationSelector locations={locations} />;
+  return <GridLocationSelector locations={locations} />;
 }
