@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { BookingLayoutWrapper } from "@/components/booking/booking-layout-wrapper";
@@ -359,7 +360,60 @@ export default function CheckoutPage({ params }: PageProps) {
   if (!paramsData) {
     return (
       <BookingLayoutWrapper currentStep={5}>
-        <div className="text-center py-12">Loading...</div>
+        <div className="space-y-3">
+          {/* Header skeleton */}
+          <div className="flex items-center gap-3 mb-1">
+            <Skeleton className="h-11 w-16 rounded-full" />
+            <Skeleton className="h-6 w-32" />
+          </div>
+
+          {/* Mobile summary skeleton */}
+          <Skeleton className="h-11 w-full rounded-lg" />
+
+          {/* Form card skeleton */}
+          <Card className="py-0">
+            <CardContent className="p-3 space-y-3">
+              {/* Phone input skeleton */}
+              <div className="space-y-1">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-11 w-full rounded-md" />
+              </div>
+
+              {/* Name fields skeleton */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-11 w-full rounded-md" />
+                </div>
+                <div className="space-y-1">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-11 w-full rounded-md" />
+                </div>
+              </div>
+
+              {/* Email skeleton */}
+              <div className="space-y-1">
+                <Skeleton className="h-3 w-28" />
+                <Skeleton className="h-11 w-full rounded-md" />
+              </div>
+
+              {/* Notes skeleton */}
+              <div className="space-y-1">
+                <Skeleton className="h-3 w-28" />
+                <Skeleton className="h-16 w-full rounded-md" />
+              </div>
+
+              {/* Inspo upload skeleton */}
+              <div className="space-y-1">
+                <Skeleton className="h-3 w-36" />
+                <Skeleton className="h-20 w-full rounded-lg" />
+              </div>
+
+              {/* Submit button skeleton */}
+              <Skeleton className="h-10 w-full rounded-md mt-1" />
+            </CardContent>
+          </Card>
+        </div>
       </BookingLayoutWrapper>
     );
   }
