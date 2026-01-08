@@ -404,11 +404,11 @@ export default function CheckoutPage({ params }: PageProps) {
             <h1 className="text-lg font-semibold leading-tight">
               {step === "info" ? "Almost Done!" : "Save Your Card"}
             </h1>
-            <p className="text-xs text-muted-foreground">
-              {step === "info"
-                ? "Enter your details to complete booking"
-                : "Card saved for no-show protection only"}
-            </p>
+            {step === "payment" && (
+              <p className="text-xs text-muted-foreground">
+                Card saved for no-show protection only
+              </p>
+            )}
           </div>
         </div>
 
@@ -416,27 +416,29 @@ export default function CheckoutPage({ params }: PageProps) {
         <div className="lg:hidden">
           <Collapsible open={showSummary} onOpenChange={setShowSummary}>
             <CollapsibleTrigger asChild>
-              <div className="flex items-center justify-between py-2 px-3 bg-muted/50 rounded-lg cursor-pointer border">
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="font-medium">{displayData.service.name}</span>
-                  <span className="text-muted-foreground">·</span>
-                  <span className="text-muted-foreground">{format(appointmentDate, "MMM d")}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="font-semibold text-sm">${Number(displayData.service.price).toFixed(0)}</span>
-                  <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform", showSummary && "rotate-180")} />
+              <div className="flex items-center py-2 px-3 bg-muted/50 rounded-lg cursor-pointer border gap-2 min-w-0">
+                <span className="font-medium text-sm truncate min-w-0">{displayData.service.name}</span>
+                <div className="flex items-center gap-1.5 text-sm text-muted-foreground shrink-0">
+                  <span>{format(appointmentDate, "MMM d")}</span>
+                  <span>·</span>
+                  <span>{timeStr}</span>
+                  <ChevronDown className={cn("h-3.5 w-3.5 ml-0.5 transition-transform", showSummary && "rotate-180")} />
                 </div>
               </div>
             </CollapsibleTrigger>
             <CollapsibleContent>
               <div className="mt-1.5 py-2 px-3 bg-muted/30 rounded-lg text-xs space-y-1">
                 <div className="flex justify-between">
+                  <span className="text-muted-foreground">Service</span>
+                  <span className="text-right">{displayData.service.name}</span>
+                </div>
+                <div className="flex justify-between">
                   <span className="text-muted-foreground">Location</span>
                   <span>{displayData.location.name}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Time</span>
-                  <span>{timeStr}</span>
+                  <span className="text-muted-foreground">Service Total</span>
+                  <span>${Number(displayData.service.price).toFixed(0)}</span>
                 </div>
                 <div className="flex justify-between font-medium text-green-700 pt-1 border-t mt-1">
                   <span>Due Today</span>

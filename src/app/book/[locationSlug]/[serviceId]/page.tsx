@@ -94,12 +94,7 @@ export default async function TechnicianSelectionPage({ params }: PageProps) {
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
-        <div>
-          <h1 className="text-lg font-semibold leading-tight">Choose Your Tech</h1>
-          <p className="text-xs text-muted-foreground">
-            {location.name} · {service.name} · <span className="font-semibold text-[#1E1B4B]">${service.price}</span>
-          </p>
-        </div>
+        <h1 className="text-lg font-semibold leading-tight">Choose Your Tech</h1>
       </div>
 
       {/* Randomized Technician Grid */}

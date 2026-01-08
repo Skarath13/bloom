@@ -93,10 +93,7 @@ export function ServiceSelector({
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
-        <div>
-          <h1 className="text-lg font-semibold leading-tight">Select a Service</h1>
-          <p className="text-xs text-muted-foreground">{locationName} · {categories.length} categories</p>
-        </div>
+        <h1 className="text-lg font-semibold leading-tight">Select a Service</h1>
       </div>
 
       {/* Horizontal Scroll Category Pills - more compact */}
