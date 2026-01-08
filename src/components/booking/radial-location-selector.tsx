@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { MapPin, Shield, Star, Clock, RotateCcw } from "lucide-react";
+import { MapPin, Shield, Star, Clock } from "lucide-react";
 import { useBooking } from "./booking-context";
 import { cn } from "@/lib/utils";
 
@@ -23,12 +23,12 @@ interface RadialLocationSelectorProps {
 }
 
 export function RadialLocationSelector({ locations }: RadialLocationSelectorProps) {
-  const { setLocation, state, getResumeUrl, getCurrentStep, resetBooking } = useBooking();
-  const resumeUrl = getResumeUrl();
-  const currentStep = getCurrentStep();
-  const hasBookingInProgress = currentStep > 1;
+  const { setLocation, resetBooking } = useBooking();
 
   const handleLocationClick = (location: Location) => {
+    // Always start fresh when selecting a location - if user is back at step 1,
+    // they likely want to change their selection rather than continue
+    resetBooking();
     setLocation(location.id, location.name, location.slug);
   };
 
@@ -60,21 +60,6 @@ export function RadialLocationSelector({ locations }: RadialLocationSelectorProp
         </p>
       </div>
 
-      {/* Resume Booking Banner */}
-      {resumeUrl && currentStep > 1 && (
-        <div className="px-4 pb-4">
-          <Link href={resumeUrl}>
-            <div className="bg-primary/10 border border-primary/20 rounded-lg p-3 text-center hover:bg-primary/15 transition-colors">
-              <p className="text-sm font-medium text-primary">
-                Continue your booking
-              </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {state.locationName} • {state.serviceName || "Step " + currentStep}
-              </p>
-            </div>
-          </Link>
-        </div>
-      )}
 
       {/* Location Grid - Pentagon/Circular arrangement */}
       <div className="flex-1 flex items-center justify-center px-4 -mt-8">
@@ -147,17 +132,6 @@ export function RadialLocationSelector({ locations }: RadialLocationSelectorProp
           <p className="text-xs text-muted-foreground">
             Questions? Text us at 657-334-9919
           </p>
-
-          {/* Start over - only show if there's a booking in progress */}
-          {hasBookingInProgress && (
-            <button
-              onClick={() => resetBooking()}
-              className="mt-2 text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors inline-flex items-center gap-1"
-            >
-              <RotateCcw className="h-2.5 w-2.5" />
-              Start over
-            </button>
-          )}
         </div>
       </div>
     </div>

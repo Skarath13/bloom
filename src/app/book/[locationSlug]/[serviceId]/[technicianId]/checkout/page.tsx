@@ -225,7 +225,22 @@ export default function CheckoutPage({ params }: PageProps) {
         inspoImageUrl = await uploadInspoImage();
       }
 
-      const [hours, minutes] = timeStr.split(":").map(Number);
+      // Parse time - handle both "HH:MM" and "H:MM AM/PM" formats
+      let hours: number;
+      let minutes: number;
+
+      if (timeStr.includes("AM") || timeStr.includes("PM")) {
+        // 12-hour format: "9:00 AM" or "10:30 PM"
+        const isPM = timeStr.includes("PM");
+        const timePart = timeStr.replace(/\s*(AM|PM)/i, "");
+        const [h, m] = timePart.split(":").map(Number);
+        hours = isPM ? (h === 12 ? 12 : h + 12) : (h === 12 ? 0 : h);
+        minutes = m;
+      } else {
+        // 24-hour format: "09:00" or "14:30"
+        [hours, minutes] = timeStr.split(":").map(Number);
+      }
+
       const startTime = new Date(appointmentDate);
       startTime.setHours(hours, minutes, 0, 0);
 
@@ -439,22 +454,23 @@ export default function CheckoutPage({ params }: PageProps) {
         </div>
 
         {/* Form / Payment - Full width on mobile */}
-        <Card>
+        <Card className="py-0">
           {step === "info" ? (
             <CardContent className="p-3">
-              <form onSubmit={handleSubmitInfo} className="space-y-2.5">
+              <form onSubmit={handleSubmitInfo} className="space-y-3" autoComplete="on">
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <Label htmlFor="firstName" className="text-xs">First Name *</Label>
                     <Input
                       id="firstName"
                       name="firstName"
+                      autoComplete="given-name"
                       placeholder="Jane"
                       value={formData.firstName}
                       onChange={handleInputChange}
                       required
                       disabled={isLoading}
-                      className="h-9 mt-1"
+                      className="h-11 mt-1 text-base"
                     />
                   </div>
                   <div>
@@ -462,12 +478,13 @@ export default function CheckoutPage({ params }: PageProps) {
                     <Input
                       id="lastName"
                       name="lastName"
+                      autoComplete="family-name"
                       placeholder="Doe"
                       value={formData.lastName}
                       onChange={handleInputChange}
                       required
                       disabled={isLoading}
-                      className="h-9 mt-1"
+                      className="h-11 mt-1 text-base"
                     />
                   </div>
                 </div>
@@ -478,13 +495,14 @@ export default function CheckoutPage({ params }: PageProps) {
                     id="phone"
                     name="phone"
                     type="tel"
-                    inputMode="numeric"
+                    inputMode="tel"
+                    autoComplete="tel"
                     placeholder="(555) 555-5555"
                     value={formData.phone}
                     onChange={handlePhoneChange}
                     required
                     disabled={isLoading}
-                    className="h-9 mt-1"
+                    className="h-11 mt-1 text-base"
                   />
                 </div>
 
@@ -494,11 +512,27 @@ export default function CheckoutPage({ params }: PageProps) {
                     id="email"
                     name="email"
                     type="email"
+                    inputMode="email"
+                    autoComplete="email"
                     placeholder="your@email.com"
                     value={formData.email}
                     onChange={handleInputChange}
                     disabled={isLoading}
-                    className="h-9 mt-1"
+                    className="h-11 mt-1 text-base"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="notes" className="text-xs">Notes (optional)</Label>
+                  <Textarea
+                    id="notes"
+                    name="notes"
+                    placeholder="Allergies, preferences..."
+                    value={formData.notes}
+                    onChange={handleInputChange}
+                    disabled={isLoading}
+                    rows={2}
+                    className="text-sm mt-1"
                   />
                 </div>
 
@@ -514,28 +548,28 @@ export default function CheckoutPage({ params }: PageProps) {
                     disabled={isLoading}
                   />
                   {inspoPreview ? (
-                    <div className="mt-1 relative">
-                      <div className="relative w-full h-32 rounded-lg overflow-hidden bg-muted">
+                    <div className="mt-1 relative flex items-start gap-3">
+                      <div className="relative w-24 aspect-square rounded-lg overflow-hidden bg-muted flex-shrink-0">
                         <img
                           src={inspoPreview}
                           alt="Inspiration preview"
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-contain"
                         />
                         <button
                           type="button"
                           onClick={handleRemoveImage}
-                          className="absolute top-1.5 right-1.5 p-1 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors"
+                          className="absolute top-1 right-1 p-0.5 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors"
                           disabled={isLoading}
                         >
-                          <X className="h-4 w-4" />
+                          <X className="h-3.5 w-3.5" />
                         </button>
                         {isUploadingImage && (
                           <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                            <Loader2 className="h-6 w-6 animate-spin text-white" />
+                            <Loader2 className="h-5 w-5 animate-spin text-white" />
                           </div>
                         )}
                       </div>
-                      <p className="text-[10px] text-muted-foreground mt-1">
+                      <p className="text-[10px] text-muted-foreground pt-1">
                         This will be shared with your technician
                       </p>
                     </div>
@@ -550,20 +584,6 @@ export default function CheckoutPage({ params }: PageProps) {
                       <span className="text-xs">Tap to add photo</span>
                     </button>
                   )}
-                </div>
-
-                <div>
-                  <Label htmlFor="notes" className="text-xs">Notes (optional)</Label>
-                  <Textarea
-                    id="notes"
-                    name="notes"
-                    placeholder="Allergies, preferences..."
-                    value={formData.notes}
-                    onChange={handleInputChange}
-                    disabled={isLoading}
-                    rows={2}
-                    className="text-sm mt-1"
-                  />
                 </div>
 
                 <Button type="submit" className="w-full h-10 mt-1" disabled={isLoading}>

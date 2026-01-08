@@ -20,14 +20,12 @@ import {
 interface BookingLayoutWrapperProps {
   children: ReactNode;
   currentStep: number;
-  showHeader?: boolean;
   showFooter?: boolean;
 }
 
 export function BookingLayoutWrapper({
   children,
   currentStep,
-  showHeader = true,
   showFooter = true,
 }: BookingLayoutWrapperProps) {
   const { resetBooking } = useBooking();
@@ -56,20 +54,6 @@ export function BookingLayoutWrapper({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      {/* Header */}
-      {showHeader && (
-        <header className="py-3 text-center border-b bg-card/80 backdrop-blur-sm sticky top-0 z-50 safe-area-inset-top">
-          <Link href="/book" className="inline-block">
-            <div className="w-64 h-14 mx-auto overflow-hidden">
-              <img
-                src="/logo.webp"
-                alt="Elegant Lashes by Katie"
-                className="w-full h-full object-contain scale-150"
-              />
-            </div>
-          </Link>
-        </header>
-      )}
 
       {/* Progress Steps - Mobile optimized */}
       <div className="bg-card/50 border-b">
@@ -86,6 +70,15 @@ export function BookingLayoutWrapper({
       {/* Footer */}
       {showFooter && (
         <footer className="py-4 text-center border-t bg-card/50 safe-area-inset-bottom">
+          <Link href="/book" className="inline-block mb-2 opacity-60 hover:opacity-100 transition-opacity">
+            <div className="w-32 h-8 mx-auto overflow-hidden">
+              <img
+                src="/logo.webp"
+                alt="Elegant Lashes by Katie"
+                className="w-full h-full object-contain scale-150"
+              />
+            </div>
+          </Link>
           <p className="text-xs text-muted-foreground">Questions? Text us at 657-334-9919</p>
           <button
             onClick={() => setShowConfirmDialog(true)}

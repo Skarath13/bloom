@@ -98,6 +98,27 @@ TWILIO_AUTH_TOKEN=...
 TWILIO_WEBHOOK_URL=https://[your-domain]/api/webhooks/twilio
 ```
 
+## TODO: Stripe Setup
+
+Configure Stripe for payment processing:
+
+1. [ ] Create/login to Stripe account at https://dashboard.stripe.com
+2. [ ] Get test API keys from https://dashboard.stripe.com/test/apikeys
+3. [ ] Update `.env.local` with:
+   ```
+   STRIPE_SECRET_KEY=sk_test_...
+   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
+   ```
+4. [ ] Restart dev server after adding keys
+5. [ ] Test booking flow end-to-end with test card: `4242 4242 4242 4242`
+6. [ ] (Production) Set up webhook endpoint at `/api/webhooks/stripe`
+7. [ ] (Production) Switch to live keys when ready
+
+**Test Cards:**
+- Success: `4242 4242 4242 4242`
+- Decline: `4000 0000 0000 0002`
+- Requires auth: `4000 0025 0000 3155`
+
 ## TODO: Twilio Webhook Setup
 
 Configure incoming SMS webhook in Twilio Console:
