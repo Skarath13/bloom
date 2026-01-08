@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { format, addDays, startOfDay, isBefore, isSameDay, endOfMonth, differenceInDays } from "date-fns";
+import { format, addDays, startOfDay, isBefore, isSameDay } from "date-fns";
 import { ArrowLeft, Clock, Loader2, ChevronDown, Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,27 +25,14 @@ interface BookingData {
   technician: { id: string; firstName: string; lastName: string } | null;
 }
 
-// Generate quick dates: remaining days of current month + next month if within 7 days
+// Generate quick dates: next 7 days for fast initial load
 const generateQuickDates = () => {
   const dates: Date[] = [];
   const today = new Date();
-  const monthEnd = endOfMonth(today);
-  const daysUntilMonthEnd = differenceInDays(monthEnd, today);
-
-  // Add remaining days of current month (including today)
-  for (let i = 0; i <= daysUntilMonthEnd; i++) {
+  // OPTIMIZATION: Only show 7 days initially for faster loading
+  for (let i = 0; i < 7; i++) {
     dates.push(addDays(today, i));
   }
-
-  // If next month starts within 7 days, add remaining days of next month too
-  if (daysUntilMonthEnd < 7) {
-    const nextMonthEnd = endOfMonth(addDays(monthEnd, 1));
-    const daysInNextMonth = differenceInDays(nextMonthEnd, monthEnd);
-    for (let i = 1; i <= daysInNextMonth; i++) {
-      dates.push(addDays(monthEnd, i));
-    }
-  }
-
   return dates;
 };
 
@@ -99,28 +86,35 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
     params.then(setParamsData);
   }, [params]);
 
-  // Fetch booking data (location, service, technician)
+  // OPTIMIZATION: Fetch booking data AND check availability in parallel
   useEffect(() => {
     if (!paramsData) return;
 
-    const fetchBookingData = async () => {
+    const fetchAllData = async () => {
       setIsLoadingData(true);
+      setIsCheckingDates(true);
+
       try {
-        const locRes = await fetch(`/api/locations`);
-        const { locations } = await locRes.json();
+        // OPTIMIZATION: Fetch all data in parallel
+        const [locRes, svcRes, techRes] = await Promise.all([
+          fetch(`/api/locations`),
+          fetch(`/api/services/${paramsData.serviceId}`),
+          paramsData.technicianId !== "any"
+            ? fetch(`/api/technicians/${paramsData.technicianId}`)
+            : Promise.resolve(null),
+        ]);
+
+        const [{ locations }, { service }, techData] = await Promise.all([
+          locRes.json(),
+          svcRes.json(),
+          techRes ? techRes.json() : Promise.resolve({ technician: null }),
+        ]);
+
         const location = locations?.find((l: { slug: string }) => l.slug === paramsData.locationSlug);
-
-        const svcRes = await fetch(`/api/services/${paramsData.serviceId}`);
-        const { service } = await svcRes.json();
-
-        let technician = null;
-        if (paramsData.technicianId !== "any") {
-          const techRes = await fetch(`/api/technicians/${paramsData.technicianId}`);
-          const techData = await techRes.json();
-          technician = techData.technician;
-        }
+        const technician = techData?.technician || null;
 
         setBookingData({ location, service, technician });
+        setIsLoadingData(false);
 
         // Update booking context
         if (technician) {
@@ -128,65 +122,54 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
         } else {
           setTechnician(null, null, true);
         }
+
+        // Now check availability using batch endpoint
+        if (location && service) {
+          const techId = paramsData.technicianId === "any" ? "any" : paramsData.technicianId;
+          const dateStrings = quickDates.map(d => format(d, "yyyy-MM-dd"));
+
+          const availRes = await fetch("/api/availability/batch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              locationId: location.id,
+              serviceId: service.id,
+              technicianId: techId,
+              dates: dateStrings,
+            }),
+          });
+
+          const availData = await availRes.json();
+          const availability: Record<string, boolean> = {};
+          let firstAvailableDate: Date | null = null;
+
+          for (const item of availData.availability || []) {
+            availability[item.date] = item.hasAvailability;
+            if (item.hasAvailability && !firstAvailableDate) {
+              firstAvailableDate = quickDates.find(d => format(d, "yyyy-MM-dd") === item.date) || null;
+            }
+          }
+
+          setDateAvailability(availability);
+
+          // Auto-select first available date, or fall back to today
+          if (firstAvailableDate) {
+            setSelectedDate(firstAvailableDate);
+          } else {
+            setSelectedDate(new Date());
+          }
+        }
       } catch (error) {
-        console.error("Failed to fetch booking data:", error);
+        console.error("Failed to fetch data:", error);
+        setSelectedDate(new Date());
       } finally {
         setIsLoadingData(false);
+        setIsCheckingDates(false);
       }
     };
 
-    fetchBookingData();
+    fetchAllData();
   }, [paramsData, setTechnician]);
-
-  // Check availability for all quick dates and auto-select first available
-  useEffect(() => {
-    if (!bookingData.location || !bookingData.service || !paramsData) return;
-
-    const checkAllDates = async () => {
-      setIsCheckingDates(true);
-      const techId = paramsData.technicianId === "any" ? "any" : paramsData.technicianId;
-      const availability: Record<string, boolean> = {};
-      let firstAvailableDate: Date | null = null;
-
-      // Check all 7 quick dates in parallel
-      const checks = quickDates.map(async (date) => {
-        const dateStr = format(date, "yyyy-MM-dd");
-        try {
-          const res = await fetch(
-            `/api/availability?locationId=${bookingData.location!.id}&serviceId=${bookingData.service!.id}&technicianId=${techId}&date=${dateStr}`
-          );
-          const data = await res.json();
-          const hasAvailability = (data.slots || []).some((s: TimeSlot) => s.available);
-          return { dateStr, hasAvailability, date };
-        } catch {
-          return { dateStr, hasAvailability: false, date };
-        }
-      });
-
-      const results = await Promise.all(checks);
-
-      // Process results
-      for (const { dateStr, hasAvailability, date } of results) {
-        availability[dateStr] = hasAvailability;
-        if (hasAvailability && !firstAvailableDate) {
-          firstAvailableDate = date;
-        }
-      }
-
-      setDateAvailability(availability);
-
-      // Auto-select first available date, or fall back to today if none available
-      if (firstAvailableDate) {
-        setSelectedDate(firstAvailableDate);
-      } else {
-        setSelectedDate(new Date());
-      }
-
-      setIsCheckingDates(false);
-    };
-
-    checkAllDates();
-  }, [bookingData.location, bookingData.service, paramsData]);
 
   // Fetch availability when date or booking data changes
   const fetchAvailability = useCallback(async (date: Date) => {

@@ -9,11 +9,6 @@ interface TimeSlot {
   technicianId?: string;
 }
 
-interface Anchor {
-  time: Date;
-  type: "day_start" | "appointment_end" | "block_end";
-}
-
 interface BusyInterval {
   start: Date;
   end: Date;
@@ -27,6 +22,7 @@ interface TechnicianRow {
 
 interface ScheduleRow {
   technicianId: string;
+  dayOfWeek: number;
   isWorking: boolean;
   startTime: string;
   endTime: string;
@@ -58,36 +54,30 @@ interface TechWithData {
   blocks: BlockRow[];
 }
 
-/**
- * Merge overlapping intervals into non-overlapping sorted list
- */
+interface DateAvailability {
+  date: string;
+  hasAvailability: boolean;
+  slotCount: number;
+}
+
 function mergeIntervals(intervals: BusyInterval[]): BusyInterval[] {
   if (intervals.length === 0) return [];
-
   const sorted = [...intervals].sort((a, b) => a.start.getTime() - b.start.getTime());
   const merged: BusyInterval[] = [{ ...sorted[0] }];
-
   for (let i = 1; i < sorted.length; i++) {
     const last = merged[merged.length - 1];
     const current = sorted[i];
-
     if (current.start.getTime() <= last.end.getTime()) {
-      // Overlapping or adjacent - extend
       last.end = new Date(Math.max(last.end.getTime(), current.end.getTime()));
     } else {
       merged.push({ ...current });
     }
   }
-
   return merged;
 }
 
-/**
- * Check if a proposed slot overlaps any busy interval
- */
 function overlapsAny(slotStart: Date, slotEnd: Date, intervals: BusyInterval[]): boolean {
   for (const interval of intervals) {
-    // Overlap: slotStart < interval.end AND slotEnd > interval.start
     if (slotStart.getTime() < interval.end.getTime() && slotEnd.getTime() > interval.start.getTime()) {
       return true;
     }
@@ -95,15 +85,10 @@ function overlapsAny(slotStart: Date, slotEnd: Date, intervals: BusyInterval[]):
   return false;
 }
 
-/**
- * Expand all blocks for a technician on a specific date
- */
 function expandBlocksForDate(blocks: BlockRow[], date: Date): BusyInterval[] {
   const intervals: BusyInterval[] = [];
-
   for (const block of blocks) {
     if (block.recurrenceRule && block.startTime && block.endTime) {
-      // Recurring block - expand for this date
       const instances = expandRecurrence(
         block.id,
         parseISO(block.startTime),
@@ -113,21 +98,14 @@ function expandBlocksForDate(blocks: BlockRow[], date: Date): BusyInterval[] {
         startOfDay(date),
         endOfDay(date)
       );
-
       for (const instance of instances) {
-        intervals.push({
-          start: instance.startTime,
-          end: instance.endTime,
-        });
+        intervals.push({ start: instance.startTime, end: instance.endTime });
       }
     } else if (block.startTime && block.endTime) {
-      // One-time block - check if it falls on this date
       const blockStart = new Date(block.startTime);
       const blockEnd = new Date(block.endTime);
       const dayStart = startOfDay(date);
       const dayEnd = endOfDay(date);
-
-      // Check if block overlaps with this day
       if (blockStart <= dayEnd && blockEnd >= dayStart) {
         intervals.push({
           start: blockStart < dayStart ? dayStart : blockStart,
@@ -136,143 +114,97 @@ function expandBlocksForDate(blocks: BlockRow[], date: Date): BusyInterval[] {
       }
     }
   }
-
   return intervals;
 }
 
-/**
- * Generate anchor-based slots for a single technician
- */
-function generateAnchoredSlotsForTech(
+function hasAvailableSlotsForTech(
   tech: TechWithData,
   date: Date,
+  dayOfWeek: number,
   appointments: AppointmentRow[],
   now: Date
-): TimeSlot[] {
-  const schedule = tech.schedules[0];
-  if (!schedule || !schedule.isWorking) return [];
+): boolean {
+  const schedule = tech.schedules.find(s => s.dayOfWeek === dayOfWeek);
+  if (!schedule || !schedule.isWorking) return false;
 
   const scheduleStart = parse(schedule.startTime, "HH:mm", date);
   const scheduleEnd = parse(schedule.endTime, "HH:mm", date);
   const buffer = tech.defaultBufferMinutes;
   const duration = tech.serviceDuration;
 
-  // Get appointments for this tech
   const techAppointments = appointments.filter((a) => a.technicianId === tech.id);
-
-  // Expand blocks for this date
   const blockIntervals = expandBlocksForDate(tech.blocks, date);
 
-  // Build anchors
-  const anchors: Anchor[] = [];
-
-  // Anchor 1: Day start
-  anchors.push({ time: scheduleStart, type: "day_start" });
-
-  // Anchor 2: Hourly fallback slots (for flexibility when day is empty)
-  // Add every hour from schedule start to end
-  const scheduleStartHour = scheduleStart.getHours();
-  const scheduleEndHour = scheduleEnd.getHours();
-  for (let hour = scheduleStartHour; hour <= scheduleEndHour; hour++) {
-    const hourlyTime = new Date(date);
-    hourlyTime.setHours(hour, 0, 0, 0);
-    // Only add if within schedule bounds and service fits
-    if (hourlyTime >= scheduleStart && addMinutes(hourlyTime, duration) <= scheduleEnd) {
-      anchors.push({ time: hourlyTime, type: "day_start" }); // Treat as day_start priority
-    }
-  }
-
-  // Anchor 3: Appointment ends + buffer (these take priority as optimal slots)
-  for (const apt of techAppointments) {
-    const aptEnd = new Date(apt.endTime);
-    const endWithBuffer = addMinutes(aptEnd, buffer);
-    anchors.push({ time: endWithBuffer, type: "appointment_end" });
-  }
-
-  // Anchor 4: Block ends
-  for (const block of blockIntervals) {
-    anchors.push({ time: block.end, type: "block_end" });
-  }
-
-  // Sort anchors by time
-  anchors.sort((a, b) => a.time.getTime() - b.time.getTime());
-
-  // Deduplicate anchors at same time (prefer day_start > appointment_end > block_end)
-  const uniqueAnchors: Anchor[] = [];
-  const seenTimes = new Set<number>();
-  for (const anchor of anchors) {
-    const timeKey = anchor.time.getTime();
-    if (!seenTimes.has(timeKey)) {
-      seenTimes.add(timeKey);
-      uniqueAnchors.push(anchor);
-    }
-  }
-
-  // Build busy intervals (appointments + blocks)
+  // Build busy intervals
   const busyIntervals: BusyInterval[] = [];
-
   for (const apt of techAppointments) {
-    busyIntervals.push({
-      start: new Date(apt.startTime),
-      end: new Date(apt.endTime),
-    });
+    busyIntervals.push({ start: new Date(apt.startTime), end: new Date(apt.endTime) });
   }
-
   for (const block of blockIntervals) {
     busyIntervals.push(block);
   }
-
   const mergedBusy = mergeIntervals(busyIntervals);
 
-  // Generate valid slots from anchors
-  const slots: TimeSlot[] = [];
+  // Check hourly slots for availability (quick check)
+  const scheduleStartHour = scheduleStart.getHours();
+  const scheduleEndHour = scheduleEnd.getHours();
 
-  for (const anchor of uniqueAnchors) {
-    const slotStart = anchor.time;
+  for (let hour = scheduleStartHour; hour <= scheduleEndHour; hour++) {
+    const slotStart = new Date(date);
+    slotStart.setHours(hour, 0, 0, 0);
     const slotEnd = addMinutes(slotStart, duration);
 
-    // Skip past slots
     if (isBefore(slotStart, now)) continue;
-
-    // Skip if starts before working hours
     if (isBefore(slotStart, scheduleStart)) continue;
-
-    // Skip if ends after working hours
     if (isAfter(slotEnd, scheduleEnd)) continue;
-
-    // Skip if overlaps any busy interval
     if (overlapsAny(slotStart, slotEnd, mergedBusy)) continue;
 
-    slots.push({
-      time: format(slotStart, "h:mm a"),
-      available: true,
-      technicianId: tech.id,
-    });
+    return true; // Found at least one available slot
   }
 
-  return slots;
+  // Also check appointment end + buffer times
+  for (const apt of techAppointments) {
+    const aptEnd = new Date(apt.endTime);
+    const slotStart = addMinutes(aptEnd, buffer);
+    const slotEnd = addMinutes(slotStart, duration);
+
+    if (isBefore(slotStart, now)) continue;
+    if (isBefore(slotStart, scheduleStart)) continue;
+    if (isAfter(slotEnd, scheduleEnd)) continue;
+    if (overlapsAny(slotStart, slotEnd, mergedBusy)) continue;
+
+    return true;
+  }
+
+  return false;
 }
 
-export async function GET(request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const locationId = searchParams.get("locationId");
-    const serviceId = searchParams.get("serviceId");
-    const technicianId = searchParams.get("technicianId");
-    const dateStr = searchParams.get("date"); // YYYY-MM-DD format
+    const body = await request.json();
+    const { locationId, serviceId, technicianId, dates } = body as {
+      locationId: string;
+      serviceId: string;
+      technicianId: string;
+      dates: string[];
+    };
 
-    if (!locationId || !serviceId || !dateStr) {
+    if (!locationId || !serviceId || !dates || dates.length === 0) {
       return NextResponse.json(
-        { error: "Missing required parameters: locationId, serviceId, date" },
+        { error: "Missing required parameters: locationId, serviceId, dates" },
         { status: 400 }
       );
     }
 
-    const date = parse(dateStr, "yyyy-MM-dd", new Date());
-    const dayOfWeek = date.getDay();
     const now = new Date();
+    const parsedDates = dates.map(d => parse(d, "yyyy-MM-dd", new Date()));
+    const minDate = startOfDay(parsedDates[0]);
+    const maxDate = endOfDay(parsedDates[parsedDates.length - 1]);
 
-    // OPTIMIZATION: Run service and technicians queries in parallel (Phase 1)
+    // Get all days of week we need schedules for
+    const daysOfWeek = [...new Set(parsedDates.map(d => d.getDay()))];
+
+    // OPTIMIZATION: Run all queries in parallel
     const [serviceResult, techResult] = await Promise.all([
       supabase
         .from(tables.services)
@@ -305,13 +237,11 @@ export async function GET(request: NextRequest) {
 
     if (techIds.length === 0) {
       return NextResponse.json({
-        date: dateStr,
-        serviceDuration: defaultServiceDuration,
-        slots: [],
+        availability: dates.map(date => ({ date, hasAvailability: false, slotCount: 0 })),
       });
     }
 
-    // OPTIMIZATION: Run all remaining queries in parallel (Phase 2)
+    // Get all data needed for all dates in parallel
     const [serviceTechResult, schedulesResult, blocksResult, appointmentsResult] = await Promise.all([
       supabase
         .from(tables.serviceTechnicians)
@@ -322,7 +252,7 @@ export async function GET(request: NextRequest) {
         .from(tables.technicianSchedules)
         .select("*")
         .in("technicianId", techIds)
-        .eq("dayOfWeek", dayOfWeek),
+        .in("dayOfWeek", daysOfWeek),
       supabase
         .from(tables.technicianBlocks)
         .select("*")
@@ -330,10 +260,10 @@ export async function GET(request: NextRequest) {
         .eq("isActive", true),
       supabase
         .from(tables.appointments)
-        .select("*")
+        .select("technicianId, startTime, endTime")
         .eq("locationId", locationId)
-        .gte("startTime", startOfDay(date).toISOString())
-        .lte("startTime", endOfDay(date).toISOString())
+        .gte("startTime", minDate.toISOString())
+        .lte("startTime", maxDate.toISOString())
         .not("status", "in", '("CANCELLED","NO_SHOW")'),
     ]);
 
@@ -354,80 +284,52 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const appointments = (existingAppointments as AppointmentRow[] | null) || [];
+    const allAppointments = (existingAppointments as AppointmentRow[] | null) || [];
 
-    // Count appointments per technician (for fairness sorting)
-    const techAppointmentCounts = new Map<string, number>();
-    for (const apt of appointments) {
-      const count = techAppointmentCounts.get(apt.technicianId) || 0;
-      techAppointmentCounts.set(apt.technicianId, count + 1);
-    }
-
-    // Build technicians with all their data
+    // Build technician data
     const techsWithData: TechWithData[] = ((technicians as TechnicianRow[] | null) || []).map((tech) => ({
       id: tech.id,
       defaultBufferMinutes: (tech.defaultBufferMinutes as number) || 0,
       serviceDuration: techDurationMap.get(tech.id) || defaultServiceDuration,
-      appointmentCount: techAppointmentCounts.get(tech.id) || 0,
+      appointmentCount: 0,
       schedules: ((schedules as ScheduleRow[] | null) || []).filter((s) => s.technicianId === tech.id),
       blocks: ((blocks as BlockRow[] | null) || []).filter((b) => b.technicianId === tech.id),
     }));
 
-    let allSlots: TimeSlot[] = [];
+    // Check availability for each date
+    const availability: DateAvailability[] = [];
 
-    if (technicianId && technicianId !== "any") {
-      // Single technician mode
-      const tech = techsWithData[0];
-      if (tech) {
-        allSlots = generateAnchoredSlotsForTech(tech, date, appointments, now);
-      }
-    } else {
-      // "Any technician" mode - aggregate from all techs with fairness
-      const slotMap = new Map<string, { techId: string; appointmentCount: number }[]>();
+    for (const dateStr of dates) {
+      const date = parse(dateStr, "yyyy-MM-dd", new Date());
+      const dayOfWeek = date.getDay();
+      const dayStart = startOfDay(date);
+      const dayEnd = endOfDay(date);
+
+      // Filter appointments for this specific date
+      const dayAppointments = allAppointments.filter(apt => {
+        const aptStart = new Date(apt.startTime);
+        return aptStart >= dayStart && aptStart <= dayEnd;
+      });
+
+      let hasAvailability = false;
 
       for (const tech of techsWithData) {
-        const techSlots = generateAnchoredSlotsForTech(tech, date, appointments, now);
-
-        for (const slot of techSlots) {
-          const key = slot.time;
-          if (!slotMap.has(key)) {
-            slotMap.set(key, []);
-          }
-          slotMap.get(key)!.push({
-            techId: tech.id,
-            appointmentCount: tech.appointmentCount,
-          });
+        if (hasAvailableSlotsForTech(tech, date, dayOfWeek, dayAppointments, now)) {
+          hasAvailability = true;
+          break;
         }
       }
 
-      // Convert map to array, picking best technician for each time slot
-      // Fairness: prefer techs with FEWER appointments to balance workload
-      for (const [time, techOptions] of slotMap) {
-        // Sort by appointment count (ascending) - techs with fewer appointments first
-        techOptions.sort((a, b) => a.appointmentCount - b.appointmentCount);
-
-        allSlots.push({
-          time,
-          available: true,
-          technicianId: techOptions[0].techId,
-        });
-      }
-
-      // Sort slots by time
-      allSlots.sort((a, b) => {
-        const timeA = parse(a.time, "h:mm a", date);
-        const timeB = parse(b.time, "h:mm a", date);
-        return timeA.getTime() - timeB.getTime();
+      availability.push({
+        date: dateStr,
+        hasAvailability,
+        slotCount: hasAvailability ? 1 : 0, // Just indicate if there's availability
       });
     }
 
-    return NextResponse.json({
-      date: dateStr,
-      serviceDuration: defaultServiceDuration,
-      slots: allSlots,
-    });
+    return NextResponse.json({ availability });
   } catch (error) {
-    console.error("Availability error:", error);
+    console.error("Batch availability error:", error);
     return NextResponse.json(
       { error: "Failed to fetch availability" },
       { status: 500 }
