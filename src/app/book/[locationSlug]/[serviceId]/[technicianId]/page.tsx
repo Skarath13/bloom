@@ -3,11 +3,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { format, addDays, startOfDay, isBefore, isSameDay } from "date-fns";
+import { format, addDays, startOfDay, isBefore, isSameDay, endOfMonth, differenceInDays } from "date-fns";
 import { ArrowLeft, Clock, Loader2, ChevronDown, Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { BookingLayoutWrapper } from "@/components/booking/booking-layout-wrapper";
@@ -26,13 +25,27 @@ interface BookingData {
   technician: { id: string; firstName: string; lastName: string } | null;
 }
 
-// Generate next 7 days for quick selection pills
+// Generate quick dates: remaining days of current month + next month if within 7 days
 const generateQuickDates = () => {
-  const dates = [];
+  const dates: Date[] = [];
   const today = new Date();
-  for (let i = 0; i < 7; i++) {
+  const monthEnd = endOfMonth(today);
+  const daysUntilMonthEnd = differenceInDays(monthEnd, today);
+
+  // Add remaining days of current month (including today)
+  for (let i = 0; i <= daysUntilMonthEnd; i++) {
     dates.push(addDays(today, i));
   }
+
+  // If next month starts within 7 days, add remaining days of next month too
+  if (daysUntilMonthEnd < 7) {
+    const nextMonthEnd = endOfMonth(addDays(monthEnd, 1));
+    const daysInNextMonth = differenceInDays(nextMonthEnd, monthEnd);
+    for (let i = 1; i <= daysInNextMonth; i++) {
+      dates.push(addDays(monthEnd, i));
+    }
+  }
+
   return dates;
 };
 
@@ -267,23 +280,23 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
     );
   }
 
-  const availableCount = timeSlots.filter((s) => s.available).length;
-
   return (
     <BookingLayoutWrapper currentStep={4}>
       <div className="space-y-3">
         {/* Compact header with back button and title inline */}
         <div className="flex items-center gap-3 mb-3">
-          <Link href={`/book/${paramsData.locationSlug}/${paramsData.serviceId}`}>
-            <Button variant="ghost" size="sm" className="h-8 px-2">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
+          <Link
+            href={`/book/${paramsData.locationSlug}/${paramsData.serviceId}`}
+            className="flex items-center gap-1.5 h-11 px-3 -ml-3 rounded-full hover:bg-muted active:scale-95 transition-all text-sm text-muted-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Back</span>
           </Link>
           <h1 className="text-lg font-semibold leading-tight">Pick a Time</h1>
         </div>
 
         {/* Quick Date Pills - Horizontal Scroll */}
-        <div className="mb-3">
+        <div className="mb-2">
           <div className="overflow-x-auto scrollbar-hide -mx-4 px-4">
             <div className="flex gap-1.5 w-max pb-1">
               {quickDates.map((date) => {
@@ -297,7 +310,7 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
                     key={date.toISOString()}
                     onClick={() => handleDateSelect(date)}
                     className={cn(
-                      "flex flex-col items-center py-1.5 px-2.5 rounded-lg transition-all min-w-[50px]",
+                      "flex flex-col items-center justify-center min-h-[44px] min-w-[44px] px-2 rounded-lg transition-all active:scale-95",
                       "border",
                       isSelected
                         ? "bg-primary text-primary-foreground border-primary"
@@ -306,7 +319,7 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
                         : "bg-card border-border hover:border-primary/50"
                     )}
                   >
-                    <span className="text-[9px] uppercase tracking-wide font-medium">
+                    <span className="text-[10px] uppercase tracking-wide font-medium leading-none">
                       {format(date, "EEE")}
                     </span>
                     <span className={cn(
@@ -316,7 +329,7 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
                       {format(date, "d")}
                     </span>
                     {isToday && (
-                      <span className="text-[7px] uppercase leading-tight">Today</span>
+                      <span className="text-[8px] uppercase leading-none">Today</span>
                     )}
                   </button>
                 );
@@ -327,14 +340,17 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
           {/* Full Calendar Toggle */}
           <Collapsible open={showFullCalendar} onOpenChange={setShowFullCalendar}>
             <CollapsibleTrigger asChild>
-              <Button variant="ghost" size="sm" className="w-full mt-1 h-7 text-xs text-muted-foreground">
-                <CalendarIcon className="h-3 w-3 mr-1" />
-                {showFullCalendar ? "Hide" : "More dates"}
-                <ChevronDown className={cn("h-3 w-3 ml-1 transition-transform", showFullCalendar && "rotate-180")} />
+              <Button
+                variant="outline"
+                className="w-full mt-2 h-11 text-sm font-medium border-dashed border-2 hover:border-solid hover:bg-muted/50 active:scale-[0.98]"
+              >
+                <CalendarIcon className="h-4 w-4 mr-1.5" />
+                {showFullCalendar ? "Hide calendar" : "View full calendar"}
+                <ChevronDown className={cn("h-4 w-4 ml-1.5 transition-transform", showFullCalendar && "rotate-180")} />
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <Card className="mt-2">
+              <Card className="mt-1.5 py-0 gap-0">
                 <CardContent className="p-2">
                   <Calendar
                     mode="single"
@@ -346,7 +362,7 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
                         startOfDay(d).getTime() === startOfDay(date).getTime()
                       );
                     }}
-                    className="mx-auto"
+                    className="mx-auto !p-0 [&_button]:min-h-[44px] [&_button]:min-w-[44px]"
                   />
                 </CardContent>
               </Card>
@@ -355,21 +371,12 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
         </div>
 
         {/* Time Slots */}
-        <Card>
-          <CardHeader className="py-2.5 px-4">
-            <CardTitle className="text-sm flex items-center justify-between">
-              <span className="flex items-center gap-1.5">
-                <Clock className="h-3.5 w-3.5" />
-                {format(selectedDate, "EEE, MMM d")}
-              </span>
-              {!isLoadingSlots && availableCount > 0 && (
-                <Badge variant="secondary" className="text-[10px] py-0 h-5">
-                  {availableCount} slots
-                </Badge>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0 pb-3">
+        <Card className="py-0 gap-0">
+          <CardContent className="p-3">
+            <div className="text-sm font-medium flex items-center gap-1.5 mb-2">
+              <Clock className="h-3.5 w-3.5" />
+              {format(selectedDate, "EEE, MMM d")}
+            </div>
             {isLoadingSlots ? (
               <div className="flex items-center justify-center py-6">
                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
@@ -384,11 +391,10 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
                   <Button
                     key={slot.time}
                     variant={selectedTime === slot.time ? "default" : "outline"}
-                    size="sm"
                     disabled={!slot.available}
                     onClick={() => handleTimeSelect(slot)}
                     className={cn(
-                      "text-xs h-9",
+                      "text-xs h-11 active:scale-95",
                       !slot.available && "opacity-40",
                       selectedTime === slot.time && "ring-2 ring-offset-1 ring-primary"
                     )}
@@ -399,14 +405,14 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
               </div>
             )}
 
-            {/* Continue Button - integrated in card */}
+            {/* Continue Button */}
             <div className="pt-3 mt-3 border-t">
               {selectedTime ? (
-                <Button className="w-full h-10" onClick={handleContinue}>
+                <Button className="w-full h-12 text-base active:scale-[0.98]" onClick={handleContinue}>
                   Continue · {format(selectedDate, "EEE, MMM d")} at {selectedTime}
                 </Button>
               ) : (
-                <Button className="w-full h-10" disabled>
+                <Button className="w-full h-12 text-base" disabled>
                   Select a time to continue
                 </Button>
               )}

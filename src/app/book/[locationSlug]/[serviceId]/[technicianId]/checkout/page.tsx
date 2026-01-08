@@ -390,15 +390,21 @@ export default function CheckoutPage({ params }: PageProps) {
         {/* Back button + Header inline */}
         <div className="flex items-center gap-3 mb-1">
           {step === "info" ? (
-            <Link href={`/book/${paramsData.locationSlug}/${paramsData.serviceId}/${paramsData.technicianId}`}>
-              <Button variant="ghost" size="sm" className="h-8 px-2">
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
+            <Link
+              href={`/book/${paramsData.locationSlug}/${paramsData.serviceId}/${paramsData.technicianId}`}
+              className="flex items-center gap-1.5 h-11 px-3 -ml-3 rounded-full hover:bg-muted active:scale-95 transition-all text-sm text-muted-foreground"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>Back</span>
             </Link>
           ) : (
-            <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => setStep("info")}>
+            <button
+              onClick={() => setStep("info")}
+              className="flex items-center gap-1.5 h-11 px-3 -ml-3 rounded-full hover:bg-muted active:scale-95 transition-all text-sm text-muted-foreground"
+            >
               <ArrowLeft className="h-4 w-4" />
-            </Button>
+              <span>Back</span>
+            </button>
           )}
           <div>
             <h1 className="text-lg font-semibold leading-tight">

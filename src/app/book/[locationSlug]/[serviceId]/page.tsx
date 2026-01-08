@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { BookingLayoutWrapper } from "@/components/booking/booking-layout-wrapper";
 import { TechnicianGrid } from "@/components/booking/technician-grid";
 import { supabase, tables } from "@/lib/supabase";
@@ -89,10 +88,12 @@ export default async function TechnicianSelectionPage({ params }: PageProps) {
     <BookingLayoutWrapper currentStep={3}>
       {/* Compact header with back button and title inline */}
       <div className="flex items-center gap-3 mb-3">
-        <Link href={`/book/${locationSlug}`}>
-          <Button variant="ghost" size="sm" className="h-8 px-2">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
+        <Link
+          href={`/book/${locationSlug}`}
+          className="flex items-center gap-1.5 h-11 px-3 -ml-3 rounded-full hover:bg-muted active:scale-95 transition-all text-sm text-muted-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span>Back</span>
         </Link>
         <h1 className="text-lg font-semibold leading-tight">Choose Your Tech</h1>
       </div>

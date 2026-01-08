@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { ArrowLeft, Clock, ChevronRight, Sparkles, ImageIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useBooking } from "./booking-context";
 
@@ -63,10 +62,12 @@ export function ServiceSelector({
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-3">
-          <Link href="/book">
-            <Button variant="ghost" size="sm" className="h-8 px-2">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
+          <Link
+            href="/book"
+            className="flex items-center gap-1.5 h-11 px-3 -ml-3 rounded-full hover:bg-muted active:scale-95 transition-all text-sm text-muted-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Back</span>
           </Link>
           <div>
             <h1 className="text-lg font-semibold leading-tight">Select a Service</h1>
@@ -88,10 +89,12 @@ export function ServiceSelector({
     <div className="space-y-3">
       {/* Compact header with back button and title inline */}
       <div className="flex items-center gap-3">
-        <Link href="/book">
-          <Button variant="ghost" size="sm" className="h-8 px-2">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
+        <Link
+          href="/book"
+          className="flex items-center gap-1.5 h-11 px-3 -ml-3 rounded-full hover:bg-muted active:scale-95 transition-all text-sm text-muted-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span>Back</span>
         </Link>
         <h1 className="text-lg font-semibold leading-tight">Select a Service</h1>
       </div>
