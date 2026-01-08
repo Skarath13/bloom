@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { format, addDays, startOfDay, isBefore, isSameDay } from "date-fns";
+import { format, addDays, startOfDay, isBefore, isSameDay, endOfMonth, differenceInDays } from "date-fns";
 import { ArrowLeft, Clock, ChevronDown, Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,14 +26,26 @@ interface BookingData {
   technician: { id: string; firstName: string; lastName: string } | null;
 }
 
-// Generate quick dates: next 7 days for fast initial load
+// Generate quick dates: remaining days of current month + next month if within 7 days
 const generateQuickDates = () => {
   const dates: Date[] = [];
   const today = new Date();
-  // OPTIMIZATION: Only show 7 days initially for faster loading
-  for (let i = 0; i < 7; i++) {
+  const monthEnd = endOfMonth(today);
+  const daysUntilMonthEnd = differenceInDays(monthEnd, today);
+
+  // Add remaining days of current month (including today)
+  for (let i = 0; i <= daysUntilMonthEnd; i++) {
     dates.push(addDays(today, i));
   }
+
+  // If next month starts within 7 days, add first week of next month too
+  if (daysUntilMonthEnd < 7) {
+    const daysToAdd = 7 - daysUntilMonthEnd;
+    for (let i = 1; i <= daysToAdd; i++) {
+      dates.push(addDays(monthEnd, i));
+    }
+  }
+
   return dates;
 };
 
@@ -124,10 +136,11 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
           setTechnician(null, null, true);
         }
 
-        // Now check availability using batch endpoint
+        // Now check availability using batch endpoint (only first 7 days for speed)
         if (location && service) {
           const techId = paramsData.technicianId === "any" ? "any" : paramsData.technicianId;
-          const dateStrings = quickDates.map(d => format(d, "yyyy-MM-dd"));
+          const datesToCheck = quickDates.slice(0, 7); // Only check first 7 for performance
+          const dateStrings = datesToCheck.map(d => format(d, "yyyy-MM-dd"));
 
           const availRes = await fetch("/api/availability/batch", {
             method: "POST",
