@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Plus, Pencil, Trash2, MapPin, Phone, Clock, Users, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, Pencil, Trash2, MapPin, Clock, Users, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,31 +24,22 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
+import { ConfirmationModal, InfoModal } from "@/components/ui/confirmation-modal";
+import { HoursEditingModal } from "@/components/admin/hours-editing-modal";
+import { supabase } from "@/lib/supabase";
 
-// Days of week mapping
-const daysOfWeek = [
-  { value: 0, key: "sunday", label: "Sunday", short: "Sun" },
-  { value: 1, key: "monday", label: "Monday", short: "Mon" },
-  { value: 2, key: "tuesday", label: "Tuesday", short: "Tue" },
-  { value: 3, key: "wednesday", label: "Wednesday", short: "Wed" },
-  { value: 4, key: "thursday", label: "Thursday", short: "Thu" },
-  { value: 5, key: "friday", label: "Friday", short: "Fri" },
-  { value: 6, key: "saturday", label: "Saturday", short: "Sat" },
-];
-
-// Database format for operating hours
-interface DBOperatingHours {
-  [key: string]: {
+// Database operating hours format
+interface DbOperatingHours {
+  [day: string]: {
     open: string | null;
     close: string | null;
-    isOpen: boolean;
+    isOpen?: boolean;
   };
 }
 
-// UI format for operating hours
-interface UIOperatingHours {
+// Frontend operating hours format (for the modal)
+interface OperatingHours {
   dayOfWeek: number;
-  key: string;
   isOpen: boolean;
   openTime: string;
   closeTime: string;
@@ -62,107 +53,122 @@ interface Location {
   city: string;
   state: string;
   zipCode: string;
-  phone: string;
+  timezone: string;
+  operatingHours: DbOperatingHours;
   isActive: boolean;
-  operatingHours: DBOperatingHours;
-  technicianCount?: number;
+  sortOrder: number;
+  technicianCount: number;
 }
 
-// Convert DB format to UI format
-function dbToUIHours(dbHours: DBOperatingHours): UIOperatingHours[] {
-  return daysOfWeek.map((day) => {
-    const hours = dbHours[day.key] || { open: "09:00", close: "19:00", isOpen: day.value !== 0 };
+const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+// Convert DB format to frontend format
+function dbHoursToFrontend(dbHours: DbOperatingHours): OperatingHours[] {
+  return dayNames.map((dayName, index) => {
+    const day = dbHours[dayName] || { open: "09:00", close: "19:00", isOpen: true };
     return {
-      dayOfWeek: day.value,
-      key: day.key,
-      isOpen: hours.isOpen,
-      openTime: hours.open || "09:00",
-      closeTime: hours.close || "19:00",
+      dayOfWeek: index,
+      isOpen: day.isOpen !== false && day.open !== null,
+      openTime: day.open || "09:00",
+      closeTime: day.close || "19:00",
     };
   });
 }
 
-// Convert UI format to DB format
-function uiToDBHours(uiHours: UIOperatingHours[]): DBOperatingHours {
-  const dbHours: DBOperatingHours = {};
-  uiHours.forEach((hour) => {
-    dbHours[hour.key] = {
-      open: hour.isOpen ? hour.openTime : null,
-      close: hour.isOpen ? hour.closeTime : null,
-      isOpen: hour.isOpen,
+// Convert frontend format to DB format
+function frontendHoursToDb(hours: OperatingHours[]): DbOperatingHours {
+  const result: DbOperatingHours = {};
+  hours.forEach((h) => {
+    const dayName = dayNames[h.dayOfWeek];
+    result[dayName] = {
+      open: h.isOpen ? h.openTime : null,
+      close: h.isOpen ? h.closeTime : null,
+      isOpen: h.isOpen,
     };
   });
-  return dbHours;
+  return result;
 }
-
-const defaultUIHours: UIOperatingHours[] = daysOfWeek.map((day) => ({
-  dayOfWeek: day.value,
-  key: day.key,
-  isOpen: day.value !== 0, // Closed on Sunday by default
-  openTime: "09:00",
-  closeTime: "19:00",
-}));
 
 export default function LocationsPage() {
   const [locations, setLocations] = useState<Location[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isHoursDialogOpen, setIsHoursDialogOpen] = useState(false);
   const [editingLocation, setEditingLocation] = useState<Location | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
-  const [operatingHours, setOperatingHours] = useState<UIOperatingHours[]>(defaultUIHours);
+
+  // Confirmation modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    type: "deactivate" | "delete" | "cannotDelete" | null;
+    location: Location | null;
+  }>({ type: null, location: null });
+
+  // Hours modal state
+  const [isHoursModalOpen, setIsHoursModalOpen] = useState(false);
+
+  // Loading states
+  const [deleting, setDeleting] = useState(false);
+  const [toggling, setToggling] = useState<string | null>(null);
+  const [savingHours, setSavingHours] = useState(false);
+  const [saving, setSaving] = useState(false);
+
   const [formData, setFormData] = useState({
     name: "",
-    slug: "",
     address: "",
     city: "",
     state: "CA",
     zipCode: "",
-    phone: "",
-    isActive: true,
   });
 
-  // Fetch locations from API
-  const fetchLocations = useCallback(async () => {
+  // Fetch locations from Supabase
+  const fetchLocations = async () => {
     try {
-      const response = await fetch("/api/locations?activeOnly=false&includeTechnicianCount=true");
-      const data = await response.json();
-      if (data.locations) {
-        setLocations(data.locations);
-      }
+      const { data: locationsData, error: locationsError } = await supabase
+        .from("bloom_locations")
+        .select("*")
+        .order("sortOrder", { ascending: true });
+
+      if (locationsError) throw locationsError;
+
+      // Get technician counts
+      const { data: techCounts, error: techError } = await supabase
+        .from("bloom_technicians")
+        .select("locationId");
+
+      if (techError) throw techError;
+
+      // Count technicians per location
+      const countMap: Record<string, number> = {};
+      techCounts?.forEach((t) => {
+        countMap[t.locationId] = (countMap[t.locationId] || 0) + 1;
+      });
+
+      const locationsWithCounts = (locationsData || []).map((loc) => ({
+        ...loc,
+        technicianCount: countMap[loc.id] || 0,
+      }));
+
+      setLocations(locationsWithCounts);
     } catch (error) {
       console.error("Error fetching locations:", error);
       toast.error("Failed to load locations");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
     fetchLocations();
-  }, [fetchLocations]);
+  }, []);
 
   const resetForm = () => {
     setFormData({
       name: "",
-      slug: "",
       address: "",
       city: "",
       state: "CA",
       zipCode: "",
-      phone: "",
-      isActive: true,
     });
     setEditingLocation(null);
-  };
-
-  const formatPhone = (phone: string) => {
-    const digits = phone.replace(/\D/g, "");
-    if (digits.length === 10) {
-      return digits.replace(/(\d{3})(\d{3})(\d{4})/, "($1) $2-$3");
-    }
-    return phone;
   };
 
   const generateSlug = (name: string) => {
@@ -173,70 +179,68 @@ export default function LocationsPage() {
     setEditingLocation(location);
     setFormData({
       name: location.name,
-      slug: location.slug,
       address: location.address,
       city: location.city,
       state: location.state,
       zipCode: location.zipCode,
-      phone: location.phone,
-      isActive: location.isActive,
     });
     setIsDialogOpen(true);
   };
 
   const handleHours = (location: Location) => {
     setSelectedLocation(location);
-    setOperatingHours(dbToUIHours(location.operatingHours));
-    setIsHoursDialogOpen(true);
+    setIsHoursModalOpen(true);
   };
 
   const handleSubmit = async () => {
-    if (!formData.name || !formData.address || !formData.city || !formData.phone) {
+    if (!formData.name || !formData.address || !formData.city) {
       toast.error("Please fill in all required fields");
       return;
     }
 
-    setIsSaving(true);
-
+    setSaving(true);
     try {
       if (editingLocation) {
-        // Update existing location
-        const response = await fetch(`/api/locations/${editingLocation.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+        const { error } = await supabase
+          .from("bloom_locations")
+          .update({
             name: formData.name,
-            slug: formData.slug || generateSlug(formData.name),
+            slug: generateSlug(formData.name),
             address: formData.address,
             city: formData.city,
             state: formData.state,
             zipCode: formData.zipCode,
-            phone: formData.phone,
-            isActive: formData.isActive,
-          }),
-        });
+            updatedAt: new Date().toISOString(),
+          })
+          .eq("id", editingLocation.id);
 
-        if (!response.ok) throw new Error("Failed to update location");
-        toast.success("Location updated successfully");
+        if (error) throw error;
+        toast.success("Location updated");
       } else {
-        // Create new location
-        const response = await fetch("/api/locations", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: formData.name,
-            slug: formData.slug || generateSlug(formData.name),
-            address: formData.address,
-            city: formData.city,
-            state: formData.state,
-            zipCode: formData.zipCode,
-            phone: formData.phone,
-            isActive: formData.isActive,
-          }),
+        const defaultHours: DbOperatingHours = {};
+        dayNames.forEach((day) => {
+          defaultHours[day] = { open: "09:00", close: "19:00", isOpen: true };
         });
 
-        if (!response.ok) throw new Error("Failed to create location");
-        toast.success("Location added successfully");
+        const { error } = await supabase.from("bloom_locations").insert({
+          id: `loc-${Date.now()}`,
+          name: formData.name,
+          slug: generateSlug(formData.name),
+          address: formData.address,
+          city: formData.city,
+          state: formData.state,
+          zipCode: formData.zipCode,
+          phone: "",
+          timezone: "America/Los_Angeles",
+          operatingHours: defaultHours,
+          isActive: true,
+          sortOrder: locations.length,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+
+        if (error) throw error;
+        toast.success("Location added");
       }
 
       await fetchLocations();
@@ -244,100 +248,128 @@ export default function LocationsPage() {
       resetForm();
     } catch (error) {
       console.error("Error saving location:", error);
-      toast.error(editingLocation ? "Failed to update location" : "Failed to add location");
+      toast.error("Failed to save location");
     } finally {
-      setIsSaving(false);
+      setSaving(false);
     }
   };
 
-  const handleSaveHours = async () => {
+  const handleSaveHours = async (hours: OperatingHours[]) => {
     if (!selectedLocation) return;
 
-    setIsSaving(true);
-
+    setSavingHours(true);
     try {
-      const response = await fetch(`/api/locations/${selectedLocation.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          operatingHours: uiToDBHours(operatingHours),
-        }),
-      });
+      const dbHours = frontendHoursToDb(hours);
 
-      if (!response.ok) throw new Error("Failed to update hours");
+      const { error } = await supabase
+        .from("bloom_locations")
+        .update({
+          operatingHours: dbHours,
+          updatedAt: new Date().toISOString(),
+        })
+        .eq("id", selectedLocation.id);
 
-      toast.success("Operating hours saved");
+      if (error) throw error;
+
       await fetchLocations();
-      setIsHoursDialogOpen(false);
+      toast.success("Operating hours saved");
+      setIsHoursModalOpen(false);
     } catch (error) {
       console.error("Error saving hours:", error);
-      toast.error("Failed to save operating hours");
+      toast.error("Failed to save hours");
     } finally {
-      setIsSaving(false);
+      setSavingHours(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    const location = locations.find((l) => l.id === id);
-    if (location && (location.technicianCount || 0) > 0) {
-      toast.error("Cannot delete location with assigned technicians");
-      return;
+  const handleDelete = (location: Location) => {
+    if (location.technicianCount > 0) {
+      setConfirmModal({ type: "cannotDelete", location });
+    } else {
+      setConfirmModal({ type: "delete", location });
     }
+  };
 
-    if (!confirm("Are you sure you want to delete this location?")) return;
+  const handleConfirmDelete = async () => {
+    if (!confirmModal.location) return;
 
+    setDeleting(true);
     try {
-      const response = await fetch(`/api/locations/${id}`, {
-        method: "DELETE",
-      });
+      const { error } = await supabase
+        .from("bloom_locations")
+        .delete()
+        .eq("id", confirmModal.location.id);
 
-      const data = await response.json();
+      if (error) throw error;
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to delete location");
-      }
-
-      toast.success("Location deleted");
       await fetchLocations();
+      toast.success("Location deleted");
+      setConfirmModal({ type: null, location: null });
     } catch (error) {
       console.error("Error deleting location:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to delete location");
+      toast.error("Failed to delete location");
+    } finally {
+      setDeleting(false);
     }
   };
 
-  const toggleActive = async (id: string) => {
+  const handleToggleActive = (location: Location) => {
+    if (location.isActive) {
+      setConfirmModal({ type: "deactivate", location });
+    } else {
+      performToggle(location.id);
+    }
+  };
+
+  const performToggle = async (id: string) => {
     const location = locations.find((l) => l.id === id);
     if (!location) return;
 
+    setToggling(id);
     try {
-      const response = await fetch(`/api/locations/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isActive: !location.isActive }),
-      });
+      const { error } = await supabase
+        .from("bloom_locations")
+        .update({
+          isActive: !location.isActive,
+          updatedAt: new Date().toISOString(),
+        })
+        .eq("id", id);
 
-      if (!response.ok) throw new Error("Failed to update location");
+      if (error) throw error;
 
       await fetchLocations();
+      toast.success(location.isActive ? `${location.name} deactivated` : `${location.name} activated`);
     } catch (error) {
       console.error("Error toggling location:", error);
-      toast.error("Failed to update location status");
+      toast.error("Failed to update location");
+    } finally {
+      setToggling(null);
     }
   };
 
-  const getHoursSummary = (hours: DBOperatingHours) => {
-    const uiHours = dbToUIHours(hours);
-    const openDays = uiHours.filter((h) => h.isOpen);
+  const handleConfirmDeactivate = async () => {
+    if (!confirmModal.location) return;
+    await performToggle(confirmModal.location.id);
+    setConfirmModal({ type: null, location: null });
+  };
+
+  const getHoursSummary = (hours: DbOperatingHours) => {
+    const openDays = dayNames.filter((day) => {
+      const h = hours[day];
+      return h && h.isOpen !== false && h.open;
+    });
+
     if (openDays.length === 0) return "Closed";
     if (openDays.length === 7) return "Open daily";
 
-    const firstOpen = openDays[0];
-    const allSameHours = openDays.every(
-      (h) => h.openTime === firstOpen.openTime && h.closeTime === firstOpen.closeTime
-    );
+    const firstDay = hours[openDays[0]];
+    const allSameHours = openDays.every((day) => {
+      const h = hours[day];
+      return h?.open === firstDay?.open && h?.close === firstDay?.close;
+    });
 
-    if (allSameHours) {
-      return `${formatTime(firstOpen.openTime)} - ${formatTime(firstOpen.closeTime)}`;
+    if (allSameHours && firstDay?.open && firstDay?.close) {
+      return `${formatTime(firstDay.open)} - ${formatTime(firstDay.close)}`;
     }
     return "Varies by day";
   };
@@ -350,12 +382,10 @@ export default function LocationsPage() {
     return `${displayHour}:${minutes} ${ampm}`;
   };
 
-  const totalTechnicians = locations.reduce((sum, l) => sum + (l.technicianCount || 0), 0);
-
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
       </div>
     );
   }
@@ -373,36 +403,6 @@ export default function LocationsPage() {
           <Plus className="h-4 w-4 mr-2" />
           Add Location
         </Button>
-      </div>
-
-      {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Locations</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{locations.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Active Locations</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {locations.filter((l) => l.isActive).length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Technicians</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalTechnicians}</div>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Location Cards */}
@@ -425,7 +425,8 @@ export default function LocationsPage() {
                 </div>
                 <Switch
                   checked={location.isActive}
-                  onCheckedChange={() => toggleActive(location.id)}
+                  onCheckedChange={() => handleToggleActive(location)}
+                  disabled={toggling === location.id}
                 />
               </div>
             </CardHeader>
@@ -438,10 +439,6 @@ export default function LocationsPage() {
                     <br />
                     {location.city}, {location.state} {location.zipCode}
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Phone className="h-4 w-4 text-muted-foreground" />
-                  {formatPhone(location.phone)}
                 </div>
                 <div className="flex items-center gap-2">
                   <Clock className="h-4 w-4 text-muted-foreground" />
@@ -475,7 +472,7 @@ export default function LocationsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handleDelete(location.id)}
+                  onClick={() => handleDelete(location)}
                   className="text-destructive hover:text-destructive"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -512,33 +509,14 @@ export default function LocationsPage() {
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Name *</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => {
-                    setFormData((prev) => ({
-                      ...prev,
-                      name: e.target.value,
-                      slug: generateSlug(e.target.value),
-                    }));
-                  }}
-                  placeholder="Newport Beach"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="slug">URL Slug</Label>
-                <Input
-                  id="slug"
-                  value={formData.slug}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, slug: e.target.value }))
-                  }
-                  placeholder="newport-beach"
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="name">Name *</Label>
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                placeholder="Newport Beach"
+              />
             </div>
 
             <div className="space-y-2">
@@ -588,121 +566,93 @@ export default function LocationsPage() {
                 />
               </div>
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone *</Label>
-              <Input
-                id="phone"
-                value={formData.phone}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, phone: e.target.value }))
-                }
-                placeholder="(949) 555-5555"
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Switch
-                id="isActive"
-                checked={formData.isActive}
-                onCheckedChange={(checked) =>
-                  setFormData((prev) => ({ ...prev, isActive: checked }))
-                }
-              />
-              <Label htmlFor="isActive">Active</Label>
-            </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={saving}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={isSaving}>
-              {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            <Button onClick={handleSubmit} disabled={saving}>
+              {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {editingLocation ? "Update" : "Add"} Location
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Operating Hours Dialog */}
-      <Dialog open={isHoursDialogOpen} onOpenChange={setIsHoursDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>
-              Operating Hours - {selectedLocation?.name}
-            </DialogTitle>
-            <DialogDescription>
-              Set the hours this location is open for appointments
-            </DialogDescription>
-          </DialogHeader>
+      {/* Hours Editing Modal */}
+      {selectedLocation && (
+        <HoursEditingModal
+          open={isHoursModalOpen}
+          onClose={() => setIsHoursModalOpen(false)}
+          onSave={handleSaveHours}
+          locationName={selectedLocation.name}
+          initialHours={dbHoursToFrontend(selectedLocation.operatingHours)}
+          saving={savingHours}
+        />
+      )}
 
-          <div className="space-y-3">
-            {operatingHours.map((day, index) => (
-              <div
-                key={day.dayOfWeek}
-                className="flex items-center gap-4 p-3 border rounded-lg"
-              >
-                <div className="w-24">
-                  <span className="font-medium">
-                    {daysOfWeek.find((d) => d.value === day.dayOfWeek)?.label}
-                  </span>
-                </div>
-                <Switch
-                  checked={day.isOpen}
-                  onCheckedChange={(checked) => {
-                    const newHours = [...operatingHours];
-                    newHours[index].isOpen = checked;
-                    setOperatingHours(newHours);
-                  }}
-                />
-                {day.isOpen ? (
-                  <>
-                    <Input
-                      type="time"
-                      value={day.openTime}
-                      onChange={(e) => {
-                        const newHours = [...operatingHours];
-                        newHours[index].openTime = e.target.value;
-                        setOperatingHours(newHours);
-                      }}
-                      className="w-28"
-                    />
-                    <span className="text-muted-foreground">to</span>
-                    <Input
-                      type="time"
-                      value={day.closeTime}
-                      onChange={(e) => {
-                        const newHours = [...operatingHours];
-                        newHours[index].closeTime = e.target.value;
-                        setOperatingHours(newHours);
-                      }}
-                      className="w-28"
-                    />
-                  </>
-                ) : (
-                  <span className="text-muted-foreground italic">Closed</span>
-                )}
-              </div>
-            ))}
-          </div>
+      {/* Deactivate Confirmation Modal */}
+      <ConfirmationModal
+        open={confirmModal.type === "deactivate"}
+        onClose={() => setConfirmModal({ type: null, location: null })}
+        onConfirm={handleConfirmDeactivate}
+        title="Deactivate Location"
+        description={
+          <>
+            Are you sure you want to deactivate{" "}
+            <span className="font-medium">&ldquo;{confirmModal.location?.name}&rdquo;</span>?
+            <p className="mt-2 text-sm">
+              This location has {confirmModal.location?.technicianCount || 0} technicians.
+              They will not appear on the booking calendar.
+            </p>
+            <p className="mt-2 text-sm text-gray-500">
+              You can reactivate this location at any time.
+            </p>
+          </>
+        }
+        confirmLabel="Deactivate"
+        variant="warning"
+        loading={toggling === confirmModal.location?.id}
+      />
 
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Clock className="h-4 w-4" />
-            Last appointment slot is typically 1 hour before closing
-          </div>
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        open={confirmModal.type === "delete"}
+        onClose={() => setConfirmModal({ type: null, location: null })}
+        onConfirm={handleConfirmDelete}
+        title="Delete Location"
+        description={
+          <>
+            Are you sure you want to permanently delete{" "}
+            <span className="font-medium">&ldquo;{confirmModal.location?.name}&rdquo;</span>?
+            <p className="mt-2 text-sm text-gray-500">
+              This action cannot be undone.
+            </p>
+          </>
+        }
+        confirmLabel="Delete Location"
+        variant="danger"
+        loading={deleting}
+      />
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsHoursDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveHours} disabled={isSaving}>
-              {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Save Hours
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Cannot Delete Info Modal */}
+      <InfoModal
+        open={confirmModal.type === "cannotDelete"}
+        onClose={() => setConfirmModal({ type: null, location: null })}
+        title="Cannot Delete Location"
+        description={
+          <>
+            <span className="font-medium">&ldquo;{confirmModal.location?.name}&rdquo;</span> cannot be
+            deleted because it has {confirmModal.location?.technicianCount} technicians
+            assigned.
+            <p className="mt-2 text-sm">
+              Please reassign these technicians to another location before deleting.
+            </p>
+          </>
+        }
+        variant="warning"
+      />
     </div>
   );
 }
