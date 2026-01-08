@@ -73,13 +73,13 @@ export function BookingLayoutWrapper({
 
       {/* Progress Steps - Mobile optimized */}
       <div className="bg-card/50 border-b">
-        <div className="max-w-2xl mx-auto px-4 py-3">
+        <div className="max-w-2xl mx-auto px-4 py-2">
           <BookingSteps currentStep={currentStep} />
         </div>
       </div>
 
       {/* Main content */}
-      <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-6">
+      <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-4">
         {children}
       </main>
 

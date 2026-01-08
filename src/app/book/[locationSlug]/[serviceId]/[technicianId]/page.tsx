@@ -63,7 +63,7 @@ interface PageProps {
 export default function DateTimeSelectionPage({ params }: PageProps) {
   const router = useRouter();
   const { setTechnician, setDateTime, resetBooking } = useBooking();
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<string | null>(null);
   const [showFullCalendar, setShowFullCalendar] = useState(false);
@@ -81,6 +81,10 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
+
+  // Track which dates have availability (for graying out unavailable dates)
+  const [dateAvailability, setDateAvailability] = useState<Record<string, boolean>>({});
+  const [isCheckingDates, setIsCheckingDates] = useState(true);
 
   // Abort controller ref for cancelling in-flight availability requests
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -132,6 +136,56 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
     fetchBookingData();
   }, [paramsData, setTechnician]);
 
+  // Check availability for all quick dates and auto-select first available
+  useEffect(() => {
+    if (!bookingData.location || !bookingData.service || !paramsData) return;
+
+    const checkAllDates = async () => {
+      setIsCheckingDates(true);
+      const techId = paramsData.technicianId === "any" ? "any" : paramsData.technicianId;
+      const availability: Record<string, boolean> = {};
+      let firstAvailableDate: Date | null = null;
+
+      // Check all 7 quick dates in parallel
+      const checks = quickDates.map(async (date) => {
+        const dateStr = format(date, "yyyy-MM-dd");
+        try {
+          const res = await fetch(
+            `/api/availability?locationId=${bookingData.location!.id}&serviceId=${bookingData.service!.id}&technicianId=${techId}&date=${dateStr}`
+          );
+          const data = await res.json();
+          const hasAvailability = (data.slots || []).some((s: TimeSlot) => s.available);
+          return { dateStr, hasAvailability, date };
+        } catch {
+          return { dateStr, hasAvailability: false, date };
+        }
+      });
+
+      const results = await Promise.all(checks);
+
+      // Process results
+      for (const { dateStr, hasAvailability, date } of results) {
+        availability[dateStr] = hasAvailability;
+        if (hasAvailability && !firstAvailableDate) {
+          firstAvailableDate = date;
+        }
+      }
+
+      setDateAvailability(availability);
+
+      // Auto-select first available date, or fall back to today if none available
+      if (firstAvailableDate) {
+        setSelectedDate(firstAvailableDate);
+      } else {
+        setSelectedDate(new Date());
+      }
+
+      setIsCheckingDates(false);
+    };
+
+    checkAllDates();
+  }, [bookingData.location, bookingData.service, paramsData]);
+
   // Fetch availability when date or booking data changes
   const fetchAvailability = useCallback(async (date: Date) => {
     if (!bookingData.location || !bookingData.service || !paramsData) return;
@@ -173,7 +227,7 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
   }, [bookingData.location, bookingData.service, paramsData]);
 
   useEffect(() => {
-    if (bookingData.location && bookingData.service) {
+    if (bookingData.location && bookingData.service && selectedDate) {
       fetchAvailability(selectedDate);
     }
   }, [selectedDate, bookingData.location, bookingData.service, fetchAvailability]);
@@ -200,7 +254,7 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
   };
 
   const handleContinue = () => {
-    if (!selectedTime || !paramsData) return;
+    if (!selectedTime || !paramsData || !selectedDate) return;
 
     // Save to booking context
     setDateTime(selectedDate, selectedTime);
@@ -218,11 +272,12 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
     router.push("/book");
   };
 
-  if (!paramsData || isLoadingData) {
+  if (!paramsData || isLoadingData || isCheckingDates || !selectedDate) {
     return (
       <BookingLayoutWrapper currentStep={4}>
-        <div className="flex items-center justify-center py-12">
+        <div className="flex flex-col items-center justify-center py-12 gap-2">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Finding available times...</p>
         </div>
       </BookingLayoutWrapper>
     );
@@ -232,55 +287,57 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
 
   return (
     <BookingLayoutWrapper currentStep={4} showFooter={false}>
-      <div className="pb-36">
-        {/* Back button and selection info */}
-        <div className="mb-4">
+      <div className="pb-28">
+        {/* Compact header with back button and title inline */}
+        <div className="flex items-center gap-3 mb-3">
           <Link href={`/book/${paramsData.locationSlug}/${paramsData.serviceId}`}>
-            <Button variant="ghost" size="sm" className="-ml-2">
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              Back
+            <Button variant="ghost" size="sm" className="h-8 px-2">
+              <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-1">
-            <Badge variant="secondary" className="text-xs">{locationName}</Badge>
-            <Badge variant="outline" className="text-xs">{serviceName}</Badge>
-            <Badge variant="outline" className="text-xs">{techName}</Badge>
+          <div>
+            <h1 className="text-lg font-semibold leading-tight">Pick a Time</h1>
+            <p className="text-xs text-muted-foreground">
+              {locationName} · {serviceName} · {techName}
+            </p>
           </div>
         </div>
 
-        {/* Header */}
-        <div className="text-center mb-4">
-          <h2 className="text-xl font-semibold text-foreground">Pick a Time</h2>
-          <p className="text-sm text-muted-foreground mt-1">Select your preferred date and time</p>
-        </div>
-
         {/* Quick Date Pills - Horizontal Scroll */}
-        <div className="mb-4">
+        <div className="mb-3">
           <div className="overflow-x-auto scrollbar-hide -mx-4 px-4">
-            <div className="flex gap-2 w-max pb-2">
+            <div className="flex gap-1.5 w-max pb-1">
               {quickDates.map((date) => {
+                const dateStr = format(date, "yyyy-MM-dd");
                 const isSelected = isSameDay(date, selectedDate);
                 const isToday = isSameDay(date, new Date());
+                const isUnavailable = dateAvailability[dateStr] === false;
+
                 return (
                   <button
                     key={date.toISOString()}
                     onClick={() => handleDateSelect(date)}
                     className={cn(
-                      "flex flex-col items-center py-2 px-3 rounded-xl transition-all min-w-[56px]",
-                      "border-2",
+                      "flex flex-col items-center py-1.5 px-2.5 rounded-lg transition-all min-w-[50px]",
+                      "border",
                       isSelected
                         ? "bg-primary text-primary-foreground border-primary"
+                        : isUnavailable
+                        ? "bg-muted/50 border-border text-muted-foreground/60"
                         : "bg-card border-border hover:border-primary/50"
                     )}
                   >
-                    <span className="text-[10px] uppercase tracking-wide font-medium">
+                    <span className="text-[9px] uppercase tracking-wide font-medium">
                       {format(date, "EEE")}
                     </span>
-                    <span className="text-lg font-bold">
+                    <span className={cn(
+                      "text-base font-bold leading-tight",
+                      isUnavailable && !isSelected && "line-through decoration-1"
+                    )}>
                       {format(date, "d")}
                     </span>
                     {isToday && (
-                      <span className="text-[8px] uppercase">Today</span>
+                      <span className="text-[7px] uppercase leading-tight">Today</span>
                     )}
                   </button>
                 );
@@ -291,15 +348,15 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
           {/* Full Calendar Toggle */}
           <Collapsible open={showFullCalendar} onOpenChange={setShowFullCalendar}>
             <CollapsibleTrigger asChild>
-              <Button variant="ghost" size="sm" className="w-full mt-2 text-xs text-muted-foreground">
+              <Button variant="ghost" size="sm" className="w-full mt-1 h-7 text-xs text-muted-foreground">
                 <CalendarIcon className="h-3 w-3 mr-1" />
-                {showFullCalendar ? "Hide calendar" : "Show full calendar"}
+                {showFullCalendar ? "Hide" : "More dates"}
                 <ChevronDown className={cn("h-3 w-3 ml-1 transition-transform", showFullCalendar && "rotate-180")} />
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent>
               <Card className="mt-2">
-                <CardContent className="p-3">
+                <CardContent className="p-2">
                   <Calendar
                     mode="single"
                     selected={selectedDate}
@@ -320,30 +377,30 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
 
         {/* Time Slots */}
         <Card>
-          <CardHeader className="pb-3">
+          <CardHeader className="py-2.5 px-4">
             <CardTitle className="text-sm flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <Clock className="h-4 w-4" />
-                {format(selectedDate, "EEEE, MMM d")}
+              <span className="flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5" />
+                {format(selectedDate, "EEE, MMM d")}
               </span>
               {!isLoadingSlots && availableCount > 0 && (
-                <Badge variant="secondary" className="text-xs">
-                  {availableCount} available
+                <Badge variant="secondary" className="text-[10px] py-0 h-5">
+                  {availableCount} slots
                 </Badge>
               )}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0 pb-3">
             {isLoadingSlots ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
               </div>
             ) : timeSlots.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">
+              <p className="text-sm text-muted-foreground text-center py-4">
                 No available times. Try another date.
               </p>
             ) : (
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-4 gap-1.5">
                 {timeSlots.map((slot) => (
                   <Button
                     key={slot.time}
@@ -352,7 +409,7 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
                     disabled={!slot.available}
                     onClick={() => handleTimeSelect(slot)}
                     className={cn(
-                      "text-xs h-10",
+                      "text-xs h-9",
                       !slot.available && "opacity-40",
                       selectedTime === slot.time && "ring-2 ring-offset-1 ring-primary"
                     )}
@@ -368,23 +425,18 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
 
       {/* Sticky Footer */}
       <div className="fixed bottom-0 left-0 right-0 bg-card border-t safe-area-inset-bottom">
-        <div className="max-w-2xl mx-auto px-4 py-3">
+        <div className="max-w-2xl mx-auto px-4 py-2.5">
           {selectedTime ? (
-            <>
-              <p className="text-xs text-center text-muted-foreground mb-1.5">
-                {format(selectedDate, "EEE, MMM d")} at {selectedTime}
-              </p>
-              <Button className="w-full h-11" onClick={handleContinue}>
-                Continue to Checkout
-              </Button>
-            </>
+            <Button className="w-full h-10" onClick={handleContinue}>
+              Continue · {format(selectedDate, "EEE, MMM d")} at {selectedTime}
+            </Button>
           ) : (
-            <Button className="w-full h-11" disabled>
+            <Button className="w-full h-10" disabled>
               Select a time to continue
             </Button>
           )}
-          <div className="mt-2 flex items-center justify-center gap-3 text-[10px] text-muted-foreground/70">
-            <span>Questions? Text 657-334-9919</span>
+          <div className="mt-1.5 flex items-center justify-center gap-3 text-[10px] text-muted-foreground/70">
+            <span>Text 657-334-9919</span>
             <span>·</span>
             <button
               onClick={() => setShowStartOverDialog(true)}
