@@ -2,14 +2,9 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { User, Phone, Loader2, CalendarDays, RotateCcw } from "lucide-react";
+import { User, Loader2, CalendarDays, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { OTPInput } from "@/components/ui/otp-input";
-import {
-  usePhoneVerification,
-  ClientData,
-} from "@/hooks/use-phone-verification";
 import { useBooking } from "./booking-context";
 import { cn } from "@/lib/utils";
 
@@ -31,6 +26,11 @@ interface AppointmentHistoryItem {
 
 interface ReturningClientCardProps {
   className?: string;
+  onSendCode?: (phone: string, formattedPhone: string) => void;
+  verifiedClient?: {
+    firstName: string;
+    id: string;
+  } | null;
 }
 
 // Format phone number as user types: (XXX) XXX-XXXX
@@ -47,33 +47,25 @@ function getDigits(formatted: string): string {
   return formatted.replace(/\D/g, "");
 }
 
-export function ReturningClientCard({ className }: ReturningClientCardProps) {
+export function ReturningClientCard({
+  className,
+  onSendCode,
+  verifiedClient,
+}: ReturningClientCardProps) {
   const router = useRouter();
   const { resetBooking, setLocation, setService, setTechnician } = useBooking();
-  const {
-    status,
-    error,
-    clientData,
-    sendCode,
-    verifyCode,
-    reset,
-    canResend,
-    resendCountdown,
-  } = usePhoneVerification();
 
   const [phone, setPhone] = useState("");
-  const [otpValue, setOtpValue] = useState("");
-  const [appointments, setAppointments] = useState<AppointmentHistoryItem[]>(
-    []
-  );
+  const [isSending, setIsSending] = useState(false);
+  const [appointments, setAppointments] = useState<AppointmentHistoryItem[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
-  // Fetch appointment history when client is verified
+  // Fetch appointment history when we have a verified client
   useEffect(() => {
-    if (status === "verified" && clientData?.id) {
-      fetchAppointmentHistory(clientData.id);
+    if (verifiedClient?.id) {
+      fetchAppointmentHistory(verifiedClient.id);
     }
-  }, [status, clientData?.id]);
+  }, [verifiedClient?.id]);
 
   const fetchAppointmentHistory = async (clientId: string) => {
     setLoadingHistory(true);
@@ -97,24 +89,11 @@ export function ReturningClientCard({ className }: ReturningClientCardProps) {
 
   const handleSendCode = async () => {
     const digits = getDigits(phone);
-    if (digits.length === 10) {
-      await sendCode(digits);
+    if (digits.length === 10 && onSendCode) {
+      setIsSending(true);
+      onSendCode(digits, phone);
+      // Don't reset isSending - parent will unmount this component
     }
-  };
-
-  const handleOtpChange = (value: string) => {
-    setOtpValue(value);
-  };
-
-  const handleOtpComplete = async (code: string) => {
-    const digits = getDigits(phone);
-    await verifyCode(digits, code);
-  };
-
-  const handleResendCode = async () => {
-    setOtpValue("");
-    const digits = getDigits(phone);
-    await sendCode(digits);
   };
 
   const handleRebook = useCallback(
@@ -147,17 +126,14 @@ export function ReturningClientCard({ className }: ReturningClientCardProps) {
   );
 
   const handleReset = () => {
-    reset();
     setPhone("");
-    setOtpValue("");
     setAppointments([]);
   };
 
   const isPhoneValid = getDigits(phone).length === 10;
-  const isVerified = status === "verified";
 
   // Render verified state with appointment history
-  if (isVerified && clientData) {
+  if (verifiedClient) {
     return (
       <div
         className={cn(
@@ -173,7 +149,7 @@ export function ReturningClientCard({ className }: ReturningClientCardProps) {
             </div>
             <div>
               <p className="text-sm font-medium text-slate-900">
-                Welcome back, {clientData.firstName}!
+                Welcome back, {verifiedClient.firstName}!
               </p>
             </div>
           </div>
@@ -230,60 +206,6 @@ export function ReturningClientCard({ className }: ReturningClientCardProps) {
     );
   }
 
-  // Render OTP verification state
-  if (status === "awaiting_code" || status === "verifying") {
-    return (
-      <div
-        className={cn(
-          "rounded-xl overflow-hidden bg-white border border-slate-200 shadow-sm p-4",
-          className
-        )}
-      >
-        <div className="text-center mb-3">
-          <div className="w-10 h-10 mx-auto rounded-full bg-[#8B687A]/10 flex items-center justify-center mb-2">
-            <Phone className="w-5 h-5 text-[#8B687A]" />
-          </div>
-          <p className="text-sm text-slate-600">
-            Enter the code sent to {phone}
-          </p>
-        </div>
-
-        <OTPInput
-          value={otpValue}
-          onChange={handleOtpChange}
-          onComplete={handleOtpComplete}
-          disabled={status === "verifying"}
-          error={!!error}
-          autoFocus
-          className="mb-2"
-        />
-
-        {error && (
-          <p className="text-xs text-red-500 text-center mb-2">{error}</p>
-        )}
-
-        <div className="flex items-center justify-between text-xs">
-          <button
-            onClick={handleReset}
-            className="text-slate-400 hover:text-slate-600"
-          >
-            Change number
-          </button>
-          {canResend ? (
-            <button
-              onClick={handleResendCode}
-              className="text-[#8B687A] hover:underline"
-            >
-              Resend code
-            </button>
-          ) : (
-            <span className="text-slate-400">Resend in {resendCountdown}s</span>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   // Render initial phone input state
   return (
     <div
@@ -308,20 +230,16 @@ export function ReturningClientCard({ className }: ReturningClientCardProps) {
           placeholder="(555) 555-5555"
           value={phone}
           onChange={handlePhoneChange}
-          disabled={status === "sending"}
+          disabled={isSending}
           className="h-10 text-sm"
         />
 
-        {error && status === "error" && (
-          <p className="text-xs text-red-500">{error}</p>
-        )}
-
         <Button
           onClick={handleSendCode}
-          disabled={!isPhoneValid || status === "sending"}
+          disabled={!isPhoneValid || isSending}
           className="w-full h-10 text-sm bg-[#8B687A] hover:bg-[#6d5261]"
         >
-          {status === "sending" ? (
+          {isSending ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               Sending...

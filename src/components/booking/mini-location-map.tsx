@@ -10,9 +10,9 @@ interface MiniLocationMapProps {
 }
 
 // Loading skeleton for the mini-map
-function MapSkeleton({ className = "" }: { className?: string }) {
+function MapSkeleton() {
   return (
-    <Skeleton className={`w-full bg-slate-100 ${className}`} />
+    <Skeleton className="w-full h-full bg-slate-100" />
   );
 }
 
@@ -22,7 +22,7 @@ const MiniLocationMapInner = dynamic(
     import("./mini-location-map-inner").then((mod) => mod.MiniLocationMapInner),
   {
     ssr: false,
-    loading: () => <MapSkeleton className="h-[80px] rounded-t-xl" />,
+    loading: () => <MapSkeleton />,
   }
 );
 
@@ -32,10 +32,12 @@ export function MiniLocationMap({
   className = "",
 }: MiniLocationMapProps) {
   return (
-    <MiniLocationMapInner
-      latitude={latitude}
-      longitude={longitude}
-      className={className}
-    />
+    <div className={`w-full h-full ${className}`}>
+      <MiniLocationMapInner
+        latitude={latitude}
+        longitude={longitude}
+        className="w-full h-full"
+      />
+    </div>
   );
 }

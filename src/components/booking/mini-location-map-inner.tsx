@@ -73,7 +73,7 @@ export function MiniLocationMapInner({
   }, []);
 
   if (!mounted) {
-    return null;
+    return <div className="w-full h-full bg-slate-100" />;
   }
 
   return (
@@ -89,7 +89,7 @@ export function MiniLocationMapInner({
       keyboard={false}
       boxZoom={false}
       attributionControl={false}
-      style={{ background: "#f8fafc" }}
+      style={{ background: "#f8fafc", height: "100%", width: "100%" }}
     >
       <TileLayer
         url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"

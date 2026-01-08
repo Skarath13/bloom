@@ -1,10 +1,13 @@
 "use client";
 
-import { MapPin, Shield, Star, Clock } from "lucide-react";
+import { useState, useCallback } from "react";
+import { MapPin, Shield, Star, CalendarCheck } from "lucide-react";
 import { useBooking } from "./booking-context";
 import { LocationCard } from "./location-card";
 import { ReturningClientCard } from "./returning-client-card";
 import { NearestLocationFinder } from "./nearest-location-finder";
+import { OtpVerificationScreen } from "./otp-verification-screen";
+import { ClientData } from "@/hooks/use-phone-verification";
 
 interface Location {
   id: string;
@@ -23,13 +26,52 @@ interface GridLocationSelectorProps {
   locations: Location[];
 }
 
+interface OtpState {
+  phone: string;
+  formattedPhone: string;
+}
+
 export function GridLocationSelector({ locations }: GridLocationSelectorProps) {
   const { setLocation, resetBooking } = useBooking();
+
+  // OTP mode state (not persisted - resets on refresh)
+  const [otpState, setOtpState] = useState<OtpState | null>(null);
+  const [verifiedClient, setVerifiedClient] = useState<{ firstName: string; id: string } | null>(null);
 
   const handleLocationClick = (location: Location) => {
     resetBooking();
     setLocation(location.id, location.name, location.slug);
   };
+
+  // Handle when user wants to send OTP code
+  const handleSendCode = useCallback((phone: string, formattedPhone: string) => {
+    setOtpState({ phone, formattedPhone });
+  }, []);
+
+  // Handle going back from OTP screen
+  const handleOtpBack = useCallback(() => {
+    setOtpState(null);
+  }, []);
+
+  // Handle successful verification
+  const handleVerified = useCallback((clientData: ClientData | null) => {
+    if (clientData) {
+      setVerifiedClient({ firstName: clientData.firstName, id: clientData.id });
+    }
+    // Stay on OTP screen - it will show the verified state with history
+  }, []);
+
+  // If in OTP mode, show full-screen OTP verification
+  if (otpState) {
+    return (
+      <OtpVerificationScreen
+        phone={otpState.phone}
+        formattedPhone={otpState.formattedPhone}
+        onBack={handleOtpBack}
+        onVerified={handleVerified}
+      />
+    );
+  }
 
   // Empty state
   if (locations.length === 0) {
@@ -75,11 +117,15 @@ export function GridLocationSelector({ locations }: GridLocationSelectorProps) {
         <div
           className="grid grid-cols-2 gap-3"
           style={{
-            gridTemplateRows: "repeat(3, minmax(160px, auto))",
+            gridTemplateRows: "repeat(3, minmax(176px, auto))",
           }}
         >
           {/* First card: Returning Client Login */}
-          <ReturningClientCard className="min-h-[160px]" />
+          <ReturningClientCard
+            className="min-h-[176px]"
+            onSendCode={handleSendCode}
+            verifiedClient={verifiedClient}
+          />
 
           {/* Location cards */}
           {displayLocations.map((location) => (
@@ -105,11 +151,11 @@ export function GridLocationSelector({ locations }: GridLocationSelectorProps) {
           </span>
           <span className="flex items-center text-xs text-muted-foreground">
             <Star className="h-3.5 w-3.5 mr-1 text-yellow-500 fill-yellow-500" />
-            High Rating
+            Highly Rated
           </span>
           <span className="flex items-center text-xs text-muted-foreground">
-            <Clock className="h-3.5 w-3.5 mr-1 text-blue-500" />
-            Same-Day
+            <CalendarCheck className="h-3.5 w-3.5 mr-1 text-blue-500" />
+            Easy Booking
           </span>
         </div>
 
@@ -123,7 +169,7 @@ export function GridLocationSelector({ locations }: GridLocationSelectorProps) {
               <div className="w-5 h-5 rounded-full bg-blue-200 border-2 border-background" />
             </div>
             <span className="text-xs text-muted-foreground">
-              Trusted by over 7,500 clients
+              Trusted by 7,500+ clients
             </span>
           </div>
           <p className="text-[10px] text-muted-foreground">
