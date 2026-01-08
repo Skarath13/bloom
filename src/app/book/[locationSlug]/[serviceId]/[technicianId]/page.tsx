@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { format, addDays, startOfDay, isBefore, isSameDay, endOfMonth, differenceInDays } from "date-fns";
+import { format, addDays, startOfDay, isBefore, isSameDay } from "date-fns";
 import { ArrowLeft, Clock, ChevronDown, Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,26 +26,13 @@ interface BookingData {
   technician: { id: string; firstName: string; lastName: string } | null;
 }
 
-// Generate quick dates: remaining days of current month + next month if within 7 days
+// Generate quick dates: next 30 days
 const generateQuickDates = () => {
   const dates: Date[] = [];
   const today = new Date();
-  const monthEnd = endOfMonth(today);
-  const daysUntilMonthEnd = differenceInDays(monthEnd, today);
-
-  // Add remaining days of current month (including today)
-  for (let i = 0; i <= daysUntilMonthEnd; i++) {
+  for (let i = 0; i < 30; i++) {
     dates.push(addDays(today, i));
   }
-
-  // If next month starts within 7 days, add first week of next month too
-  if (daysUntilMonthEnd < 7) {
-    const daysToAdd = 7 - daysUntilMonthEnd;
-    for (let i = 1; i <= daysToAdd; i++) {
-      dates.push(addDays(monthEnd, i));
-    }
-  }
-
   return dates;
 };
 
