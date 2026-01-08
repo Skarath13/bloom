@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { format, parse } from "date-fns";
@@ -16,6 +16,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { BookingLayoutWrapper } from "@/components/booking/booking-layout-wrapper";
 import { useBooking } from "@/components/booking/booking-context";
 import { CardPaymentForm } from "@/components/booking/card-payment-form";
+import { PhoneVerificationInput } from "@/components/booking/phone-verification-input";
+import { SavedCardPicker, SavedCard } from "@/components/booking/saved-card-picker";
+import { ClientData } from "@/hooks/use-phone-verification";
 import { getStripe } from "@/lib/stripe-client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -62,6 +65,12 @@ export default function CheckoutPage({ params }: PageProps) {
   const [inspoPreview, setInspoPreview] = useState<string | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Phone verification and returning client state
+  const [phoneVerified, setPhoneVerified] = useState(false);
+  const [existingClient, setExistingClient] = useState<ClientData | null>(null);
+  const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string | null>(null);
+  const [showNewCardForm, setShowNewCardForm] = useState(false);
 
   // Resolve params
   useEffect(() => {
@@ -110,18 +119,43 @@ export default function CheckoutPage({ params }: PageProps) {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value.replace(/\D/g, "");
-    if (value.length > 10) value = value.slice(0, 10);
-
-    if (value.length >= 6) {
-      value = `(${value.slice(0, 3)}) ${value.slice(3, 6)}-${value.slice(6)}`;
-    } else if (value.length >= 3) {
-      value = `(${value.slice(0, 3)}) ${value.slice(3)}`;
+  const handlePhoneChange = (newPhone: string) => {
+    setFormData((prev) => ({ ...prev, phone: newPhone }));
+    // Reset verification state when phone changes
+    if (phoneVerified) {
+      setPhoneVerified(false);
+      setExistingClient(null);
+      setSelectedPaymentMethodId(null);
+      setShowNewCardForm(false);
     }
-
-    setFormData((prev) => ({ ...prev, phone: value }));
   };
+
+  // Handle phone verification completion
+  const handlePhoneVerified = useCallback((clientData: ClientData | null) => {
+    setPhoneVerified(true);
+    setExistingClient(clientData);
+
+    if (clientData) {
+      // Pre-fill form with existing client data
+      setFormData((prev) => ({
+        ...prev,
+        firstName: clientData.firstName || prev.firstName,
+        lastName: clientData.lastName || prev.lastName,
+        email: clientData.email || prev.email,
+        notes: clientData.notes || prev.notes,
+      }));
+
+      // Auto-select first payment method if available
+      if (clientData.paymentMethods && clientData.paymentMethods.length > 0) {
+        setSelectedPaymentMethodId(clientData.paymentMethods[0].id);
+        setShowNewCardForm(false);
+      } else {
+        setShowNewCardForm(true);
+      }
+    } else {
+      setShowNewCardForm(true);
+    }
+  }, []);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -187,6 +221,10 @@ export default function CheckoutPage({ params }: PageProps) {
   };
 
   const validateForm = () => {
+    if (!phoneVerified) {
+      toast.error("Please verify your phone number first");
+      return false;
+    }
     if (!formData.firstName.trim()) {
       toast.error("Please enter your first name");
       return false;
@@ -458,6 +496,15 @@ export default function CheckoutPage({ params }: PageProps) {
           {step === "info" ? (
             <CardContent className="p-3">
               <form onSubmit={handleSubmitInfo} className="space-y-3" autoComplete="on">
+                {/* Phone Verification - First (acts as login) */}
+                <PhoneVerificationInput
+                  value={formData.phone}
+                  onChange={handlePhoneChange}
+                  onVerified={handlePhoneVerified}
+                  disabled={isLoading}
+                />
+
+                {/* Name fields - shown after phone verification or for new clients */}
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <Label htmlFor="firstName" className="text-xs">First Name *</Label>
@@ -469,7 +516,7 @@ export default function CheckoutPage({ params }: PageProps) {
                       value={formData.firstName}
                       onChange={handleInputChange}
                       required
-                      disabled={isLoading}
+                      disabled={isLoading || !phoneVerified}
                       className="h-11 mt-1 text-base"
                     />
                   </div>
@@ -483,27 +530,10 @@ export default function CheckoutPage({ params }: PageProps) {
                       value={formData.lastName}
                       onChange={handleInputChange}
                       required
-                      disabled={isLoading}
+                      disabled={isLoading || !phoneVerified}
                       className="h-11 mt-1 text-base"
                     />
                   </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="phone" className="text-xs">Phone *</Label>
-                  <Input
-                    id="phone"
-                    name="phone"
-                    type="tel"
-                    inputMode="tel"
-                    autoComplete="tel"
-                    placeholder="(555) 555-5555"
-                    value={formData.phone}
-                    onChange={handlePhoneChange}
-                    required
-                    disabled={isLoading}
-                    className="h-11 mt-1 text-base"
-                  />
                 </div>
 
                 <div>
@@ -517,7 +547,7 @@ export default function CheckoutPage({ params }: PageProps) {
                     placeholder="your@email.com"
                     value={formData.email}
                     onChange={handleInputChange}
-                    disabled={isLoading}
+                    disabled={isLoading || !phoneVerified}
                     className="h-11 mt-1 text-base"
                   />
                 </div>
@@ -530,7 +560,7 @@ export default function CheckoutPage({ params }: PageProps) {
                     placeholder="Allergies, preferences..."
                     value={formData.notes}
                     onChange={handleInputChange}
-                    disabled={isLoading}
+                    disabled={isLoading || !phoneVerified}
                     rows={2}
                     className="text-sm mt-1"
                   />
@@ -545,7 +575,7 @@ export default function CheckoutPage({ params }: PageProps) {
                     accept="image/*"
                     onChange={handleFileSelect}
                     className="hidden"
-                    disabled={isLoading}
+                    disabled={isLoading || !phoneVerified}
                   />
                   {inspoPreview ? (
                     <div className="mt-1 relative flex items-start gap-3">
@@ -577,8 +607,13 @@ export default function CheckoutPage({ params }: PageProps) {
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="mt-1 w-full h-20 rounded-lg border-2 border-dashed border-muted-foreground/25 hover:border-primary/50 transition-colors flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-foreground"
-                      disabled={isLoading}
+                      className={cn(
+                        "mt-1 w-full h-20 rounded-lg border-2 border-dashed transition-colors flex flex-col items-center justify-center gap-1",
+                        phoneVerified
+                          ? "border-muted-foreground/25 hover:border-primary/50 text-muted-foreground hover:text-foreground"
+                          : "border-muted-foreground/10 text-muted-foreground/50 cursor-not-allowed"
+                      )}
+                      disabled={isLoading || !phoneVerified}
                     >
                       <ImagePlus className="h-5 w-5" />
                       <span className="text-xs">Tap to add photo</span>
@@ -586,8 +621,8 @@ export default function CheckoutPage({ params }: PageProps) {
                   )}
                 </div>
 
-                <Button type="submit" className="w-full h-10 mt-1" disabled={isLoading}>
-                  {isLoading ? "Processing..." : "Continue to Card"}
+                <Button type="submit" className="w-full h-10 mt-1" disabled={isLoading || !phoneVerified}>
+                  {isLoading ? "Processing..." : phoneVerified ? "Continue to Card" : "Verify Phone to Continue"}
                 </Button>
               </form>
             </CardContent>
@@ -610,7 +645,46 @@ export default function CheckoutPage({ params }: PageProps) {
                   </p>
                 </div>
 
-                {bookingData?.clientSecret && (
+                {/* Saved Card Picker for returning clients */}
+                {existingClient && existingClient.paymentMethods && existingClient.paymentMethods.length > 0 && (
+                  <div className="mb-4">
+                    <SavedCardPicker
+                      cards={existingClient.paymentMethods as SavedCard[]}
+                      selectedId={selectedPaymentMethodId}
+                      onSelect={(id) => {
+                        setSelectedPaymentMethodId(id);
+                        setShowNewCardForm(id === null);
+                      }}
+                      onAddNew={() => {
+                        setSelectedPaymentMethodId(null);
+                        setShowNewCardForm(true);
+                      }}
+                      disabled={isLoading}
+                    />
+
+                    {/* Confirm with saved card button */}
+                    {selectedPaymentMethodId && !showNewCardForm && (
+                      <Button
+                        type="button"
+                        className="w-full mt-4"
+                        disabled={isLoading}
+                        onClick={() => {
+                          const selectedCard = existingClient.paymentMethods.find(
+                            (pm) => pm.id === selectedPaymentMethodId
+                          );
+                          if (selectedCard) {
+                            handlePaymentSuccess(selectedCard.stripePaymentMethodId);
+                          }
+                        }}
+                      >
+                        {isLoading ? "Processing..." : "Confirm Booking"}
+                      </Button>
+                    )}
+                  </div>
+                )}
+
+                {/* Show Stripe form for new card entry */}
+                {(showNewCardForm || !existingClient?.paymentMethods?.length) && bookingData?.clientSecret && (
                   <Elements
                     stripe={getStripe()}
                     options={{

@@ -63,17 +63,44 @@ export async function POST(request: NextRequest) {
     // Normalize phone number
     const normalizedPhone = clientPhone.replace(/\D/g, "");
 
-    // ATOMIC CLIENT CREATION: Use upsert with ON CONFLICT
-    // This prevents race conditions where two concurrent requests create duplicate clients
-    const clientId = generateId();
-    const now = new Date().toISOString();
-
-    // Try to insert new client, or return existing one on phone conflict
-    const { data: upsertResult, error: upsertError } = await supabase
+    // Check if client already exists by phone
+    const { data: existingClient } = await supabase
       .from(tables.clients)
-      // @ts-expect-error - Supabase types don't resolve dynamic table names correctly
-      .upsert(
-        {
+      .select("*")
+      .eq("phone", normalizedPhone)
+      .single() as { data: ClientData | null; error: unknown };
+
+    let client: ClientData | null = existingClient;
+
+    if (existingClient) {
+      // Update existing client (preserve phoneVerified status!)
+      const { data: updatedClient, error: updateError } = await supabase
+        .from(tables.clients)
+        // @ts-expect-error - Supabase types don't resolve dynamic table names correctly
+        .update({
+          firstName: clientFirstName,
+          lastName: clientLastName,
+          email: clientEmail || existingClient.email,
+          updatedAt: new Date().toISOString(),
+        })
+        .eq("id", existingClient.id)
+        .select("*")
+        .single() as { data: ClientData | null; error: unknown };
+
+      if (updateError) {
+        console.error("Client update error:", updateError);
+      } else if (updatedClient) {
+        client = updatedClient;
+      }
+    } else {
+      // Create new client
+      const clientId = generateId();
+      const now = new Date().toISOString();
+
+      const { data: newClient, error: insertError } = await supabase
+        .from(tables.clients)
+        // @ts-expect-error - Supabase types don't resolve dynamic table names correctly
+        .insert({
           id: clientId,
           firstName: clientFirstName,
           lastName: clientLastName,
@@ -83,32 +110,18 @@ export async function POST(request: NextRequest) {
           isBlocked: false,
           createdAt: now,
           updatedAt: now,
-        },
-        {
-          onConflict: "phone",
-          ignoreDuplicates: false, // Return existing record on conflict
-        }
-      )
-      .select("*")
-      .single() as { data: ClientData | null; error: unknown };
-
-    // If upsert failed, try to fetch existing client
-    let client: ClientData | null = upsertResult;
-    if (upsertError) {
-      const { data: existingClient, error: fetchError } = await supabase
-        .from(tables.clients)
+        })
         .select("*")
-        .eq("phone", normalizedPhone)
         .single() as { data: ClientData | null; error: unknown };
 
-      if (fetchError || !existingClient) {
-        console.error("Client creation/fetch error:", upsertError);
+      if (insertError || !newClient) {
+        console.error("Client creation error:", insertError);
         return NextResponse.json(
           { error: "Failed to create client" },
           { status: 500 }
         );
       }
-      client = existingClient;
+      client = newClient;
     }
 
     // At this point client must exist

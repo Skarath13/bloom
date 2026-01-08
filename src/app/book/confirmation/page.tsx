@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CheckCircle2, Calendar, Clock, MapPin, EyeClosed, MessageSquare, Home } from "lucide-react";
+import { CheckCircle2, Calendar, Clock, MapPin, EyeClosed, MessageSquare, Home, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -116,6 +116,12 @@ export default function ConfirmationPage() {
 
       {/* Actions */}
       <div className="flex flex-col sm:flex-row gap-4 justify-center">
+        <Link href="/profile">
+          <Button variant="outline" className="w-full sm:w-auto">
+            <User className="h-4 w-4 mr-2" />
+            Manage Your Profile
+          </Button>
+        </Link>
         <Link href="/book">
           <Button variant="outline" className="w-full sm:w-auto">
             <Calendar className="h-4 w-4 mr-2" />
