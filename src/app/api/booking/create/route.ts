@@ -35,6 +35,7 @@ export async function POST(request: NextRequest) {
       clientPhone,
       clientEmail,
       notes,
+      inspoImageUrl,
     } = body;
 
     // Validate required fields
@@ -170,6 +171,7 @@ export async function POST(request: NextRequest) {
       endTime: appointmentEnd,
       status: "PENDING",
       notes: notes || null,
+      inspoImageUrl: inspoImageUrl || null,
       noShowProtected: true, // Card on file for protection
       bookedBy: "Client",
       depositAmount: service.depositAmount,

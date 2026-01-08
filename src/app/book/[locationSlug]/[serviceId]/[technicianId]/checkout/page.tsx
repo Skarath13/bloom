@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { format, parse } from "date-fns";
-import { ArrowLeft, Calendar, Clock, MapPin, User, Shield, Lock, ChevronDown, CheckCircle } from "lucide-react";
+import { ArrowLeft, Calendar, Clock, MapPin, User, ChevronDown, Shield, ImagePlus, X, Loader2 } from "lucide-react";
 import { Elements } from "@stripe/react-stripe-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,6 +58,10 @@ export default function CheckoutPage({ params }: PageProps) {
   });
 
   const [locationId, setLocationId] = useState<string | null>(null);
+  const [inspoImage, setInspoImage] = useState<File | null>(null);
+  const [inspoPreview, setInspoPreview] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Resolve params
   useEffect(() => {
@@ -119,6 +123,69 @@ export default function CheckoutPage({ params }: PageProps) {
     setFormData((prev) => ({ ...prev, phone: value }));
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file");
+      return;
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Image must be under 10MB");
+      return;
+    }
+
+    setInspoImage(file);
+
+    // Create preview URL
+    const previewUrl = URL.createObjectURL(file);
+    setInspoPreview(previewUrl);
+  };
+
+  const handleRemoveImage = () => {
+    if (inspoPreview) {
+      URL.revokeObjectURL(inspoPreview);
+    }
+    setInspoImage(null);
+    setInspoPreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const uploadInspoImage = async (): Promise<string | null> => {
+    if (!inspoImage) return null;
+
+    setIsUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", inspoImage);
+
+      const response = await fetch("/api/upload/inspo", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to upload image");
+      }
+
+      const { url } = await response.json();
+      return url;
+    } catch (error) {
+      console.error("Image upload error:", error);
+      toast.error("Failed to upload inspiration image");
+      return null;
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
   const validateForm = () => {
     if (!formData.firstName.trim()) {
       toast.error("Please enter your first name");
@@ -152,6 +219,12 @@ export default function CheckoutPage({ params }: PageProps) {
     setIsLoading(true);
 
     try {
+      // Upload inspo image first if selected
+      let inspoImageUrl: string | null = null;
+      if (inspoImage) {
+        inspoImageUrl = await uploadInspoImage();
+      }
+
       const [hours, minutes] = timeStr.split(":").map(Number);
       const startTime = new Date(appointmentDate);
       startTime.setHours(hours, minutes, 0, 0);
@@ -169,6 +242,7 @@ export default function CheckoutPage({ params }: PageProps) {
           clientPhone: formData.phone,
           clientEmail: formData.email || undefined,
           notes: formData.notes || undefined,
+          inspoImageUrl: inspoImageUrl || undefined,
         }),
       });
 
@@ -259,76 +333,64 @@ export default function CheckoutPage({ params }: PageProps) {
 
   return (
     <BookingLayoutWrapper currentStep={5}>
-      <div className="space-y-4">
-        {/* Back button */}
-        <div>
+      <div className="space-y-3">
+        {/* Back button + Header inline */}
+        <div className="flex items-center gap-3 mb-1">
           {step === "info" ? (
             <Link href={`/book/${paramsData.locationSlug}/${paramsData.serviceId}/${paramsData.technicianId}`}>
-              <Button variant="ghost" size="sm" className="-ml-2">
-                <ArrowLeft className="h-4 w-4 mr-1" />
-                Back
+              <Button variant="ghost" size="sm" className="h-8 px-2">
+                <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
           ) : (
-            <Button variant="ghost" size="sm" className="-ml-2" onClick={() => setStep("info")}>
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              Edit Info
+            <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => setStep("info")}>
+              <ArrowLeft className="h-4 w-4" />
             </Button>
           )}
-        </div>
-
-        {/* Header */}
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-foreground">
-            {step === "info" ? "Almost Done!" : "Save Your Card"}
-          </h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            {step === "info"
-              ? "Enter your details to complete booking"
-              : "Card saved for no-show protection only"}
-          </p>
+          <div>
+            <h1 className="text-lg font-semibold leading-tight">
+              {step === "info" ? "Almost Done!" : "Save Your Card"}
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              {step === "info"
+                ? "Enter your details to complete booking"
+                : "Card saved for no-show protection only"}
+            </p>
+          </div>
         </div>
 
         {/* Mobile: Collapsible Summary */}
         <div className="lg:hidden">
           <Collapsible open={showSummary} onOpenChange={setShowSummary}>
-            <Card>
-              <CollapsibleTrigger asChild>
-                <CardHeader className="cursor-pointer py-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm">Booking Summary</CardTitle>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold">${Number(displayData.service.price).toFixed(0)}</span>
-                      <ChevronDown className={cn("h-4 w-4 transition-transform", showSummary && "rotate-180")} />
-                    </div>
-                  </div>
-                </CardHeader>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <CardContent className="pt-0 pb-4 space-y-3 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Service</span>
-                    <span>{displayData.service.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Location</span>
-                    <span>{displayData.location.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Date & Time</span>
-                    <span>{format(appointmentDate, "MMM d")} at {timeStr}</span>
-                  </div>
-                  <Separator />
-                  <div className="flex justify-between font-medium text-green-700">
-                    <span className="flex items-center gap-1">
-                      <Shield className="h-3 w-3" />
-                      Due Today
-                    </span>
-                    <span>$0.00</span>
-                  </div>
-                </CardContent>
-              </CollapsibleContent>
-            </Card>
+            <CollapsibleTrigger asChild>
+              <div className="flex items-center justify-between py-2 px-3 bg-muted/50 rounded-lg cursor-pointer border">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="font-medium">{displayData.service.name}</span>
+                  <span className="text-muted-foreground">·</span>
+                  <span className="text-muted-foreground">{format(appointmentDate, "MMM d")}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-sm">${Number(displayData.service.price).toFixed(0)}</span>
+                  <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform", showSummary && "rotate-180")} />
+                </div>
+              </div>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="mt-1.5 py-2 px-3 bg-muted/30 rounded-lg text-xs space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Location</span>
+                  <span>{displayData.location.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Time</span>
+                  <span>{timeStr}</span>
+                </div>
+                <div className="flex justify-between font-medium text-green-700 pt-1 border-t mt-1">
+                  <span>Due Today</span>
+                  <span>$0.00</span>
+                </div>
+              </div>
+            </CollapsibleContent>
           </Collapsible>
         </div>
 
@@ -379,133 +441,152 @@ export default function CheckoutPage({ params }: PageProps) {
         {/* Form / Payment - Full width on mobile */}
         <Card>
           {step === "info" ? (
-            <>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Your Information</CardTitle>
-                <CardDescription className="text-xs">
-                  We&apos;ll send appointment reminders to your phone
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {/* Almost Done Encouragement */}
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
-                  <p className="text-sm text-green-800 flex items-center">
-                    <CheckCircle className="h-4 w-4 mr-2 flex-shrink-0" />
-                    You&apos;re almost done! Just add your details.
-                  </p>
-                </div>
-
-                <form onSubmit={handleSubmitInfo} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label htmlFor="firstName" className="text-xs">First Name *</Label>
-                      <Input
-                        id="firstName"
-                        name="firstName"
-                        placeholder="Jane"
-                        value={formData.firstName}
-                        onChange={handleInputChange}
-                        required
-                        disabled={isLoading}
-                        className="h-12 text-base"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="lastName" className="text-xs">Last Name *</Label>
-                      <Input
-                        id="lastName"
-                        name="lastName"
-                        placeholder="Doe"
-                        value={formData.lastName}
-                        onChange={handleInputChange}
-                        required
-                        disabled={isLoading}
-                        className="h-12 text-base"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="phone" className="text-xs">Phone Number *</Label>
+            <CardContent className="p-3">
+              <form onSubmit={handleSubmitInfo} className="space-y-2.5">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label htmlFor="firstName" className="text-xs">First Name *</Label>
                     <Input
-                      id="phone"
-                      name="phone"
-                      type="tel"
-                      inputMode="numeric"
-                      placeholder="(555) 555-5555"
-                      value={formData.phone}
-                      onChange={handlePhoneChange}
+                      id="firstName"
+                      name="firstName"
+                      placeholder="Jane"
+                      value={formData.firstName}
+                      onChange={handleInputChange}
                       required
                       disabled={isLoading}
-                      className="h-12 text-base"
+                      className="h-9 mt-1"
                     />
-                    <p className="text-[10px] text-muted-foreground">
-                      For appointment reminders
-                    </p>
                   </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="email" className="text-xs">Email (Optional)</Label>
+                  <div>
+                    <Label htmlFor="lastName" className="text-xs">Last Name *</Label>
                     <Input
-                      id="email"
-                      name="email"
-                      type="email"
-                      placeholder="your@email.com"
-                      value={formData.email}
+                      id="lastName"
+                      name="lastName"
+                      placeholder="Doe"
+                      value={formData.lastName}
                       onChange={handleInputChange}
+                      required
                       disabled={isLoading}
-                      className="h-12 text-base"
+                      className="h-9 mt-1"
                     />
                   </div>
+                </div>
 
-                  <div className="space-y-1">
-                    <Label htmlFor="notes" className="text-xs">Special Requests (Optional)</Label>
-                    <Textarea
-                      id="notes"
-                      name="notes"
-                      placeholder="Allergies, preferences..."
-                      value={formData.notes}
-                      onChange={handleInputChange}
+                <div>
+                  <Label htmlFor="phone" className="text-xs">Phone *</Label>
+                  <Input
+                    id="phone"
+                    name="phone"
+                    type="tel"
+                    inputMode="numeric"
+                    placeholder="(555) 555-5555"
+                    value={formData.phone}
+                    onChange={handlePhoneChange}
+                    required
+                    disabled={isLoading}
+                    className="h-9 mt-1"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="email" className="text-xs">Email (optional)</Label>
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    placeholder="your@email.com"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    disabled={isLoading}
+                    className="h-9 mt-1"
+                  />
+                </div>
+
+                {/* Inspo Image Upload - Mobile optimized */}
+                <div>
+                  <Label className="text-xs">Inspiration Photo (optional)</Label>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                    disabled={isLoading}
+                  />
+                  {inspoPreview ? (
+                    <div className="mt-1 relative">
+                      <div className="relative w-full h-32 rounded-lg overflow-hidden bg-muted">
+                        <img
+                          src={inspoPreview}
+                          alt="Inspiration preview"
+                          className="w-full h-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleRemoveImage}
+                          className="absolute top-1.5 right-1.5 p-1 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors"
+                          disabled={isLoading}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                        {isUploadingImage && (
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                            <Loader2 className="h-6 w-6 animate-spin text-white" />
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        This will be shared with your technician
+                      </p>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="mt-1 w-full h-20 rounded-lg border-2 border-dashed border-muted-foreground/25 hover:border-primary/50 transition-colors flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-foreground"
                       disabled={isLoading}
-                      rows={2}
-                      className="text-base"
-                    />
-                  </div>
+                    >
+                      <ImagePlus className="h-5 w-5" />
+                      <span className="text-xs">Tap to add photo</span>
+                    </button>
+                  )}
+                </div>
 
-                  {/* Trust indicators */}
-                  <div className="flex items-center justify-center gap-4 py-2 text-[10px] text-muted-foreground">
-                    <span className="flex items-center">
-                      <Lock className="h-3 w-3 mr-1" />
-                      Secure
-                    </span>
-                    <span className="flex items-center">
-                      <Shield className="h-3 w-3 mr-1" />
-                      256-bit SSL
-                    </span>
-                  </div>
+                <div>
+                  <Label htmlFor="notes" className="text-xs">Notes (optional)</Label>
+                  <Textarea
+                    id="notes"
+                    name="notes"
+                    placeholder="Allergies, preferences..."
+                    value={formData.notes}
+                    onChange={handleInputChange}
+                    disabled={isLoading}
+                    rows={2}
+                    className="text-sm mt-1"
+                  />
+                </div>
 
-                  <Button type="submit" className="w-full h-12 text-base" disabled={isLoading}>
-                    {isLoading ? "Processing..." : "Continue to Card"}
-                  </Button>
-                </form>
-              </CardContent>
-            </>
+                <Button type="submit" className="w-full h-10 mt-1" disabled={isLoading}>
+                  {isLoading ? "Processing..." : "Continue to Card"}
+                </Button>
+              </form>
+            </CardContent>
           ) : (
             <>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Card on File</CardTitle>
+              <CardHeader className="pb-2 pt-3 px-3">
+                <CardTitle className="text-sm">Card on File</CardTitle>
                 <CardDescription className="text-xs">
-                  Saved for no-show protection only - not charged today
+                  Saved for no-show protection · Not charged today
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-3 pb-3">
                 {/* Reassurance */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-                  <p className="text-sm text-blue-800 font-medium mb-1">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5 mb-3">
+                  <p className="text-xs text-blue-800 font-medium">
                     Your card will NOT be charged today
                   </p>
-                  <p className="text-xs text-blue-700">
-                    We only save it for no-show protection. Pay in-store after your service.
+                  <p className="text-[10px] text-blue-700 mt-0.5">
+                    Save for no-show protection. Pay in-store after service.
                   </p>
                 </div>
 

@@ -299,6 +299,7 @@ export async function createAppointmentWithCheck({
   noShowProtected = false,
   bookedBy,
   depositAmount = 0,
+  inspoImageUrl,
 }: {
   clientId: string;
   technicianId: string;
@@ -311,6 +312,7 @@ export async function createAppointmentWithCheck({
   noShowProtected?: boolean;
   bookedBy?: string;
   depositAmount?: number;
+  inspoImageUrl?: string | null;
 }) {
   // Step 1: Check for conflicts
   const conflict = await checkAppointmentConflict({
@@ -343,6 +345,7 @@ export async function createAppointmentWithCheck({
       endTime: endTime.toISOString(),
       status,
       notes: notes || null,
+      inspoImageUrl: inspoImageUrl || null,
       noShowProtected,
       bookedBy: bookedBy || null,
       depositAmount,

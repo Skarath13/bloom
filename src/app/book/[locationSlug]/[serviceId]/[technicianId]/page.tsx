@@ -4,12 +4,22 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format, addDays, startOfDay, isBefore, isSameDay } from "date-fns";
-import { ArrowLeft, Clock, Loader2, ChevronDown, Calendar as CalendarIcon } from "lucide-react";
+import { ArrowLeft, Clock, Loader2, ChevronDown, Calendar as CalendarIcon, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { BookingLayoutWrapper } from "@/components/booking/booking-layout-wrapper";
 import { useBooking } from "@/components/booking/booking-context";
 import { cn } from "@/lib/utils";
@@ -52,11 +62,12 @@ interface PageProps {
 
 export default function DateTimeSelectionPage({ params }: PageProps) {
   const router = useRouter();
-  const { setTechnician, setDateTime } = useBooking();
+  const { setTechnician, setDateTime, resetBooking } = useBooking();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<string | null>(null);
   const [showFullCalendar, setShowFullCalendar] = useState(false);
+  const [showStartOverDialog, setShowStartOverDialog] = useState(false);
   const [paramsData, setParamsData] = useState<{
     locationSlug: string;
     serviceId: string;
@@ -107,7 +118,7 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
 
         // Update booking context
         if (technician) {
-          setTechnician(technician.id, `${technician.firstName} ${technician.lastName[0]}.`, false);
+          setTechnician(technician.id, `${technician.firstName} ${technician.lastName[0]}`, false);
         } else {
           setTechnician(null, null, true);
         }
@@ -202,6 +213,11 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
     router.push(checkoutUrl);
   };
 
+  const handleStartOver = () => {
+    resetBooking();
+    router.push("/book");
+  };
+
   if (!paramsData || isLoadingData) {
     return (
       <BookingLayoutWrapper currentStep={4}>
@@ -216,7 +232,7 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
 
   return (
     <BookingLayoutWrapper currentStep={4} showFooter={false}>
-      <div className="pb-24">
+      <div className="pb-36">
         {/* Back button and selection info */}
         <div className="mb-4">
           <Link href={`/book/${paramsData.locationSlug}/${paramsData.serviceId}`}>
@@ -351,24 +367,51 @@ export default function DateTimeSelectionPage({ params }: PageProps) {
       </div>
 
       {/* Sticky Footer */}
-      <div className="fixed bottom-0 left-0 right-0 bg-card border-t p-4 safe-area-inset-bottom">
-        <div className="max-w-2xl mx-auto">
+      <div className="fixed bottom-0 left-0 right-0 bg-card border-t safe-area-inset-bottom">
+        <div className="max-w-2xl mx-auto px-4 py-3">
           {selectedTime ? (
             <>
-              <p className="text-sm text-center text-muted-foreground mb-2">
+              <p className="text-xs text-center text-muted-foreground mb-1.5">
                 {format(selectedDate, "EEE, MMM d")} at {selectedTime}
               </p>
-              <Button className="w-full h-12" onClick={handleContinue}>
+              <Button className="w-full h-11" onClick={handleContinue}>
                 Continue to Checkout
               </Button>
             </>
           ) : (
-            <Button className="w-full h-12" disabled>
+            <Button className="w-full h-11" disabled>
               Select a time to continue
             </Button>
           )}
+          <div className="mt-2 flex items-center justify-center gap-3 text-[10px] text-muted-foreground/70">
+            <span>Questions? Text 657-334-9919</span>
+            <span>·</span>
+            <button
+              onClick={() => setShowStartOverDialog(true)}
+              className="hover:text-muted-foreground transition-colors inline-flex items-center gap-1"
+            >
+              <RotateCcw className="h-2.5 w-2.5" />
+              Start over
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Start Over Confirmation Dialog */}
+      <AlertDialog open={showStartOverDialog} onOpenChange={setShowStartOverDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Start over?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will clear your current booking selections and take you back to the beginning.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleStartOver}>Yes, start over</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </BookingLayoutWrapper>
   );
 }

@@ -52,6 +52,7 @@ export interface Database {
           reminder2hSent: boolean;
           confirmedAt: string | null;
           notes: string | null;
+          inspoImageUrl: string | null;
           createdAt: string;
           updatedAt: string;
           cancelledAt: string | null;
