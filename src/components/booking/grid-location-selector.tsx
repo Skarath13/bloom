@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { MapPin, Shield, Star, CalendarCheck } from "lucide-react";
 import { useBooking } from "./booking-context";
 import { LocationCard } from "./location-card";
@@ -37,6 +37,13 @@ export function GridLocationSelector({ locations }: GridLocationSelectorProps) {
   // OTP mode state (not persisted - resets on refresh)
   const [otpState, setOtpState] = useState<OtpState | null>(null);
   const [verifiedClient, setVerifiedClient] = useState<{ firstName: string; id: string } | null>(null);
+
+  // Scroll to top when returning from OTP screen
+  useEffect(() => {
+    if (otpState === null) {
+      window.scrollTo({ top: 0, behavior: "instant" });
+    }
+  }, [otpState]);
 
   const handleLocationClick = (location: Location) => {
     resetBooking();

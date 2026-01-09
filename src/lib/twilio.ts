@@ -54,6 +54,40 @@ export function generateVerificationCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+// Carrier lookup to validate phone number type
+// Returns: mobile, landline, voip, or null if lookup fails
+export async function lookupPhoneType(
+  phone: string
+): Promise<{ type: string | null; carrier: string | null; error?: string }> {
+  const client = getTwilioClient();
+  const formattedPhone = formatPhoneE164(phone);
+
+  // Dev mode: skip lookup
+  if (!client) {
+    console.log(`[DEV] Carrier lookup for ${formattedPhone}: assumed mobile`);
+    return { type: "mobile", carrier: "dev-mode" };
+  }
+
+  try {
+    const lookup = await client.lookups.v2.phoneNumbers(formattedPhone).fetch({
+      fields: "line_type_intelligence",
+    });
+
+    const lineType = lookup.lineTypeIntelligence?.type || null;
+    const carrier = lookup.lineTypeIntelligence?.carrier_name || null;
+
+    return { type: lineType, carrier };
+  } catch (error) {
+    console.error("Carrier lookup failed:", error);
+    // Don't block on lookup failure - allow the SMS to proceed
+    return {
+      type: null,
+      carrier: null,
+      error: error instanceof Error ? error.message : "Lookup failed",
+    };
+  }
+}
+
 // Send verification code via SMS
 export async function sendVerificationCode(
   phone: string,

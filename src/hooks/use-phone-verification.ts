@@ -43,7 +43,8 @@ export interface UsePhoneVerificationReturn {
   attemptsRemaining: number | null;
 }
 
-const RESEND_COOLDOWN_SECONDS = 60;
+// Exponential backoff: 30s → 60s → 120s → 180s (capped)
+const BACKOFF_DELAYS = [30, 60, 120, 180];
 
 export function usePhoneVerification(): UsePhoneVerificationReturn {
   const [status, setStatus] = useState<VerificationStatus>("idle");
@@ -52,6 +53,7 @@ export function usePhoneVerification(): UsePhoneVerificationReturn {
   const [clientData, setClientData] = useState<ClientData | null>(null);
   const [resendCountdown, setResendCountdown] = useState(0);
   const [attemptsRemaining, setAttemptsRemaining] = useState<number | null>(null);
+  const [sendAttempts, setSendAttempts] = useState(0);
 
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -64,9 +66,12 @@ export function usePhoneVerification(): UsePhoneVerificationReturn {
     };
   }, []);
 
-  // Start countdown timer
-  const startCountdown = useCallback(() => {
-    setResendCountdown(RESEND_COOLDOWN_SECONDS);
+  // Start countdown timer with exponential backoff
+  const startCountdown = useCallback((attempt: number) => {
+    // Get delay based on attempt number (0-indexed), cap at max delay
+    const delayIndex = Math.min(attempt, BACKOFF_DELAYS.length - 1);
+    const delay = BACKOFF_DELAYS[delayIndex];
+    setResendCountdown(delay);
 
     if (countdownRef.current) {
       clearInterval(countdownRef.current);
@@ -135,8 +140,11 @@ export function usePhoneVerification(): UsePhoneVerificationReturn {
           setAttemptsRemaining(data.remainingAttempts);
         }
 
+        // Track send attempts for exponential backoff
+        setSendAttempts((prev) => prev + 1);
+
         setStatus("awaiting_code");
-        startCountdown();
+        startCountdown(sendAttempts);
         return true;
       } catch (err) {
         setStatus("error");
@@ -145,7 +153,7 @@ export function usePhoneVerification(): UsePhoneVerificationReturn {
         return false;
       }
     },
-    [startCountdown]
+    [startCountdown, sendAttempts]
   );
 
   const verifyCode = useCallback(
@@ -213,6 +221,7 @@ export function usePhoneVerification(): UsePhoneVerificationReturn {
     setClientData(null);
     setResendCountdown(0);
     setAttemptsRemaining(null);
+    setSendAttempts(0);
 
     if (countdownRef.current) {
       clearInterval(countdownRef.current);

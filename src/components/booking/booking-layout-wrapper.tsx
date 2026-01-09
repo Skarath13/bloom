@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { RotateCcw } from "lucide-react";
@@ -31,6 +31,11 @@ export function BookingLayoutWrapper({
   const { resetBooking } = useBooking();
   const router = useRouter();
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+
+  // Scroll to top when step changes
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [currentStep]);
 
   const handleStartOver = () => {
     resetBooking();

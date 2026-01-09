@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Phone, Loader2, ArrowLeft, User, CalendarDays, RotateCcw } from "lucide-react";
+import Link from "next/link";
+import { Phone, Loader2, ArrowLeft, User, CalendarDays, RotateCcw, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OTPInput } from "@/components/ui/otp-input";
 import {
@@ -56,15 +57,22 @@ export function OtpVerificationScreen({
   const [otpValue, setOtpValue] = useState("");
   const [appointments, setAppointments] = useState<AppointmentHistoryItem[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [codeSent, setCodeSent] = useState(false);
 
-  // Send code on mount
+  // Use ref to prevent double-send in React Strict Mode
+  const codeSentRef = useRef(false);
+
+  // Scroll to top on mount
   useEffect(() => {
-    if (!codeSent) {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, []);
+
+  // Send code on mount (only once)
+  useEffect(() => {
+    if (!codeSentRef.current) {
+      codeSentRef.current = true;
       sendCode(phone);
-      setCodeSent(true);
     }
-  }, [phone, sendCode, codeSent]);
+  }, [phone, sendCode]);
 
   // Fetch appointment history when verified
   useEffect(() => {
@@ -158,9 +166,16 @@ export function OtpVerificationScreen({
           <h1 className="text-xl font-bold text-slate-900 mb-1">
             Welcome back, {clientData.firstName}!
           </h1>
-          <p className="text-sm text-slate-500 mb-8">
+          <p className="text-sm text-slate-500 mb-2">
             {formattedPhone}
           </p>
+          <Link
+            href="/profile"
+            className="inline-flex items-center gap-1 text-sm text-[#8B687A] hover:underline mb-6"
+          >
+            <Pencil className="w-3 h-3" />
+            Edit Profile
+          </Link>
 
           {/* Appointment history */}
           {loadingHistory ? (
