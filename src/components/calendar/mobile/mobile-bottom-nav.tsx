@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { CalendarDays, Users, Eye, Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useMobileNav } from "@/contexts/mobile-nav-context";
 
 interface MobileBottomNavProps {
   onMoreClick: () => void;
@@ -17,9 +18,12 @@ const navItems = [
 
 export function MobileBottomNav({ onMoreClick }: MobileBottomNavProps) {
   const pathname = usePathname();
+  const { isNavHidden } = useMobileNav();
+
+  if (isNavHidden) return null;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 safe-area-inset-bottom">
+    <nav className="mobile-bottom-nav fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 safe-area-inset-bottom">
       <div className="flex items-center justify-around h-14">
         {navItems.map((item) => {
           const isActive = pathname === item.href ||

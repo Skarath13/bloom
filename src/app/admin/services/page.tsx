@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import { ServiceList } from "@/components/admin/services/service-list";
 import { ServiceDetailPanel, ServiceDetailEmpty } from "@/components/admin/services/service-detail-panel";
 import { AddServiceSheet } from "@/components/admin/services/add-service-sheet";
+import { MobileServicesLayout } from "@/components/services/mobile";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 
 interface Service {
   id: string;
@@ -28,6 +30,16 @@ interface Location {
 }
 
 export default function ServicesPage() {
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return <MobileServicesLayout />;
+  }
+
+  return <DesktopServicesPage />;
+}
+
+function DesktopServicesPage() {
   const [services, setServices] = useState<Service[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [selectedService, setSelectedService] = useState<Service | null>(null);

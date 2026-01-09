@@ -4,7 +4,12 @@ import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { format } from "date-fns";
 import { ResourceCalendar } from "@/components/calendar/resource-calendar";
-import { CalendarConfigProvider } from "@/components/calendar/calendar-config";
+import { CalendarConfigProvider, useCalendarConfig } from "@/components/calendar/calendar-config";
+import { MobileCalendarLayout } from "@/components/calendar/mobile";
+import { MobileAppointmentDetailSheet } from "@/components/calendar/mobile/mobile-appointment-detail-sheet";
+import { MobileCreateAppointmentSheet } from "@/components/calendar/mobile/mobile-create-appointment-sheet";
+import { MobileCreatePersonalEventSheet } from "@/components/calendar/mobile/mobile-create-personal-event-sheet";
+import { MobilePersonalEventDetailSheet } from "@/components/calendar/mobile/mobile-personal-event-detail-sheet";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { AppointmentDetailsDialog } from "@/components/calendar/appointment-details-dialog";
@@ -13,6 +18,7 @@ import { StaffScheduleDialog } from "@/components/calendar/staff-schedule-dialog
 import { PersonalEventDialog } from "@/components/calendar/personal-event-dialog";
 import { useRealtimeAppointments } from "@/hooks/use-realtime-appointments";
 import { useRealtimeTechnicians } from "@/hooks/use-realtime-technicians";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { AdminSidebar } from "@/components/admin/sidebar";
@@ -118,6 +124,7 @@ function CalendarContent() {
   const searchParams = useSearchParams();
   const appointmentIdFromUrl = searchParams.get("apt");
   const settingsOpenFromUrl = searchParams.get("settings") === "true";
+  const isMobile = useIsMobile();
 
   const [locations, setLocations] = useState<Location[]>([]);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
@@ -125,6 +132,24 @@ function CalendarContent() {
   const [blocks, setBlocks] = useState<TechnicianBlock[]>([]);
   const [selectedBlock, setSelectedBlock] = useState<TechnicianBlock | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Mobile-specific sheet states for create flows
+  const [mobileCreateAppointment, setMobileCreateAppointment] = useState<{
+    open: boolean;
+    technicianId: string;
+    technicianName: string;
+    technicianColor: string;
+    locationId: string;
+    locationName: string;
+    time: Date;
+  } | null>(null);
+  const [mobileCreatePersonalEvent, setMobileCreatePersonalEvent] = useState<{
+    open: boolean;
+    technicianId: string;
+    technicianName: string;
+    locationId: string;
+    time: Date;
+  } | null>(null);
 
   // Initialize from localStorage (client-side only)
   const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>(() => {
@@ -161,6 +186,8 @@ function CalendarContent() {
   } | null>(null);
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  // Mobile-specific state: track which technicians are visible (for mobile filter)
+  const [mobileTechFilter, setMobileTechFilter] = useState<string[]>([]);
 
   // Update URL when appointment is selected/deselected
   const updateAppointmentUrl = useCallback((appointmentId: string | null) => {
@@ -260,6 +287,27 @@ function CalendarContent() {
   useEffect(() => {
     fetchTechnicians();
   }, [fetchTechnicians]);
+
+  // Initialize mobile tech filter when technicians load (show all by default)
+  useEffect(() => {
+    if (technicians.length > 0 && mobileTechFilter.length === 0) {
+      setMobileTechFilter(technicians.map(t => t.id));
+    }
+  }, [technicians, mobileTechFilter.length]);
+
+  // Handler to toggle technician visibility in mobile view
+  const handleMobileTechToggle = useCallback((techId: string) => {
+    setMobileTechFilter(prev => {
+      if (prev.includes(techId)) {
+        // Don't allow deselecting the last one
+        if (prev.length > 1) {
+          return prev.filter(id => id !== techId);
+        }
+        return prev;
+      }
+      return [...prev, techId];
+    });
+  }, []);
 
   // Fetch appointments when locations or date changes
   // Fetch blocks helper (no loading state - used by combined fetch)
@@ -480,7 +528,24 @@ function CalendarContent() {
   };
 
   const handleSlotClick = (technicianId: string, time: Date) => {
-    setNewAppointmentSlot({ technicianId, time });
+    if (isMobile) {
+      // On mobile, open the mobile create appointment sheet
+      const tech = technicians.find(t => t.id === technicianId);
+      if (!tech) return;
+      const location = locations.find(l => l.id === tech.locationId);
+      setMobileCreateAppointment({
+        open: true,
+        technicianId,
+        technicianName: `${tech.firstName} ${tech.lastName}`,
+        technicianColor: tech.color,
+        locationId: tech.locationId,
+        locationName: location?.name || "",
+        time,
+      });
+    } else {
+      // On desktop, use the desktop dialog
+      setNewAppointmentSlot({ technicianId, time });
+    }
   };
 
   const handleBlockClick = (block: TechnicianBlock) => {
@@ -590,6 +655,54 @@ function CalendarContent() {
 
   const newTech = technicians.find((t) => t.id === newAppointmentSlot?.technicianId);
 
+  // Handler for mobile create menu - opens mobile-specific create sheets
+  const handleMobileCreateEvent = useCallback((type: "appointment" | "class" | "personal_event") => {
+    if (type === "class") {
+      // Classes not implemented yet
+      toast.info("Class creation coming soon");
+      return;
+    }
+    // Get the first visible technician for the slot
+    const visibleTechs = technicians.filter(t => mobileTechFilter.includes(t.id));
+    const firstTech = visibleTechs[0];
+    if (!firstTech) {
+      toast.error("No technician available");
+      return;
+    }
+
+    // Set a slot at 9am on the selected date
+    const slotTime = new Date(selectedDate);
+    slotTime.setHours(9, 0, 0, 0);
+
+    const techName = `${firstTech.firstName} ${firstTech.lastName}`;
+    const location = locations.find(l => l.id === firstTech.locationId);
+
+    if (type === "appointment") {
+      setMobileCreateAppointment({
+        open: true,
+        technicianId: firstTech.id,
+        technicianName: techName,
+        technicianColor: firstTech.color,
+        locationId: firstTech.locationId,
+        locationName: location?.name || "",
+        time: slotTime,
+      });
+    } else if (type === "personal_event") {
+      setMobileCreatePersonalEvent({
+        open: true,
+        technicianId: firstTech.id,
+        technicianName: techName,
+        locationId: firstTech.locationId,
+        time: slotTime,
+      });
+    }
+  }, [technicians, mobileTechFilter, selectedDate, locations]);
+
+  // Filter technicians for mobile view
+  const visibleTechnicians = isMobile
+    ? technicians.filter(t => mobileTechFilter.includes(t.id))
+    : technicians;
+
   if (loading && locations.length === 0) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -598,36 +711,75 @@ function CalendarContent() {
     );
   }
 
+  // Common calendar props
+  const calendarProps = {
+    locations,
+    technicians: visibleTechnicians,
+    appointments,
+    blocks,
+    selectedLocationIds,
+    selectedDate,
+    multiLocationMode,
+    settingsOpen: settingsOpenFromUrl,
+    onSettingsOpenChange: handleSettingsOpenChange,
+    onLocationToggle: handleLocationToggle,
+    onDateChange: handleDateChange,
+    onAppointmentClick: handleAppointmentClick,
+    onBlockClick: handleBlockClick,
+    onSlotClick: handleSlotClick,
+    onScheduleClick: () => setScheduleDialogOpen(true),
+    onMenuClick: () => setMobileMenuOpen(true),
+    onMoveAppointment: handleMoveAppointment,
+    onMoveBlock: handleMoveBlock,
+    onMultiLocationModeChange: handleMultiLocationModeChange,
+  };
+
   return (
     <CalendarConfigProvider>
       <div className="h-full">
-        <ResourceCalendar
-          locations={locations}
-          technicians={technicians}
-          appointments={appointments}
-          blocks={blocks}
-          selectedLocationIds={selectedLocationIds}
-          selectedDate={selectedDate}
-          multiLocationMode={multiLocationMode}
-          settingsOpen={settingsOpenFromUrl}
-          onSettingsOpenChange={handleSettingsOpenChange}
-          onLocationToggle={handleLocationToggle}
-          onDateChange={handleDateChange}
-          onAppointmentClick={handleAppointmentClick}
-          onBlockClick={handleBlockClick}
-          onSlotClick={handleSlotClick}
-          onScheduleClick={() => setScheduleDialogOpen(true)}
-          onMenuClick={() => setMobileMenuOpen(true)}
-          onMoveAppointment={handleMoveAppointment}
-          onMoveBlock={handleMoveBlock}
-          onMultiLocationModeChange={handleMultiLocationModeChange}
-        />
+        {isMobile ? (
+          // Mobile layout with new PWA-style UI
+          <MobileCalendarLayout
+            selectedDate={selectedDate}
+            onDateChange={handleDateChange}
+            technicians={technicians}
+            selectedTechIds={mobileTechFilter}
+            onTechToggle={handleMobileTechToggle}
+            locations={locations}
+            onEditScheduleClick={() => setScheduleDialogOpen(true)}
+            onCreateEvent={handleMobileCreateEvent}
+          >
+            <ResourceCalendar
+              {...calendarProps}
+              // On mobile, hide the built-in header since MobileCalendarLayout provides it
+              hideHeader
+            />
+          </MobileCalendarLayout>
+        ) : (
+          // Desktop layout - unchanged
+          <ResourceCalendar {...calendarProps} />
+        )}
 
-      {/* Appointment details dialog - Square style */}
-      <AppointmentDetailsDialog
-        appointment={selectedAppointment}
-        onClose={handleCloseAppointment}
-        onSave={async (data) => {
+      {/* Appointment details - Mobile sheet or Desktop dialog */}
+      {isMobile ? (
+        <MobileAppointmentDetailSheet
+          appointmentId={selectedAppointment?.id || null}
+          open={!!selectedAppointment}
+          onOpenChange={(open) => {
+            if (!open) handleCloseAppointment();
+          }}
+          onStatusChange={() => {
+            fetchAppointments();
+          }}
+          onRefresh={() => {
+            fetchAppointments();
+          }}
+        />
+      ) : (
+        <AppointmentDetailsDialog
+          appointment={selectedAppointment}
+          onClose={handleCloseAppointment}
+          onSave={async (data) => {
           if (!selectedAppointment) return;
           setSaving(true);
           try {
@@ -739,7 +891,8 @@ function CalendarContent() {
           fetchAppointmentById(appointmentId);
         }}
         saving={saving}
-      />
+        />
+      )}
 
       {/* Create event dialog (appointments + personal events) */}
       {newAppointmentSlot && (
@@ -768,14 +921,74 @@ function CalendarContent() {
         selectedDate={selectedDate}
       />
 
-      {/* Personal event dialog */}
-      <PersonalEventDialog
-        block={selectedBlock}
-        technicians={technicians}
-        onClose={() => setSelectedBlock(null)}
-        onSave={refreshCalendarData}
-        onDelete={refreshCalendarData}
-      />
+      {/* Personal event dialog - Desktop only */}
+      {!isMobile && (
+        <PersonalEventDialog
+          block={selectedBlock}
+          technicians={technicians}
+          onClose={() => setSelectedBlock(null)}
+          onSave={refreshCalendarData}
+          onDelete={refreshCalendarData}
+        />
+      )}
+
+      {/* Mobile Personal Event Detail Sheet */}
+      {isMobile && (
+        <MobilePersonalEventDetailSheet
+          block={selectedBlock}
+          technician={technicians.find(t => t.id === selectedBlock?.technicianId)}
+          open={!!selectedBlock}
+          onOpenChange={(open) => {
+            if (!open) setSelectedBlock(null);
+          }}
+          onSave={() => {
+            refreshCalendarData();
+            setSelectedBlock(null);
+          }}
+          onDelete={() => {
+            refreshCalendarData();
+            setSelectedBlock(null);
+          }}
+        />
+      )}
+
+      {/* Mobile Create Appointment Sheet */}
+      {mobileCreateAppointment && (
+        <MobileCreateAppointmentSheet
+          open={mobileCreateAppointment.open}
+          onOpenChange={(open) => {
+            if (!open) setMobileCreateAppointment(null);
+          }}
+          technicianId={mobileCreateAppointment.technicianId}
+          technicianName={mobileCreateAppointment.technicianName}
+          technicianColor={mobileCreateAppointment.technicianColor}
+          locationId={mobileCreateAppointment.locationId}
+          locationName={mobileCreateAppointment.locationName}
+          time={mobileCreateAppointment.time}
+          onSuccess={() => {
+            refreshCalendarData();
+            setMobileCreateAppointment(null);
+          }}
+        />
+      )}
+
+      {/* Mobile Create Personal Event Sheet */}
+      {mobileCreatePersonalEvent && (
+        <MobileCreatePersonalEventSheet
+          open={mobileCreatePersonalEvent.open}
+          onOpenChange={(open) => {
+            if (!open) setMobileCreatePersonalEvent(null);
+          }}
+          technicianId={mobileCreatePersonalEvent.technicianId}
+          technicianName={mobileCreatePersonalEvent.technicianName}
+          locationId={mobileCreatePersonalEvent.locationId}
+          time={mobileCreatePersonalEvent.time}
+          onSuccess={() => {
+            refreshCalendarData();
+            setMobileCreatePersonalEvent(null);
+          }}
+        />
+      )}
 
       {/* Mobile navigation sidebar */}
       <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>

@@ -89,7 +89,8 @@ export function MobileDatePickerSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
-        className="h-full rounded-none p-0 flex flex-col [&>button]:hidden"
+        className="rounded-none p-0 flex flex-col [&>button]:hidden"
+        style={{ height: "100dvh" }}
       >
         {/* Accessibility (visually hidden) */}
         <SheetTitle className="sr-only">Select a Day</SheetTitle>
@@ -151,6 +152,8 @@ export function MobileDatePickerSheet({
               />
             );
           })}
+          {/* Bottom padding */}
+          <div className="h-8" />
         </div>
       </SheetContent>
     </Sheet>

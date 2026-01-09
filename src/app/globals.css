@@ -383,6 +383,20 @@
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* Mobile sheet that respects bottom nav bar - full height */
+.mobile-sheet-with-nav {
+  bottom: auto !important;
+  height: calc(100% - 56px - env(safe-area-inset-bottom)) !important;
+  top: 0 !important;
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+}
+
+/* Mobile sheet that respects bottom nav bar - partial height (pickers, etc) */
+.mobile-sheet-above-nav {
+  bottom: calc(56px + env(safe-area-inset-bottom)) !important;
+}
+
 .mobile-bottom-nav-inner {
   display: flex;
   align-items: center;

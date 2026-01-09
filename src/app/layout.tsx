@@ -28,6 +28,16 @@ export const metadata: Metadata = {
     "Tustin",
     "Santa Ana",
   ],
+  // PWA Configuration
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Bloom Admin",
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
+  },
 };
 
 export const viewport = {

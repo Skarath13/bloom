@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useIsMobile } from "@/hooks/use-is-mobile";
+import { MobileClientsLayout } from "@/components/clients/mobile";
 import {
   Card,
   CardContent,
@@ -204,6 +206,17 @@ async function fetchClientAppointments(clientId: string): Promise<Appointment[]>
 // ============================================================================
 
 export default function ClientsPage() {
+  const isMobile = useIsMobile();
+
+  // Render mobile layout
+  if (isMobile) {
+    return <MobileClientsLayout />;
+  }
+
+  return <DesktopClientsPage />;
+}
+
+function DesktopClientsPage() {
   // Data state
   const [clients, setClients] = useState<Client[]>([]);
   const [pagination, setPagination] = useState<PaginationState>({

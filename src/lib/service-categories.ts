@@ -3,9 +3,9 @@
 
 export const SERVICE_CATEGORIES = [
   // Primary lash services (displayed first)
-  { value: "LASH_EXTENSION", label: "Lash Extensions", icon: "eye" },
-  { value: "LASH_FILL", label: "Lash Fills", icon: "refresh-cw" },
-  { value: "LASH_LIFT", label: "Lash Lifts/Tints", icon: "trending-up" },
+  { value: "LASH_EXTENSIONS", label: "Lash Extensions", icon: "eye" },
+  { value: "LASH_FILLS", label: "Lash Fills", icon: "refresh-cw" },
+  { value: "LASH_LIFTS", label: "Lash Lifts/Tints", icon: "trending-up" },
   // Brow & Face
   { value: "BROW", label: "Brow Services", icon: "eye" },
   { value: "FACIALS", label: "Facials", icon: "sparkle" },

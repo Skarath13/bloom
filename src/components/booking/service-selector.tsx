@@ -27,7 +27,7 @@ interface ServiceSelectorProps {
 // Popular services that get a badge
 const POPULAR_SERVICES = ["Classic Full Set", "Volume Full Set", "Hybrid Full Set", "Lash Fill"];
 
-// Format category name: LASH_EXTENSION -> Lash Extension
+// Format category name: LASH_EXTENSIONS -> Lash Extensions
 function formatCategoryName(category: string): string {
   return category
     .split("_")

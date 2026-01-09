@@ -15,7 +15,6 @@ interface MobileCreateMenuProps {
 
 const menuItems: { type: EventType; label: string }[] = [
   { type: "appointment", label: "Create appointment" },
-  { type: "class", label: "Create class" },
   { type: "personal_event", label: "Create personal event" },
 ];
 
@@ -46,8 +45,10 @@ export function MobileCreateMenu({
         )}
       </PopoverTrigger>
       <PopoverContent
+        side="bottom"
         align="end"
-        sideOffset={8}
+        sideOffset={4}
+        alignOffset={-8}
         className="w-[220px] p-0 rounded-xl shadow-lg border border-gray-200"
       >
         <div className="py-2">

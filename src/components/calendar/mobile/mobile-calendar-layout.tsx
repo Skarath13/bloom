@@ -5,7 +5,6 @@ import { MobileCalendarHeader } from "./mobile-calendar-header";
 import { MobileWeekStrip } from "./mobile-week-strip";
 import { MobileSettingsSheet } from "./mobile-settings-sheet";
 import { MobileDatePickerSheet } from "./mobile-date-picker-sheet";
-import { MobileCreateMenu } from "./mobile-create-menu";
 
 interface Technician {
   id: string;
@@ -20,7 +19,7 @@ interface Location {
   name: string;
 }
 
-type EventType = "appointment" | "class" | "personal_event";
+type EventType = "appointment" | "personal_event";
 
 interface MobileCalendarLayoutProps {
   // Children - the calendar grid
@@ -67,7 +66,6 @@ export function MobileCalendarLayout({
 
   const handleCreateEvent = (type: EventType) => {
     onCreateEvent(type);
-    setCreateMenuOpen(false);
   };
 
   return (
@@ -77,7 +75,9 @@ export function MobileCalendarLayout({
         selectedDate={selectedDate}
         onSettingsClick={() => setSettingsSheetOpen(true)}
         onMonthClick={() => setDatePickerOpen(true)}
-        onCreateClick={() => setCreateMenuOpen(true)}
+        createMenuOpen={createMenuOpen}
+        onCreateMenuOpenChange={setCreateMenuOpen}
+        onCreateEvent={handleCreateEvent}
       />
 
       {/* Week strip */}
@@ -122,16 +122,6 @@ export function MobileCalendarLayout({
         selectedDate={selectedDate}
         onDateSelect={onDateChange}
       />
-
-      {/* Create menu - positioned at header */}
-      <MobileCreateMenu
-        open={createMenuOpen}
-        onOpenChange={setCreateMenuOpen}
-        onCreateEvent={handleCreateEvent}
-      >
-        {/* Empty trigger - the header button controls this */}
-        <span />
-      </MobileCreateMenu>
     </div>
   );
 }

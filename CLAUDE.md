@@ -166,3 +166,82 @@ All required tables have been populated:
 --blush-pink: #F5D0D0;
 --blush-peach: #EDCAC9;
 ```
+
+## Responsive Design: Desktop vs Mobile
+
+### Detection
+- Mobile detection via `useIsMobile()` hook at `src/hooks/use-is-mobile.ts`
+- Breakpoint: `768px` (below = mobile, above = desktop)
+- Calendar page uses conditional rendering based on `config.isMobile`
+
+### Desktop View
+- Full sidebar navigation (`AdminSidebar`)
+- Resource calendar with drag-and-drop support (dnd-kit)
+- Multi-column technician view
+- Hover states and tooltips
+
+### Mobile View (PWA)
+- **Target Device**: iPhone 14 Pro Max (430×932 viewport)
+- **Mode**: Progressive Web App (standalone via Safari "Add to Home Screen")
+- Bottom tab navigation (persistent across all admin pages)
+- Full-screen sheet modals instead of dialogs
+- Touch-optimized with 44×44pt minimum tap targets
+- No drag-and-drop (tap-to-create only)
+
+### Mobile Components (`src/components/calendar/mobile/`)
+
+| Component | Purpose |
+|-----------|---------|
+| `mobile-calendar-layout.tsx` | Main wrapper with header, week strip, content area |
+| `mobile-calendar-header.tsx` | 3-dot menu (left), month picker (center), + create (right) |
+| `mobile-week-strip.tsx` | Swipeable week selector with lazy loading |
+| `mobile-bottom-nav.tsx` | Tab bar: Calendar, Clients, Services, More |
+| `mobile-more-sheet.tsx` | Full navigation menu (from More tab) |
+| `mobile-settings-sheet.tsx` | Calendar filters and view options |
+| `mobile-date-picker-sheet.tsx` | Full-screen scrollable month picker |
+
+### Mobile Design Guidelines
+
+**Layout**
+- Use `100dvh` not `100vh` for dynamic viewport height
+- Apply `safe-area-inset-*` for notch/home indicator
+- Bottom nav is 56px + safe area padding
+- Header is 48px height
+
+**Touch Targets**
+- Minimum 44×44pt for all interactive elements
+- Use `min-w-[44px] min-h-[44px]` classes
+
+**Scrolling**
+- Hide scrollbars: `scrollbar-hide` class or `-ms-overflow-style: none`
+- Use `-webkit-overflow-scrolling: touch` for momentum
+- Week strip: `scroll-snap-type: x mandatory` with `scroll-snap-stop: always`
+
+**Modals/Sheets**
+- Use `Sheet` with `side="bottom"` and `className="h-full"` for full-screen
+- Always include `SheetTitle` and `SheetDescription` (can be `sr-only`) for accessibility
+
+**Interactions**
+- No drag-and-drop on mobile (disabled via empty sensors array)
+- Tap on 15-min time slots to create appointments
+- Swipe week strip left/right to navigate weeks
+- Tap date to select, appointments load on selection
+
+### PWA Configuration
+
+**Manifest**: `public/manifest.json`
+```json
+{
+  "name": "Bloom Admin",
+  "short_name": "Bloom",
+  "start_url": "/admin/calendar",
+  "display": "standalone",
+  "theme_color": "#1A1A1A"
+}
+```
+
+**Icons**: `public/icons/`
+- `icon-192.png`, `icon-512.png` - Android/PWA
+- `apple-touch-icon.png` - iOS home screen
+
+**Installation**: Safari → Share → Add to Home Screen

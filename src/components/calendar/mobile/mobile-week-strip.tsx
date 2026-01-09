@@ -9,7 +9,7 @@ interface MobileWeekStripProps {
   onDateSelect: (date: Date) => void;
 }
 
-const weekDayLabels = ["S", "M", "T", "W", "T", "F", "S"];
+const weekDayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 // Calculate week width based on viewport (7 days * ~52px each + padding)
 const WEEK_WIDTH = 375; // Will be calculated dynamically
