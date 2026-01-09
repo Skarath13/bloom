@@ -39,11 +39,10 @@ export function LocationCard({ location, onClick }: LocationCardProps) {
       href={`/book/${location.slug}`}
       onClick={onClick}
       className={cn(
-        "relative rounded-xl overflow-hidden",
-        "bg-white border border-slate-200",
-        "shadow-sm hover:shadow-md",
-        "transition-all duration-200",
-        "active:scale-[0.98] active:shadow-sm",
+        "relative rounded-2xl overflow-hidden",
+        "bg-white",
+        "transition-all duration-150 ease-out",
+        "active:scale-[0.97]",
         // Safari/WebKit optimizations
         "select-none",
         "-webkit-tap-highlight-color-transparent"
@@ -51,6 +50,12 @@ export function LocationCard({ location, onClick }: LocationCardProps) {
       style={{
         WebkitTapHighlightColor: "transparent",
         minHeight: "176px",
+        boxShadow: `
+          0 1px 2px rgba(0, 0, 0, 0.04),
+          0 4px 8px rgba(0, 0, 0, 0.06),
+          0 8px 16px rgba(0, 0, 0, 0.06),
+          0 0 0 1px rgba(0, 0, 0, 0.04)
+        `,
       }}
     >
       {/* Mini Map - full bleed background */}
