@@ -4,7 +4,8 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { SessionProvider } from "@/components/providers/session-provider";
 import { AdminSidebar } from "@/components/admin/sidebar";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Button } from "@/components/ui/button";
 import { Menu } from "lucide-react";
 
@@ -30,22 +31,27 @@ export default function AdminLayout({
         {/* Mobile sidebar */}
         <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
           <SheetContent side="left" className="p-0 w-56">
+            <VisuallyHidden>
+              <SheetTitle>Navigation Menu</SheetTitle>
+            </VisuallyHidden>
             <AdminSidebar />
           </SheetContent>
         </Sheet>
 
         {/* Main content - no header, full height */}
         <div className="flex flex-1 flex-col min-h-0 relative">
-          {/* Mobile menu button - floating */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="lg:hidden absolute top-2 left-2 z-50 bg-white/80 backdrop-blur-sm shadow-sm"
-            onClick={() => setSidebarOpen(true)}
-          >
-            <Menu className="h-5 w-5" />
-            <span className="sr-only">Toggle menu</span>
-          </Button>
+          {/* Mobile menu button - floating (hidden on full-bleed pages which have their own mobile nav) */}
+          {!isFullBleedPage && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="lg:hidden absolute top-2 left-2 z-50 bg-white/80 backdrop-blur-sm shadow-sm"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Menu className="h-5 w-5" />
+              <span className="sr-only">Toggle menu</span>
+            </Button>
+          )}
           <main className={`flex-1 bg-background relative ${isFullBleedPage ? "overflow-hidden" : "overflow-auto p-6"}`}>
             {children}
           </main>

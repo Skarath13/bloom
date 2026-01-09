@@ -3,13 +3,9 @@
 import { useState, useCallback, useRef, RefObject } from "react";
 import { DragStartEvent, DragMoveEvent, DragEndEvent } from "@dnd-kit/core";
 
-// Calendar configuration (should match resource-calendar.tsx)
-const PIXELS_PER_HOUR = 80;
-const PIXELS_PER_15_MIN = 20;
-const TIME_COLUMN_WIDTH = 56;
+// Static calendar constants (same for mobile/desktop)
 const CALENDAR_START_HOUR = 0;
 const CALENDAR_END_HOUR = 24;
-const HEADER_HEIGHT = 37; // Height of sticky technician header row
 
 interface Technician {
   id: string;
@@ -91,6 +87,11 @@ interface UseCalendarDndOptions {
     endTime: Date,
     excludeId?: string
   ) => Promise<boolean>;
+  // Responsive config values (from CalendarConfigProvider)
+  pixelsPerHour: number;
+  pixelsPerFifteenMin: number;
+  timeColumnWidth: number;
+  headerHeight: number;
 }
 
 const initialDragState: DragState = {
@@ -120,6 +121,10 @@ export function useCalendarDnd({
   visibleTechnicians,
   gridRef,
   onSlotSelect,
+  pixelsPerHour,
+  pixelsPerFifteenMin,
+  timeColumnWidth,
+  headerHeight,
 }: UseCalendarDndOptions) {
   const [dragState, setDragState] = useState<DragState>(initialDragState);
   const [selection, setSelection] = useState<SelectionState>(initialSelectionState);
@@ -139,10 +144,10 @@ export function useCalendarDnd({
       const rect = gridElement.getBoundingClientRect();
       const scrollTop = gridElement.scrollTop;
       // Account for sticky header height
-      const relativeY = clientY - rect.top + scrollTop - HEADER_HEIGHT;
+      const relativeY = clientY - rect.top + scrollTop - headerHeight;
 
       // Use floor to match the hover highlight behavior - select the cell the cursor is IN
-      const minutes = Math.floor(relativeY / PIXELS_PER_15_MIN) * 15;
+      const minutes = Math.floor(relativeY / pixelsPerFifteenMin) * 15;
       const clampedMinutes = Math.max(
         0,
         Math.min(minutes, (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * 60 - 15)
@@ -155,7 +160,7 @@ export function useCalendarDnd({
       time.setHours(hours + CALENDAR_START_HOUR, mins, 0, 0);
       return time;
     },
-    [gridRef, selectedDate]
+    [gridRef, selectedDate, headerHeight, pixelsPerFifteenMin]
   );
 
   // Calculate technician from X position
@@ -165,17 +170,17 @@ export function useCalendarDnd({
       if (!gridElement || visibleTechnicians.length === 0) return null;
 
       const rect = gridElement.getBoundingClientRect();
-      const relativeX = clientX - rect.left - TIME_COLUMN_WIDTH;
+      const relativeX = clientX - rect.left - timeColumnWidth;
 
       if (relativeX < 0) return null;
 
-      const contentWidth = rect.width - TIME_COLUMN_WIDTH;
+      const contentWidth = rect.width - timeColumnWidth;
       const columnWidth = contentWidth / visibleTechnicians.length;
       const techIndex = Math.floor(relativeX / columnWidth);
 
       return visibleTechnicians[techIndex] || null;
     },
-    [gridRef, visibleTechnicians]
+    [gridRef, visibleTechnicians, timeColumnWidth]
   );
 
   // Check for conflicts locally (quick check against visible appointments)
@@ -268,7 +273,7 @@ export function useCalendarDnd({
 
       // Calculate delta Y from initial position and convert to minutes
       const deltaY = pointerY - dragState.initialPointerY;
-      const deltaMinutes = Math.round(deltaY / PIXELS_PER_15_MIN) * 15;
+      const deltaMinutes = Math.round(deltaY / pixelsPerFifteenMin) * 15;
 
       // Calculate new time by adding delta to original start time
       const newTime = new Date(dragState.originalStartTime.getTime() + deltaMinutes * 60 * 1000);
@@ -310,7 +315,7 @@ export function useCalendarDnd({
         hasConflict,
       }));
     },
-    [dragState.activeAppointment, dragState.activeBlock, dragState.activeId, dragState.initialPointerY, dragState.originalStartTime, getTechnicianFromX, checkLocalConflict]
+    [dragState.activeAppointment, dragState.activeBlock, dragState.activeId, dragState.initialPointerY, dragState.originalStartTime, getTechnicianFromX, checkLocalConflict, pixelsPerFifteenMin]
   );
 
   const handleDragEnd = useCallback(
@@ -504,16 +509,16 @@ export function useCalendarDnd({
     const maxMinutes = Math.max(startMinutes, endMinutes);
 
     const columnWidth = 100 / visibleTechnicians.length;
-    const top = minMinutes * (PIXELS_PER_HOUR / 60);
-    const height = (maxMinutes - minMinutes) * (PIXELS_PER_HOUR / 60);
+    const top = minMinutes * (pixelsPerHour / 60);
+    const height = (maxMinutes - minMinutes) * (pixelsPerHour / 60);
 
     return {
       top: `${top}px`,
-      height: `${Math.max(height, PIXELS_PER_15_MIN)}px`,
+      height: `${Math.max(height, pixelsPerFifteenMin)}px`,
       left: `${techIndex * columnWidth}%`,
       width: `${columnWidth}%`,
     };
-  }, [selection, visibleTechnicians]);
+  }, [selection, visibleTechnicians, pixelsPerHour, pixelsPerFifteenMin]);
 
   // Get technician color for drag overlay
   const getDragOverlayTechColor = useCallback(() => {
@@ -543,16 +548,16 @@ export function useCalendarDnd({
     const durationMinutes = duration / (1000 * 60);
 
     const columnWidth = 100 / visibleTechnicians.length;
-    const top = startMinutes * (PIXELS_PER_HOUR / 60);
-    const height = durationMinutes * (PIXELS_PER_HOUR / 60);
+    const top = startMinutes * (pixelsPerHour / 60);
+    const height = durationMinutes * (pixelsPerHour / 60);
 
     return {
       top: `${top}px`,
-      height: `${Math.max(height, PIXELS_PER_15_MIN)}px`,
+      height: `${Math.max(height, pixelsPerFifteenMin)}px`,
       left: `${techIndex * columnWidth}%`,
       width: `${columnWidth}%`,
     };
-  }, [dragState.activeAppointment, dragState.currentTime, dragState.currentTechId, visibleTechnicians]);
+  }, [dragState.activeAppointment, dragState.currentTime, dragState.currentTechId, visibleTechnicians, pixelsPerHour, pixelsPerFifteenMin]);
 
   return {
     // Drag state

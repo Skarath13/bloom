@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { addDays, subDays, startOfDay, setHours, setMinutes, isSameDay, format } from "date-fns";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Users } from "lucide-react";
 import {
   DndContext,
   DragOverlay,
@@ -24,8 +24,17 @@ import {
 import { TimeIndicator } from "./time-indicator";
 import { MoveConfirmationModal } from "./move-confirmation-modal";
 import { CalendarSettingsDialog, ViewRange } from "./calendar-settings-dialog";
+import { useCalendarConfig } from "./calendar-config";
 import { useCalendarDnd } from "@/hooks/use-calendar-dnd";
 import { cn } from "@/lib/utils";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
 
 // Types
 interface TechnicianSchedule {
@@ -89,6 +98,7 @@ interface ResourceCalendarProps {
   onScheduleClick?: () => void;
   onSettingsClick?: () => void;
   onMoreClick?: () => void;
+  onMenuClick?: () => void; // For mobile navigation
   onMultiLocationModeChange?: (enabled: boolean) => void;
   onMoveAppointment?: (
     appointmentId: string,
@@ -105,13 +115,10 @@ interface ResourceCalendarProps {
   ) => Promise<void>;
 }
 
-// Calendar configuration
+// Static calendar constants (same for mobile/desktop)
 const CALENDAR_START_HOUR = 0; // Midnight
 const CALENDAR_END_HOUR = 24; // Midnight next day
-const PIXELS_PER_HOUR = 80; // 80px per hour for better visibility
-const PIXELS_PER_15_MIN = 20; // 20px per 15 minutes (snap increment)
-const TIME_COLUMN_WIDTH = 56; // Width of time column in pixels
-const HEADER_HEIGHT = 37; // Height of sticky technician header row
+// Note: PIXELS_PER_HOUR, TIME_COLUMN_WIDTH, etc. are now in CalendarConfig (responsive)
 
 
 // Generate time slots for the full day
@@ -182,15 +189,21 @@ const getOffHoursBlocks = (
 };
 
 // Calculate appointment position and height
-const getAppointmentStyle = (appointment: Appointment, calendarDate: Date) => {
+const getAppointmentStyle = (
+  appointment: Appointment,
+  calendarDate: Date,
+  calendarStartHour: number,
+  calendarEndHour: number,
+  pixelsPerHour: number
+) => {
   const startHour = appointment.startTime.getHours();
   const startMinute = appointment.startTime.getMinutes();
   const endHour = appointment.endTime.getHours();
   const endMinute = appointment.endTime.getMinutes();
 
   // Calculate total minutes from calendar start
-  const startMinutesFromMidnight = (startHour - CALENDAR_START_HOUR) * 60 + startMinute;
-  let endMinutesFromMidnight = (endHour - CALENDAR_START_HOUR) * 60 + endMinute;
+  const startMinutesFromMidnight = (startHour - calendarStartHour) * 60 + startMinute;
+  let endMinutesFromMidnight = (endHour - calendarStartHour) * 60 + endMinute;
 
   // Check if appointment spans into the next day
   const appointmentSpansNextDay = !isSameDay(appointment.startTime, appointment.endTime);
@@ -198,13 +211,13 @@ const getAppointmentStyle = (appointment: Appointment, calendarDate: Date) => {
   if (appointmentSpansNextDay) {
     // If appointment goes past midnight, extend to end of calendar (24 hours = 1440 minutes)
     // This makes the appointment "protrude" to the bottom of the day view
-    endMinutesFromMidnight = (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * 60;
+    endMinutesFromMidnight = (calendarEndHour - calendarStartHour) * 60;
   }
 
   const durationMinutes = endMinutesFromMidnight - startMinutesFromMidnight;
 
-  // Convert minutes to pixels (PIXELS_PER_HOUR / 60 = pixels per minute)
-  const pixelsPerMinute = PIXELS_PER_HOUR / 60;
+  // Convert minutes to pixels (pixelsPerHour / 60 = pixels per minute)
+  const pixelsPerMinute = pixelsPerHour / 60;
   const top = startMinutesFromMidnight * pixelsPerMinute;
   const height = Math.max(durationMinutes * pixelsPerMinute, 20); // Minimum 20px height
 
@@ -233,12 +246,17 @@ export function ResourceCalendar({
   onScheduleClick,
   onSettingsClick,
   onMoreClick,
+  onMenuClick,
   onMultiLocationModeChange,
   onMoveAppointment,
   onMoveBlock,
 }: ResourceCalendarProps) {
   const [selectedDate, setSelectedDate] = useState<Date>(initialDate || new Date());
   const [internalSettingsOpen, setInternalSettingsOpen] = useState(false);
+  const [staffSheetOpen, setStaffSheetOpen] = useState(false);
+
+  // Get responsive calendar config
+  const config = useCalendarConfig();
 
   // Use controlled state if provided, otherwise use internal state
   const settingsOpen = controlledSettingsOpen ?? internalSettingsOpen;
@@ -272,11 +290,12 @@ export function ResourceCalendar({
   const [isMoving, setIsMoving] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
 
-  // DnD sensors - require 5px movement to start drag (prevents accidental drags on click)
+  // DnD sensors - require movement to start drag (prevents accidental drags on click)
+  // Mobile uses larger distance (12px) to prevent conflicts with scroll gestures
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 5,
+        distance: config.isMobile ? 12 : 5,
       },
     })
   );
@@ -342,10 +361,10 @@ export function ResourceCalendar({
   // Scroll to 8 AM at the top of viewport on mount
   useEffect(() => {
     if (gridRef.current) {
-      const scrollPosition = 8 * PIXELS_PER_HOUR;
+      const scrollPosition = 8 * config.PIXELS_PER_HOUR;
       gridRef.current.scrollTop = scrollPosition;
     }
-  }, []);
+  }, [config.PIXELS_PER_HOUR]);
 
   // Filter technicians based on selection
   const visibleTechnicians = useMemo(() => {
@@ -421,6 +440,10 @@ export function ResourceCalendar({
     visibleTechnicians,
     gridRef,
     onSlotSelect: onSlotClick,
+    pixelsPerHour: config.PIXELS_PER_HOUR,
+    pixelsPerFifteenMin: config.PIXELS_PER_15_MIN,
+    timeColumnWidth: config.TIME_COLUMN_WIDTH,
+    headerHeight: config.HEADER_HEIGHT,
   });
 
   // Handle move confirmation
@@ -494,20 +517,20 @@ export function ResourceCalendar({
     const endHour = block.endTime.getHours();
     const endMinute = block.endTime.getMinutes();
 
-    const startMinutesFromMidnight = (startHour - CALENDAR_START_HOUR) * 60 + startMinute;
-    let endMinutesFromMidnight = (endHour - CALENDAR_START_HOUR) * 60 + endMinute;
+    const startMinutesFromMidnight = (startHour - config.CALENDAR_START_HOUR) * 60 + startMinute;
+    let endMinutesFromMidnight = (endHour - config.CALENDAR_START_HOUR) * 60 + endMinute;
 
     // Check if block spans into the next day
     const blockSpansNextDay = !isSameDay(block.startTime, block.endTime);
 
     if (blockSpansNextDay) {
       // Extend to end of calendar
-      endMinutesFromMidnight = (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * 60;
+      endMinutesFromMidnight = (config.CALENDAR_END_HOUR - config.CALENDAR_START_HOUR) * 60;
     }
 
     const durationMinutes = endMinutesFromMidnight - startMinutesFromMidnight;
 
-    const pixelsPerMinute = PIXELS_PER_HOUR / 60;
+    const pixelsPerMinute = config.PIXELS_PER_HOUR / 60;
     const top = startMinutesFromMidnight * pixelsPerMinute;
     const height = Math.max(durationMinutes * pixelsPerMinute, 20);
 
@@ -541,9 +564,9 @@ export function ResourceCalendar({
 
     // Calculate Y position relative to grid content
     // Account for: scroll position and sticky header height
-    const relativeY = e.clientY - rect.top + scrollTop - HEADER_HEIGHT;
+    const relativeY = e.clientY - rect.top + scrollTop - config.HEADER_HEIGHT;
     // Calculate X position relative to technician columns (excluding time column)
-    const relativeX = e.clientX - rect.left - TIME_COLUMN_WIDTH;
+    const relativeX = e.clientX - rect.left - config.TIME_COLUMN_WIDTH;
 
     // If mouse is in header area or time column, clear hover
     if (relativeX < 0 || relativeY < 0) {
@@ -552,7 +575,7 @@ export function ResourceCalendar({
     }
 
     // Calculate which technician column
-    const contentWidth = rect.width - TIME_COLUMN_WIDTH;
+    const contentWidth = rect.width - config.TIME_COLUMN_WIDTH;
     const columnWidth = contentWidth / visibleTechnicians.length;
     const techIndex = Math.floor(relativeX / columnWidth);
     const tech = visibleTechnicians[techIndex];
@@ -563,9 +586,9 @@ export function ResourceCalendar({
     }
 
     // Snap to 15-minute increments
-    const minutes = Math.floor(relativeY / PIXELS_PER_15_MIN) * 15;
+    const minutes = Math.floor(relativeY / config.PIXELS_PER_15_MIN) * 15;
     // Clamp to valid range
-    const clampedMinutes = Math.max(0, Math.min(minutes, (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * 60 - 15));
+    const clampedMinutes = Math.max(0, Math.min(minutes, (config.CALENDAR_END_HOUR - config.CALENDAR_START_HOUR) * 60 - 15));
 
     setHoveredSlot({ technicianId: tech.id, minutesFromMidnight: clampedMinutes });
   };
@@ -582,17 +605,17 @@ export function ResourceCalendar({
     if (techIndex === -1) return null;
 
     const columnWidth = 100 / visibleTechnicians.length;
-    const top = hoveredSlot.minutesFromMidnight * (PIXELS_PER_HOUR / 60);
+    const top = hoveredSlot.minutesFromMidnight * (config.PIXELS_PER_HOUR / 60);
 
     return {
       top: `${top}px`,
-      height: `${PIXELS_PER_15_MIN}px`,
+      height: `${config.PIXELS_PER_15_MIN}px`,
       left: `${techIndex * columnWidth}%`,
       width: `${columnWidth}%`,
     };
   };
 
-  const totalGridHeight = (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * PIXELS_PER_HOUR;
+  const totalGridHeight = (config.CALENDAR_END_HOUR - config.CALENDAR_START_HOUR) * config.PIXELS_PER_HOUR;
 
   // Toggle individual technician
   const handleTechToggle = (techId: string) => {
@@ -685,19 +708,85 @@ export function ResourceCalendar({
 
       {/* Main Calendar Area */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Header Bar */}
-        <CalendarHeader
-          selectedDate={selectedDate}
-          onPrevDay={handlePrevDay}
-          onNextDay={handleNextDay}
-          locations={locations}
-          selectedLocationIds={selectedLocationIds}
-          multiLocationMode={multiLocationMode}
-          onLocationToggle={onLocationToggle}
-          onScheduleClick={onScheduleClick}
-          onSettingsClick={() => setSettingsOpen(true)}
-          onMoreClick={onMoreClick}
-        />
+        {/* Header Bar with Mobile Staff Button */}
+        <div className="flex items-center border-b border-gray-200 bg-white">
+          <CalendarHeader
+            selectedDate={selectedDate}
+            onPrevDay={handlePrevDay}
+            onNextDay={handleNextDay}
+            onDateSelect={handleDateChange}
+            locations={locations}
+            selectedLocationIds={selectedLocationIds}
+            multiLocationMode={multiLocationMode}
+            onLocationToggle={onLocationToggle}
+            onScheduleClick={onScheduleClick}
+            onSettingsClick={() => setSettingsOpen(true)}
+            onMoreClick={onMoreClick}
+            onMenuClick={onMenuClick}
+          />
+
+          {/* Mobile Staff Selector Button */}
+          {config.isMobile && (
+            <Sheet open={staffSheetOpen} onOpenChange={setStaffSheetOpen}>
+              <SheetTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-full bg-gray-100 hover:bg-gray-200 mr-2 flex-shrink-0"
+                >
+                  <Users className="h-4 w-4" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-[280px] p-0">
+                <SheetHeader className="p-4 border-b">
+                  <SheetTitle>Staff</SheetTitle>
+                </SheetHeader>
+                <div className="p-4 overflow-y-auto max-h-[calc(100vh-80px)]">
+                  <div className="flex flex-col gap-2">
+                    {technicians.map((tech) => {
+                      const isSelected = selectedTechIds.includes(tech.id);
+                      return (
+                        <button
+                          key={tech.id}
+                          className={cn(
+                            "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium cursor-pointer transition-all duration-200",
+                            isSelected
+                              ? "text-white shadow-sm"
+                              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                          )}
+                          style={isSelected ? { backgroundColor: tech.color } : undefined}
+                          onClick={() => handleTechToggle(tech.id)}
+                        >
+                          <span
+                            className={cn(
+                              "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200 flex-shrink-0",
+                              isSelected
+                                ? "border-white/50 bg-white/20"
+                                : "border-gray-300 bg-white"
+                            )}
+                          >
+                            {isSelected && (
+                              <svg className="w-3 h-3 text-white" viewBox="0 0 12 12" fill="none">
+                                <path d="M2 6L5 9L10 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
+                            )}
+                          </span>
+                          {!isSelected && (
+                            <span
+                              className="w-3 h-3 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: tech.color }}
+                            />
+                          )}
+                          <span className="truncate">{tech.firstName}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </SheetContent>
+            </Sheet>
+          )}
+        </div>
 
         {/* Calendar Grid */}
         <DndContext
@@ -708,7 +797,10 @@ export function ResourceCalendar({
           onDragCancel={handleDragCancel}
         >
         <div
-          className={cn("flex-1 overflow-auto custom-scrollbar", isDragging && "cursor-grabbing")}
+          className={cn(
+            "flex-1 overflow-auto custom-scrollbar calendar-scroll-container",
+            isDragging && "cursor-grabbing"
+          )}
           ref={gridRef}
           onMouseMove={(e) => {
             handleGridMouseMove(e);
@@ -725,19 +817,27 @@ export function ResourceCalendar({
               {/* Empty spacer for time column */}
               <div
                 className="flex-shrink-0 border-r border-gray-200"
-                style={{ width: TIME_COLUMN_WIDTH }}
+                style={{ width: config.TIME_COLUMN_WIDTH }}
               />
 
               {/* Technician column headers */}
               {visibleTechnicians.map((tech) => (
                 <div
                   key={tech.id}
-                  className="border-r border-gray-200 flex items-center justify-center gap-1 py-2 min-w-0 flex-1 overflow-hidden"
+                  className={cn(
+                    "border-r border-gray-200 flex items-center justify-center min-w-0 flex-1 overflow-hidden",
+                    config.isMobile ? "gap-0.5 py-1.5 px-0.5" : "gap-1 py-2"
+                  )}
                 >
-                  <span className="font-medium text-sm text-gray-700 truncate">
+                  <span className={cn(
+                    "font-medium text-gray-700 truncate",
+                    config.isMobile ? "text-[11px]" : "text-sm"
+                  )}>
                     {tech.firstName}
                   </span>
-                  <Sparkles className="h-4 w-4 flex-shrink-0" style={{ color: tech.color }} />
+                  {config.showSparkles && (
+                    <Sparkles className="h-4 w-4 flex-shrink-0" style={{ color: tech.color }} />
+                  )}
                 </div>
               ))}
             </div>
@@ -749,7 +849,7 @@ export function ResourceCalendar({
                 <div
                   key={`hour-line-${index}`}
                   className="absolute left-0 right-0 border-b border-gray-300"
-                  style={{ top: index * PIXELS_PER_HOUR }}
+                  style={{ top: index * config.PIXELS_PER_HOUR }}
                 />
               ))}
 
@@ -759,17 +859,17 @@ export function ResourceCalendar({
                   {/* :15 line */}
                   <div
                     className="absolute left-0 right-0 border-b border-gray-200/60"
-                    style={{ top: index * PIXELS_PER_HOUR + PIXELS_PER_15_MIN }}
+                    style={{ top: index * config.PIXELS_PER_HOUR + config.PIXELS_PER_15_MIN }}
                   />
                   {/* :30 line (slightly darker) */}
                   <div
                     className="absolute left-0 right-0 border-b border-gray-300/70"
-                    style={{ top: index * PIXELS_PER_HOUR + PIXELS_PER_15_MIN * 2 }}
+                    style={{ top: index * config.PIXELS_PER_HOUR + config.PIXELS_PER_15_MIN * 2 }}
                   />
                   {/* :45 line */}
                   <div
                     className="absolute left-0 right-0 border-b border-gray-200/60"
-                    style={{ top: index * PIXELS_PER_HOUR + PIXELS_PER_15_MIN * 3 }}
+                    style={{ top: index * config.PIXELS_PER_HOUR + config.PIXELS_PER_15_MIN * 3 }}
                   />
                 </div>
               ))}
@@ -779,12 +879,15 @@ export function ResourceCalendar({
                 <div
                   key={index}
                   className="absolute left-0 right-0 flex"
-                  style={{ top: index * PIXELS_PER_HOUR, height: PIXELS_PER_HOUR }}
+                  style={{ top: index * config.PIXELS_PER_HOUR, height: config.PIXELS_PER_HOUR }}
                 >
                   {/* Time label */}
                   <div
-                    className="flex-shrink-0 border-r border-gray-200 px-2 text-xs text-gray-500 text-right pt-0"
-                    style={{ width: TIME_COLUMN_WIDTH }}
+                    className={cn(
+                      "flex-shrink-0 border-r border-gray-200 text-gray-500 text-right pt-0",
+                      config.isMobile ? "px-1 text-[10px]" : "px-2 text-xs"
+                    )}
+                    style={{ width: config.TIME_COLUMN_WIDTH }}
                   >
                     {formatTimeLabel(slot.getHours())}
                   </div>
@@ -797,7 +900,8 @@ export function ResourceCalendar({
                       onClick={() => onSlotClick?.(tech.id, slot)}
                       onMouseDown={(e) => {
                         // Only start selection on primary mouse button
-                        if (e.button === 0 && onSlotClick) {
+                        // Disable drag-to-select on mobile (conflicts with scroll)
+                        if (e.button === 0 && onSlotClick && !config.isMobile) {
                           handleSelectionStart(e, tech.id);
                         }
                       }}
@@ -809,7 +913,7 @@ export function ResourceCalendar({
               {/* Off-hours overlay (darker gray zones) */}
               <div
                 className="absolute top-0 bottom-0 pointer-events-none"
-                style={{ left: TIME_COLUMN_WIDTH, right: 0 }}
+                style={{ left: config.TIME_COLUMN_WIDTH, right: 0 }}
               >
                 <div className="flex h-full">
                   {visibleTechnicians.map((tech) => {
@@ -817,9 +921,9 @@ export function ResourceCalendar({
                     const offHoursBlocks = getOffHoursBlocks(
                       tech,
                       dayOfWeek,
-                      CALENDAR_START_HOUR,
-                      CALENDAR_END_HOUR,
-                      PIXELS_PER_HOUR
+                      config.CALENDAR_START_HOUR,
+                      config.CALENDAR_END_HOUR,
+                      config.PIXELS_PER_HOUR
                     );
 
                     return (
@@ -844,7 +948,7 @@ export function ResourceCalendar({
               {hoveredSlot && !isDragging && !isSelecting && (
                 <div
                   className="absolute top-0 bottom-0 pointer-events-none"
-                  style={{ left: TIME_COLUMN_WIDTH, right: 0 }}
+                  style={{ left: config.TIME_COLUMN_WIDTH, right: 0 }}
                 >
                   <div className="relative h-full">
                     <div
@@ -859,7 +963,7 @@ export function ResourceCalendar({
               {isSelecting && (
                 <div
                   className="absolute top-0 bottom-0 pointer-events-none"
-                  style={{ left: TIME_COLUMN_WIDTH, right: 0 }}
+                  style={{ left: config.TIME_COLUMN_WIDTH, right: 0 }}
                 >
                   <div className="relative h-full">
                     <div
@@ -873,16 +977,16 @@ export function ResourceCalendar({
               {/* Current time indicator - only show on today */}
               {isSameDay(selectedDate, new Date()) && (
                 <TimeIndicator
-                  startHour={CALENDAR_START_HOUR}
-                  pixelsPerHour={PIXELS_PER_HOUR}
-                  leftOffset={TIME_COLUMN_WIDTH}
+                  startHour={config.CALENDAR_START_HOUR}
+                  pixelsPerHour={config.PIXELS_PER_HOUR}
+                  leftOffset={config.TIME_COLUMN_WIDTH}
                 />
               )}
 
               {/* Unified events overlay (appointments + blocks with shared overlap calculation) */}
               <div
                 className="absolute top-0 bottom-0 pointer-events-none"
-                style={{ left: TIME_COLUMN_WIDTH, right: 0 }}
+                style={{ left: config.TIME_COLUMN_WIDTH, right: 0 }}
               >
                 <div className="flex h-full">
                   {visibleTechnicians.map((tech) => (
@@ -917,7 +1021,13 @@ export function ResourceCalendar({
                           );
                         } else {
                           const apt = event.originalData as Appointment;
-                          const { top, height } = getAppointmentStyle(apt, selectedDate);
+                          const { top, height } = getAppointmentStyle(
+                            apt,
+                            selectedDate,
+                            config.CALENDAR_START_HOUR,
+                            config.CALENDAR_END_HOUR,
+                            config.PIXELS_PER_HOUR
+                          );
                           // Hide appointment if it has a pending move (it will be shown at the new position)
                           const hasPendingMove = pendingMove?.appointment.id === apt.id;
 
@@ -960,9 +1070,9 @@ export function ResourceCalendar({
 
                   const columnWidth = 100 / visibleTechnicians.length;
                   const duration = pendingMove.appointment.endTime.getTime() - pendingMove.appointment.startTime.getTime();
-                  const aptHeight = (duration / (1000 * 60)) * (PIXELS_PER_HOUR / 60);
-                  const topPx = ((pendingMove.newTime.getHours() - CALENDAR_START_HOUR) * 60 +
-                    pendingMove.newTime.getMinutes()) * (PIXELS_PER_HOUR / 60);
+                  const aptHeight = (duration / (1000 * 60)) * (config.PIXELS_PER_HOUR / 60);
+                  const topPx = ((pendingMove.newTime.getHours() - config.CALENDAR_START_HOUR) * 60 +
+                    pendingMove.newTime.getMinutes()) * (config.PIXELS_PER_HOUR / 60);
                   const pendingTech = visibleTechnicians[techIndex];
 
                   return (
@@ -1000,9 +1110,9 @@ export function ResourceCalendar({
 
                   const columnWidth = 100 / visibleTechnicians.length;
                   const duration = new Date(pendingBlockMove.block.endTime).getTime() - new Date(pendingBlockMove.block.startTime).getTime();
-                  const blockHeight = (duration / (1000 * 60)) * (PIXELS_PER_HOUR / 60);
-                  const topPx = ((pendingBlockMove.newTime.getHours() - CALENDAR_START_HOUR) * 60 +
-                    pendingBlockMove.newTime.getMinutes()) * (PIXELS_PER_HOUR / 60);
+                  const blockHeight = (duration / (1000 * 60)) * (config.PIXELS_PER_HOUR / 60);
+                  const topPx = ((pendingBlockMove.newTime.getHours() - config.CALENDAR_START_HOUR) * 60 +
+                    pendingBlockMove.newTime.getMinutes()) * (config.PIXELS_PER_HOUR / 60);
 
                   return (
                     <div
@@ -1034,9 +1144,9 @@ export function ResourceCalendar({
 
                   const columnWidth = 100 / visibleTechnicians.length;
                   const aptHeight = ((dragState.activeAppointment.endTime.getTime() -
-                    dragState.activeAppointment.startTime.getTime()) / (1000 * 60)) * (PIXELS_PER_HOUR / 60);
-                  const topPx = ((dragState.currentTime.getHours() - CALENDAR_START_HOUR) * 60 +
-                    dragState.currentTime.getMinutes()) * (PIXELS_PER_HOUR / 60);
+                    dragState.activeAppointment.startTime.getTime()) / (1000 * 60)) * (config.PIXELS_PER_HOUR / 60);
+                  const topPx = ((dragState.currentTime.getHours() - config.CALENDAR_START_HOUR) * 60 +
+                    dragState.currentTime.getMinutes()) * (config.PIXELS_PER_HOUR / 60);
 
                   return (
                     <div
@@ -1083,9 +1193,9 @@ export function ResourceCalendar({
 
                   const columnWidth = 100 / visibleTechnicians.length;
                   const blockHeight = ((new Date(dragState.activeBlock.endTime).getTime() -
-                    new Date(dragState.activeBlock.startTime).getTime()) / (1000 * 60)) * (PIXELS_PER_HOUR / 60);
-                  const topPx = ((dragState.currentTime.getHours() - CALENDAR_START_HOUR) * 60 +
-                    dragState.currentTime.getMinutes()) * (PIXELS_PER_HOUR / 60);
+                    new Date(dragState.activeBlock.startTime).getTime()) / (1000 * 60)) * (config.PIXELS_PER_HOUR / 60);
+                  const topPx = ((dragState.currentTime.getHours() - config.CALENDAR_START_HOUR) * 60 +
+                    dragState.currentTime.getMinutes()) * (config.PIXELS_PER_HOUR / 60);
 
                   return (
                     <div
@@ -1145,6 +1255,9 @@ export function ResourceCalendar({
         selectedStaffCount={selectedTechIds.length}
         multiLocationMode={multiLocationMode}
         onMultiLocationModeChange={onMultiLocationModeChange}
+        locations={locations}
+        selectedLocationIds={selectedLocationIds}
+        onLocationToggle={onLocationToggle}
       />
 
     </div>

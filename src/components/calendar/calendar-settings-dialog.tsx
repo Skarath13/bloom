@@ -15,6 +15,12 @@ export type ViewRange = "day" | "week" | "month";
 
 type SettingsSection = "view-range" | "location";
 
+interface Location {
+  id: string;
+  name: string;
+  slug: string;
+}
+
 interface CalendarSettingsDialogProps {
   open: boolean;
   onClose: () => void;
@@ -23,6 +29,10 @@ interface CalendarSettingsDialogProps {
   selectedStaffCount: number;
   multiLocationMode?: boolean;
   onMultiLocationModeChange?: (enabled: boolean) => void;
+  // Location selection (for mobile - location pills hidden)
+  locations?: Location[];
+  selectedLocationIds?: string[];
+  onLocationToggle?: (locationId: string) => void;
 }
 
 const VIEW_RANGE_OPTIONS: { value: ViewRange; label: string; description: string }[] = [
@@ -39,6 +49,9 @@ export function CalendarSettingsDialog({
   selectedStaffCount,
   multiLocationMode = false,
   onMultiLocationModeChange,
+  locations = [],
+  selectedLocationIds = [],
+  onLocationToggle,
 }: CalendarSettingsDialogProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("view-range");
   const isSingleStaff = selectedStaffCount === 1;
@@ -51,9 +64,12 @@ export function CalendarSettingsDialog({
     onViewRangeChange(range);
   };
 
+  // Show location section if we have locations to select from or multi-location mode is available
+  const showLocationSection = locations.length > 0 || onMultiLocationModeChange;
+
   const sidebarItems = [
     { id: "view-range" as const, label: "View Range", icon: Calendar },
-    ...(onMultiLocationModeChange
+    ...(showLocationSection
       ? [{ id: "location" as const, label: "Location", icon: MapPin }]
       : []),
   ];
@@ -149,24 +165,68 @@ export function CalendarSettingsDialog({
             )}
 
             {/* Location Section */}
-            {activeSection === "location" && onMultiLocationModeChange && (
-              <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-4">Location Selection</h3>
-                <div className="flex items-center justify-between p-4 rounded-lg border border-gray-200 bg-white">
-                  <div className="text-left pr-4">
-                    <div className="font-medium text-gray-900">
-                      Multi-Location Mode
-                    </div>
-                    <div className="text-sm text-gray-500 mt-1">
-                      View multiple locations simultaneously. Toggle locations on/off instead of switching between them.
+            {activeSection === "location" && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700 mb-3">Select Location</h3>
+                  <div className="space-y-2">
+                    {locations.map((location) => {
+                      const isSelected = selectedLocationIds.includes(location.id);
+                      return (
+                        <button
+                          key={location.id}
+                          onClick={() => onLocationToggle?.(location.id)}
+                          className={cn(
+                            "w-full flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer",
+                            isSelected
+                              ? "border-[#1E1B4B] bg-[#1E1B4B]/5"
+                              : "border-gray-200 hover:border-gray-300"
+                          )}
+                        >
+                          <div className="flex items-center gap-3">
+                            <MapPin className={cn(
+                              "w-4 h-4",
+                              isSelected ? "text-[#1E1B4B]" : "text-gray-400"
+                            )} />
+                            <span className={cn(
+                              "font-medium",
+                              isSelected ? "text-[#1E1B4B]" : "text-gray-900"
+                            )}>
+                              {location.name}
+                            </span>
+                          </div>
+                          {isSelected && (
+                            <div className="w-5 h-5 rounded-full bg-[#1E1B4B] flex items-center justify-center">
+                              <Check className="w-3 h-3 text-white" />
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Multi-location mode toggle */}
+                {onMultiLocationModeChange && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 mb-3">Advanced</h3>
+                    <div className="flex items-center justify-between p-4 rounded-lg border border-gray-200 bg-white">
+                      <div className="text-left pr-4">
+                        <div className="font-medium text-gray-900">
+                          Multi-Location Mode
+                        </div>
+                        <div className="text-sm text-gray-500 mt-1">
+                          View multiple locations simultaneously.
+                        </div>
+                      </div>
+                      <Switch
+                        checked={multiLocationMode}
+                        onCheckedChange={onMultiLocationModeChange}
+                        className="cursor-pointer data-[state=checked]:bg-[#1E1B4B]"
+                      />
                     </div>
                   </div>
-                  <Switch
-                    checked={multiLocationMode}
-                    onCheckedChange={onMultiLocationModeChange}
-                    className="cursor-pointer data-[state=checked]:bg-[#1E1B4B]"
-                  />
-                </div>
+                )}
               </div>
             )}
           </div>

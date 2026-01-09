@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import { Check, CheckCheck, Sparkles, User, Play, X } from "lucide-react";
 import { useDraggable } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
+import { useCalendarConfig } from "./calendar-config";
 import type { OverlapPosition } from "./overlap-utils";
 
 // Default color palette for technicians (15 distinct earth tones/pastels)
@@ -65,6 +66,8 @@ export function AppointmentCard({
   technicianId,
   overlapPosition,
 }: AppointmentCardProps) {
+  const config = useCalendarConfig();
+
   // Drag and drop hook
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id,
@@ -104,9 +107,9 @@ export function AppointmentCard({
     NO_SHOW: "x",
   }[status] as string | undefined;
 
-  // Determine what content to show based on card height
-  const showServiceName = height > 40;
-  const showCategory = height > 55;
+  // Determine what content to show based on card height (smaller thresholds on mobile)
+  const showServiceName = height > (config.isMobile ? 32 : 40);
+  const showCategory = height > (config.isMobile ? 45 : 55);
 
   return (
     <div
@@ -155,27 +158,39 @@ export function AppointmentCard({
       )}
 
       {/* Time */}
-      <div className="text-xs font-medium text-white pr-5">
+      <div className={cn(
+        "font-medium text-white",
+        config.isMobile ? "text-[10px] pr-4" : "text-xs pr-5"
+      )}>
         {format(startTime, "h:mm a")}
       </div>
 
       {/* Client name */}
-      <div className="text-xs text-white font-medium">
+      <div className={cn(
+        "text-white font-medium truncate",
+        config.isMobile ? "text-[10px]" : "text-xs"
+      )}>
         {isPersonalEvent ? "Personal Event" : clientName}
       </div>
 
       {/* Service name (if height allows) */}
       {showServiceName && !isPersonalEvent && (
-        <div className="text-xs text-white/90">
+        <div className={cn(
+          "text-white/90",
+          config.isMobile ? "text-[10px] break-words leading-tight" : "text-xs truncate"
+        )}>
           {serviceName}
         </div>
       )}
 
       {/* Service category with sparkle (if height allows) */}
       {showCategory && serviceCategory && !isPersonalEvent && (
-        <div className="text-xs text-white/80 flex items-center gap-0.5">
+        <div className={cn(
+          "text-white/80 flex items-center gap-0.5",
+          config.isMobile ? "text-[10px]" : "text-xs"
+        )}>
           ({serviceCategory})
-          <Sparkles className="h-2.5 w-2.5 flex-shrink-0" />
+          {config.showSparkles && <Sparkles className="h-2.5 w-2.5 flex-shrink-0" />}
         </div>
       )}
     </div>

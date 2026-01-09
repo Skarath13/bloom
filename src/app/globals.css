@@ -287,6 +287,40 @@
   display: none;
 }
 
+/* Safari/PWA Calendar optimizations */
+.calendar-scroll-container {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  overscroll-behavior-y: contain;
+}
+
+/* Prevent drag conflicts with scroll on Safari */
+.calendar-draggable {
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Mobile calendar optimizations */
+@media (max-width: 767px) {
+  .calendar-tech-header {
+    font-size: 11px;
+    padding: 0.375rem 0.25rem;
+  }
+
+  .calendar-time-label {
+    font-size: 10px;
+    padding-left: 0.125rem;
+    padding-right: 0.125rem;
+  }
+
+  /* Ensure touch targets are large enough on mobile */
+  .calendar-appointment-card {
+    min-height: 24px;
+  }
+}
+
 /* Reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
   .animate-pulse,

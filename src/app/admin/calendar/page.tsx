@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { format } from "date-fns";
 import { ResourceCalendar } from "@/components/calendar/resource-calendar";
+import { CalendarConfigProvider } from "@/components/calendar/calendar-config";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { AppointmentDetailsDialog } from "@/components/calendar/appointment-details-dialog";
@@ -12,6 +13,9 @@ import { StaffScheduleDialog } from "@/components/calendar/staff-schedule-dialog
 import { PersonalEventDialog } from "@/components/calendar/personal-event-dialog";
 import { useRealtimeAppointments } from "@/hooks/use-realtime-appointments";
 import { useRealtimeTechnicians } from "@/hooks/use-realtime-technicians";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
+import { AdminSidebar } from "@/components/admin/sidebar";
 
 interface Location {
   id: string;
@@ -156,6 +160,7 @@ function CalendarContent() {
     time: Date;
   } | null>(null);
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Update URL when appointment is selected/deselected
   const updateAppointmentUrl = useCallback((appointmentId: string | null) => {
@@ -594,27 +599,29 @@ function CalendarContent() {
   }
 
   return (
-    <div className="h-full">
-      <ResourceCalendar
-        locations={locations}
-        technicians={technicians}
-        appointments={appointments}
-        blocks={blocks}
-        selectedLocationIds={selectedLocationIds}
-        selectedDate={selectedDate}
-        multiLocationMode={multiLocationMode}
-        settingsOpen={settingsOpenFromUrl}
-        onSettingsOpenChange={handleSettingsOpenChange}
-        onLocationToggle={handleLocationToggle}
-        onDateChange={handleDateChange}
-        onAppointmentClick={handleAppointmentClick}
-        onBlockClick={handleBlockClick}
-        onSlotClick={handleSlotClick}
-        onScheduleClick={() => setScheduleDialogOpen(true)}
-        onMoveAppointment={handleMoveAppointment}
-        onMoveBlock={handleMoveBlock}
-        onMultiLocationModeChange={handleMultiLocationModeChange}
-      />
+    <CalendarConfigProvider>
+      <div className="h-full">
+        <ResourceCalendar
+          locations={locations}
+          technicians={technicians}
+          appointments={appointments}
+          blocks={blocks}
+          selectedLocationIds={selectedLocationIds}
+          selectedDate={selectedDate}
+          multiLocationMode={multiLocationMode}
+          settingsOpen={settingsOpenFromUrl}
+          onSettingsOpenChange={handleSettingsOpenChange}
+          onLocationToggle={handleLocationToggle}
+          onDateChange={handleDateChange}
+          onAppointmentClick={handleAppointmentClick}
+          onBlockClick={handleBlockClick}
+          onSlotClick={handleSlotClick}
+          onScheduleClick={() => setScheduleDialogOpen(true)}
+          onMenuClick={() => setMobileMenuOpen(true)}
+          onMoveAppointment={handleMoveAppointment}
+          onMoveBlock={handleMoveBlock}
+          onMultiLocationModeChange={handleMultiLocationModeChange}
+        />
 
       {/* Appointment details dialog - Square style */}
       <AppointmentDetailsDialog
@@ -769,7 +776,18 @@ function CalendarContent() {
         onSave={refreshCalendarData}
         onDelete={refreshCalendarData}
       />
-    </div>
+
+      {/* Mobile navigation sidebar */}
+      <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+        <SheetContent side="left" className="p-0 w-56">
+          <VisuallyHidden>
+            <SheetTitle>Navigation Menu</SheetTitle>
+          </VisuallyHidden>
+          <AdminSidebar />
+        </SheetContent>
+      </Sheet>
+      </div>
+    </CalendarConfigProvider>
   );
 }
 
