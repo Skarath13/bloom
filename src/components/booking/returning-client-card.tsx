@@ -2,9 +2,8 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { User, Loader2, CalendarDays, RotateCcw } from "lucide-react";
+import { Loader2, ArrowRight, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useBooking } from "./booking-context";
 import { cn } from "@/lib/utils";
 
@@ -34,8 +33,21 @@ interface ReturningClientCardProps {
 }
 
 // Format phone number as user types: (XXX) XXX-XXXX
+// Handles country codes like +1, 1, etc. - strips them and keeps last 10 digits
 function formatPhoneNumber(value: string): string {
-  const digits = value.replace(/\D/g, "").slice(0, 10);
+  // Remove all non-digits
+  let digits = value.replace(/\D/g, "");
+
+  // If starts with 1 and has more than 10 digits, it's likely a country code
+  if (digits.length > 10 && digits.startsWith("1")) {
+    digits = digits.slice(1);
+  }
+
+  // Take only the last 10 digits (handles any country code)
+  if (digits.length > 10) {
+    digits = digits.slice(-10);
+  }
+
   if (digits.length === 0) return "";
   if (digits.length <= 3) return `(${digits}`;
   if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
@@ -137,117 +149,140 @@ export function ReturningClientCard({
     return (
       <div
         className={cn(
-          "rounded-xl overflow-hidden bg-white border border-slate-200 shadow-sm p-4",
+          "rounded-2xl overflow-hidden",
+          "bg-white",
+          "flex flex-col p-3",
           className
         )}
+        style={{
+          minHeight: "176px",
+          boxShadow: `
+            0 1px 2px rgba(0, 0, 0, 0.04),
+            0 4px 8px rgba(0, 0, 0, 0.06),
+            0 0 0 1px rgba(16, 185, 129, 0.15)
+          `,
+        }}
       >
-        {/* Welcome message */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
-              <User className="w-4 h-4 text-green-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-slate-900">
-                Welcome back, {verifiedClient.firstName}!
-              </p>
-            </div>
+        {/* Header */}
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            <p className="text-sm font-semibold text-slate-800">
+              Hi, {verifiedClient.firstName}
+            </p>
           </div>
           <button
             onClick={handleReset}
-            className="text-xs text-slate-400 hover:text-slate-600"
+            className="text-[10px] text-slate-400 hover:text-slate-600"
           >
             Switch
           </button>
         </div>
 
-        {/* Appointment history or empty state */}
-        {loadingHistory ? (
-          <div className="flex items-center justify-center py-4">
-            <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
-          </div>
-        ) : appointments.length > 0 ? (
-          <div className="space-y-2">
-            <p className="text-xs text-slate-500 mb-2">Recent appointments:</p>
-            {appointments.slice(0, 2).map((apt) => (
-              <div
-                key={apt.id}
-                className="flex items-center justify-between p-2 bg-slate-50 rounded-lg"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium text-slate-900 truncate">
+        {/* Quick rebook */}
+        <div className="flex-1 flex flex-col justify-center">
+          {loadingHistory ? (
+            <div className="flex items-center justify-center py-3">
+              <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+            </div>
+          ) : appointments.length > 0 ? (
+            <div className="space-y-1.5">
+              <p className="text-[10px] text-slate-400 uppercase tracking-wide">Rebook</p>
+              {appointments.slice(0, 2).map((apt) => (
+                <button
+                  key={apt.id}
+                  onClick={() => handleRebook(apt)}
+                  className="w-full flex items-center justify-between p-2 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors group"
+                >
+                  <p className="text-[11px] font-medium text-slate-700 truncate">
                     {apt.serviceName}
                   </p>
-                  <p className="text-[10px] text-slate-500 truncate">
-                    {apt.locationName} - {apt.technicianName}
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleRebook(apt)}
-                  className="ml-2 h-7 text-xs px-2 shrink-0"
-                >
-                  <RotateCcw className="w-3 h-3 mr-1" />
-                  Rebook
-                </Button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-2">
-            <CalendarDays className="w-6 h-6 mx-auto text-slate-300 mb-1" />
-            <p className="text-xs text-slate-500">
-              Select a location below to book
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 shrink-0" />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[11px] text-slate-500 text-center">
+              Select a location below
             </p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     );
   }
 
-  // Render initial phone input state
+  // Render initial phone input state - Clean minimal design
   return (
     <div
       className={cn(
-        "rounded-xl overflow-hidden bg-white border border-slate-200 shadow-sm p-4",
+        "rounded-2xl overflow-hidden",
+        "bg-white",
+        "flex flex-col justify-between p-3",
         className
       )}
+      style={{
+        minHeight: "176px",
+        boxShadow: `
+          0 1px 2px rgba(0, 0, 0, 0.04),
+          0 4px 8px rgba(0, 0, 0, 0.06),
+          0 0 0 1px rgba(0, 0, 0, 0.04)
+        `,
+      }}
     >
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-8 h-8 rounded-full bg-[#8B687A]/10 flex items-center justify-center">
-          <User className="w-4 h-4 text-[#8B687A]" />
-        </div>
-        <div>
-          <p className="text-sm font-medium text-slate-900">Returning?</p>
-          <p className="text-[10px] text-slate-500">Log in to rebook</p>
-        </div>
+      {/* Header - centered */}
+      <div className="flex-1 flex items-center justify-center">
+        <p className="text-base font-semibold text-slate-800">Quick Login</p>
       </div>
 
+      {/* Phone input - compact */}
       <div className="space-y-2">
-        <Input
-          type="tel"
-          placeholder="(555) 555-5555"
-          value={phone}
-          onChange={handlePhoneChange}
-          disabled={isSending}
-          className="h-10 text-sm"
-        />
+        <div className="relative">
+          <label htmlFor="phone" className="sr-only">Phone Number</label>
+          <input
+            type="tel"
+            inputMode="tel"
+            name="phone"
+            id="phone"
+            autoComplete="tel"
+            placeholder="Enter Phone Number"
+            value={phone}
+            onChange={handlePhoneChange}
+            disabled={isSending}
+            className={cn(
+              "w-full h-10 px-3 rounded-xl text-center",
+              "bg-slate-50",
+              "border border-transparent",
+              "text-xs text-slate-700 placeholder:text-slate-400 placeholder:text-xs",
+              "focus:outline-none focus:bg-white focus:border-[#8B687A]/40 focus:ring-2 focus:ring-[#8B687A]/10",
+              "transition-all duration-150",
+              "disabled:opacity-50"
+            )}
+          />
+        </div>
 
-        <Button
+        <button
           onClick={handleSendCode}
           disabled={!isPhoneValid || isSending}
-          className="w-full h-10 text-sm bg-[#8B687A] hover:bg-[#6d5261]"
+          className={cn(
+            "w-full h-10 rounded-xl",
+            "text-[13px] font-medium",
+            "flex items-center justify-center gap-1.5",
+            "transition-all duration-150",
+            "disabled:cursor-not-allowed",
+            isPhoneValid && !isSending
+              ? "bg-[#8B687A] text-white active:scale-[0.98]"
+              : "bg-slate-100 text-slate-400"
+          )}
         >
           {isSending ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Sending...
-            </>
+            <Loader2 className="w-4 h-4 animate-spin" />
           ) : (
-            "Send Code"
+            <>
+              <span>Send Code</span>
+              <ArrowRight className="w-4 h-4" />
+            </>
           )}
-        </Button>
+        </button>
       </div>
     </div>
   );

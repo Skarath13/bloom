@@ -574,7 +574,7 @@ export default function CheckoutPage({ params }: PageProps) {
                       id="firstName"
                       name="firstName"
                       autoComplete="given-name"
-                      placeholder="Jane"
+                      placeholder=""
                       value={formData.firstName}
                       onChange={handleInputChange}
                       required
@@ -588,7 +588,7 @@ export default function CheckoutPage({ params }: PageProps) {
                       id="lastName"
                       name="lastName"
                       autoComplete="family-name"
-                      placeholder="Doe"
+                      placeholder=""
                       value={formData.lastName}
                       onChange={handleInputChange}
                       required
@@ -606,7 +606,7 @@ export default function CheckoutPage({ params }: PageProps) {
                     type="email"
                     inputMode="email"
                     autoComplete="email"
-                    placeholder="your@email.com"
+                    placeholder=""
                     value={formData.email}
                     onChange={handleInputChange}
                     disabled={isLoading || !phoneVerified}
@@ -619,7 +619,7 @@ export default function CheckoutPage({ params }: PageProps) {
                   <Textarea
                     id="notes"
                     name="notes"
-                    placeholder="Allergies, preferences..."
+                    placeholder=""
                     value={formData.notes}
                     onChange={handleInputChange}
                     disabled={isLoading || !phoneVerified}

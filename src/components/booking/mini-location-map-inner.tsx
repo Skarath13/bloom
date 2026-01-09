@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { MapContainer, TileLayer, Marker } from "react-leaflet";
-import * as L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
 interface MiniLocationMapInnerProps {
@@ -11,68 +10,72 @@ interface MiniLocationMapInnerProps {
   className?: string;
 }
 
-// Create a smaller marker icon for mini-maps
-const createMiniMarkerIcon = () => {
-  const size = 28;
-  const innerSize = 20;
-
-  return L.divIcon({
-    className: "mini-marker",
-    html: `
-      <div style="
-        width: ${size}px;
-        height: ${size}px;
-        position: relative;
-      ">
-        <!-- Main marker body -->
-        <div style="
-          position: absolute;
-          inset: ${(size - innerSize) / 2}px;
-          background: linear-gradient(135deg, #8B687A 0%, #6d5261 100%);
-          border-radius: 50%;
-          box-shadow:
-            0 2px 6px rgba(139, 104, 122, 0.4),
-            0 1px 2px rgba(0, 0, 0, 0.1);
-          border: 2px solid white;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        ">
-          <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="white" stroke="none">
-            <circle cx="12" cy="10" r="4"/>
-          </svg>
-        </div>
-        <!-- Pin point -->
-        <div style="
-          position: absolute;
-          bottom: -4px;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 0;
-          height: 0;
-          border-left: 5px solid transparent;
-          border-right: 5px solid transparent;
-          border-top: 7px solid #6d5261;
-        "></div>
-      </div>
-    `,
-    iconSize: [size, size + 7],
-    iconAnchor: [size / 2, size + 4],
-  });
-};
-
 export function MiniLocationMapInner({
   latitude,
   longitude,
   className = "",
 }: MiniLocationMapInnerProps) {
   const [mounted, setMounted] = useState(false);
+  const [L, setL] = useState<typeof import("leaflet") | null>(null);
 
   useEffect(() => {
-    setMounted(true);
+    import("leaflet").then((leaflet) => {
+      setL(leaflet);
+      setMounted(true);
+    });
   }, []);
 
-  if (!mounted) {
+  // Create marker icon only after Leaflet is loaded
+  const markerIcon = useMemo(() => {
+    if (!L) return null;
+
+    const size = 28;
+    const innerSize = 20;
+
+    return L.divIcon({
+      className: "mini-marker",
+      html: `
+        <div style="
+          width: ${size}px;
+          height: ${size}px;
+          position: relative;
+        ">
+          <div style="
+            position: absolute;
+            inset: ${(size - innerSize) / 2}px;
+            background: linear-gradient(135deg, #8B687A 0%, #6d5261 100%);
+            border-radius: 50%;
+            box-shadow:
+              0 2px 6px rgba(139, 104, 122, 0.4),
+              0 1px 2px rgba(0, 0, 0, 0.1);
+            border: 2px solid white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          ">
+            <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="white" stroke="none">
+              <circle cx="12" cy="10" r="4"/>
+            </svg>
+          </div>
+          <div style="
+            position: absolute;
+            bottom: -4px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 7px solid #6d5261;
+          "></div>
+        </div>
+      `,
+      iconSize: [size, size + 7],
+      iconAnchor: [size / 2, size + 4],
+    });
+  }, [L]);
+
+  if (!mounted || !markerIcon) {
     return <div className="w-full h-full bg-slate-100" />;
   }
 
@@ -98,7 +101,7 @@ export function MiniLocationMapInner({
       />
       <Marker
         position={[latitude, longitude]}
-        icon={createMiniMarkerIcon()}
+        icon={markerIcon}
         interactive={false}
       />
     </MapContainer>

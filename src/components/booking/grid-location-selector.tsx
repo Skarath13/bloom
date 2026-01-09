@@ -86,8 +86,15 @@ export function GridLocationSelector({ locations }: GridLocationSelectorProps) {
     );
   }
 
-  // Take first 5 locations for the grid
-  const displayLocations = locations.slice(0, 5);
+  // Sort locations in preferred order and take first 5
+  const locationOrder = ["tustin", "costa mesa", "irvine", "santa ana", "newport beach"];
+  const displayLocations = [...locations]
+    .sort((a, b) => {
+      const aIndex = locationOrder.findIndex(name => a.name.toLowerCase().includes(name));
+      const bIndex = locationOrder.findIndex(name => b.name.toLowerCase().includes(name));
+      return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
+    })
+    .slice(0, 5);
 
   return (
     <div

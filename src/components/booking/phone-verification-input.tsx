@@ -21,8 +21,20 @@ interface PhoneVerificationInputProps {
 }
 
 // Format phone number as (XXX) XXX-XXXX
+// Handles country codes like +1, 1, etc. - strips them and keeps last 10 digits
 function formatPhone(value: string): string {
-  const digits = value.replace(/\D/g, "");
+  let digits = value.replace(/\D/g, "");
+
+  // If starts with 1 and has more than 10 digits, strip the country code
+  if (digits.length > 10 && digits.startsWith("1")) {
+    digits = digits.slice(1);
+  }
+
+  // Take only the last 10 digits (handles any country code)
+  if (digits.length > 10) {
+    digits = digits.slice(-10);
+  }
+
   if (digits.length <= 3) return digits;
   if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
@@ -133,7 +145,7 @@ export function PhoneVerificationInput({
               type="tel"
               inputMode="tel"
               autoComplete="tel"
-              placeholder="(555) 555-5555"
+              placeholder="Enter Phone Number First"
               value={value}
               onChange={handlePhoneChange}
               disabled={disabled || isVerified}

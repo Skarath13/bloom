@@ -34,6 +34,7 @@ export function BookingLayoutWrapper({
 
   const handleStartOver = () => {
     resetBooking();
+    window.scrollTo(0, 0);
     router.push("/book");
   };
 

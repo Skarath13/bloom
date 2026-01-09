@@ -58,6 +58,15 @@ export function LocationCard({ location, onClick }: LocationCardProps) {
         `,
       }}
     >
+      {/* New Badge for Newport Beach */}
+      {location.city === "Newport Beach" && (
+        <div className="absolute top-2 right-2 z-20">
+          <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 text-amber-900 shadow-sm">
+            New
+          </span>
+        </div>
+      )}
+
       {/* Mini Map - full bleed background */}
       {hasCoordinates ? (
         <div className="absolute inset-0 z-0 pointer-events-none">
