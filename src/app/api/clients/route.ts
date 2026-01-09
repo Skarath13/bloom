@@ -117,7 +117,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { firstName, lastName, phone, email } = body;
+    const { firstName, lastName, phone, email, notes } = body;
 
     // Validate required fields
     if (!firstName || !lastName || !phone) {
@@ -165,6 +165,7 @@ export async function POST(request: NextRequest) {
         lastName,
         phone: normalizedPhone,
         email: email || null,
+        notes: notes || null,
         phoneVerified: false,
         isBlocked: false,
         createdAt: new Date().toISOString(),

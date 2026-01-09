@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
       // Save the payment method to database
       await supabase
         .from(tables.paymentMethods)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         .insert({
           id: generateId(),
           clientId,

@@ -161,7 +161,7 @@ export async function PATCH(
           new Date(instanceDateObj.getTime() - 24 * 60 * 60 * 1000),
           "yyyyMMdd"
         );
-        let newRule = `FREQ=${parsed.freq};INTERVAL=${parsed.interval};UNTIL=${untilDate}`;
+        const newRule = `FREQ=${parsed.freq};INTERVAL=${parsed.interval};UNTIL=${untilDate}`;
 
         await supabase
           .from(tables.technicianBlocks)

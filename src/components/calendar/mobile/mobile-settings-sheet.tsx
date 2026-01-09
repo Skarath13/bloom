@@ -1,6 +1,6 @@
 "use client";
 
-import { X, ChevronRight, Check } from "lucide-react";
+import { X, ChevronRight, Check, MapPin } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,10 @@ type ColorBy = "staff" | "service";
 interface MobileSettingsSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  // Location selection (at top)
+  locations: Location[];
+  selectedLocationId: string;
+  onLocationChange: (locationId: string) => void;
   // View settings
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
@@ -32,8 +36,6 @@ interface MobileSettingsSheetProps {
   technicians: Technician[];
   selectedTechIds: string[];
   onTechToggle: (techId: string) => void;
-  // Location info for display
-  locations: Location[];
   // Appointment attributes
   showConfirmed: boolean;
   onShowConfirmedChange: (show: boolean) => void;
@@ -56,12 +58,14 @@ interface MobileSettingsSheetProps {
 export function MobileSettingsSheet({
   open,
   onOpenChange,
+  locations,
+  selectedLocationId,
+  onLocationChange,
   viewMode,
   onViewModeChange,
   technicians,
   selectedTechIds,
   onTechToggle,
-  locations,
   showConfirmed,
   onShowConfirmedChange,
   showUnconfirmed,
@@ -108,34 +112,16 @@ export function MobileSettingsSheet({
 
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto">
-          {/* BOOKING AVAILABILITY */}
-          <SectionHeader>Booking Availability</SectionHeader>
-          <NavItem
-            label="Make a one-time change"
-            onClick={onEditScheduleClick}
-          />
-          <NavItem
-            label="Edit repeating schedule"
-            onClick={onEditScheduleClick}
-          />
-
-          {/* CALENDAR VIEW */}
-          <SectionHeader>Calendar View</SectionHeader>
-          <RadioOption
-            label="Day"
-            selected={viewMode === "day"}
-            onSelect={() => onViewModeChange("day")}
-          />
-          <RadioOption
-            label="Week"
-            selected={viewMode === "week"}
-            onSelect={() => onViewModeChange("week")}
-          />
-          <RadioOption
-            label="List"
-            selected={viewMode === "list"}
-            onSelect={() => onViewModeChange("list")}
-          />
+          {/* LOCATION - at top */}
+          <SectionHeader>Location</SectionHeader>
+          {locations.map((location) => (
+            <LocationRow
+              key={location.id}
+              location={location}
+              selected={selectedLocationId === location.id}
+              onSelect={() => onLocationChange(location.id)}
+            />
+          ))}
 
           {/* EMPLOYEES */}
           <SectionHeader>Employees</SectionHeader>
@@ -180,7 +166,7 @@ export function MobileSettingsSheet({
           />
 
           {/* ADDITIONAL FILTERS */}
-          <SectionHeader>Additional Filters Section</SectionHeader>
+          <SectionHeader>Additional Filters</SectionHeader>
           <ToggleRow
             icon={<span className="text-[10px] border border-gray-400 px-0.5 rounded">10am</span>}
             label="Show canceled bookings"
@@ -203,6 +189,35 @@ export function MobileSettingsSheet({
           <p className="px-4 text-sm text-gray-500 mt-2 mb-4">
             Assign colors to your services by editing them in the Service Library
           </p>
+
+          {/* CALENDAR VIEW - moved down */}
+          <SectionHeader>Calendar View</SectionHeader>
+          <RadioOption
+            label="Day"
+            selected={viewMode === "day"}
+            onSelect={() => onViewModeChange("day")}
+          />
+          <RadioOption
+            label="Week"
+            selected={viewMode === "week"}
+            onSelect={() => onViewModeChange("week")}
+          />
+          <RadioOption
+            label="List"
+            selected={viewMode === "list"}
+            onSelect={() => onViewModeChange("list")}
+          />
+
+          {/* BOOKING AVAILABILITY - moved down */}
+          <SectionHeader>Booking Availability</SectionHeader>
+          <NavItem
+            label="Make a one-time change"
+            onClick={onEditScheduleClick}
+          />
+          <NavItem
+            label="Edit repeating schedule"
+            onClick={onEditScheduleClick}
+          />
 
           {/* Spacer for bottom button */}
           <div className="h-20" />
@@ -349,5 +364,40 @@ function ToggleRow({
         className="data-[state=checked]:bg-blue-600"
       />
     </div>
+  );
+}
+
+function LocationRow({
+  location,
+  selected,
+  onSelect,
+}: {
+  location: { id: string; name: string };
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      onClick={onSelect}
+      className="w-full flex items-center gap-3 px-4 py-4 min-h-[52px] active:bg-gray-100"
+    >
+      {/* Location icon */}
+      <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+        <MapPin className="h-4 w-4 text-blue-600" />
+      </div>
+      {/* Name */}
+      <span className="flex-1 text-left text-base text-gray-900">{location.name}</span>
+      {/* Radio indicator */}
+      <div
+        className={cn(
+          "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors",
+          selected
+            ? "border-blue-600 bg-blue-600"
+            : "border-gray-300"
+        )}
+      >
+        {selected && <div className="w-2.5 h-2.5 rounded-full bg-white" />}
+      </div>
+    </button>
   );
 }

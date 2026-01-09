@@ -288,12 +288,19 @@ function CalendarContent() {
     fetchTechnicians();
   }, [fetchTechnicians]);
 
-  // Initialize mobile tech filter when technicians load (show all by default)
+  // Initialize/reset mobile tech filter when technicians change
+  // This handles both initial load AND location changes
   useEffect(() => {
-    if (technicians.length > 0 && mobileTechFilter.length === 0) {
-      setMobileTechFilter(technicians.map(t => t.id));
+    if (technicians.length > 0) {
+      const techIds = technicians.map(t => t.id);
+      // Check if current filter has any valid IDs for these technicians
+      const hasValidFilter = mobileTechFilter.some(id => techIds.includes(id));
+      if (!hasValidFilter) {
+        // No valid filter IDs - reset to show all technicians
+        setMobileTechFilter(techIds);
+      }
     }
-  }, [technicians, mobileTechFilter.length]);
+  }, [technicians, mobileTechFilter]);
 
   // Handler to toggle technician visibility in mobile view
   const handleMobileTechToggle = useCallback((techId: string) => {
@@ -746,6 +753,12 @@ function CalendarContent() {
             selectedTechIds={mobileTechFilter}
             onTechToggle={handleMobileTechToggle}
             locations={locations}
+            selectedLocationId={selectedLocationIds[0] || ""}
+            onLocationChange={(locationId) => {
+              // Single-select for mobile
+              setSelectedLocationIds([locationId]);
+              localStorage.setItem(STORAGE_KEYS.locationIds, JSON.stringify([locationId]));
+            }}
             onEditScheduleClick={() => setScheduleDialogOpen(true)}
             onCreateEvent={handleMobileCreateEvent}
           >

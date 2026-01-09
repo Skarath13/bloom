@@ -4,9 +4,16 @@ import { compare } from "bcryptjs";
 import { supabase, tables } from "./supabase";
 import type { UserRole } from "@/types/next-auth";
 
+// 1 year in seconds
+const ONE_YEAR = 365 * 24 * 60 * 60;
+
 export const authOptions: NextAuthOptions = {
   session: {
     strategy: "jwt",
+    maxAge: ONE_YEAR, // Session lasts 1 year
+  },
+  jwt: {
+    maxAge: ONE_YEAR, // JWT token lasts 1 year
   },
   pages: {
     signIn: "/admin/login",

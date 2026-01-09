@@ -33,6 +33,8 @@ interface MobileCalendarLayoutProps {
   onTechToggle: (techId: string) => void;
   // Locations
   locations: Location[];
+  selectedLocationId: string;
+  onLocationChange: (locationId: string) => void;
   // Schedule
   onEditScheduleClick?: () => void;
   // Create event
@@ -47,6 +49,8 @@ export function MobileCalendarLayout({
   selectedTechIds,
   onTechToggle,
   locations,
+  selectedLocationId,
+  onLocationChange,
   onEditScheduleClick,
   onCreateEvent,
 }: MobileCalendarLayoutProps) {
@@ -66,6 +70,11 @@ export function MobileCalendarLayout({
 
   const handleCreateEvent = (type: EventType) => {
     onCreateEvent(type);
+  };
+
+  const handleLocationChange = (locationId: string) => {
+    onLocationChange(locationId);
+    setSettingsSheetOpen(false); // Close sheet when location changes
   };
 
   return (
@@ -95,12 +104,18 @@ export function MobileCalendarLayout({
       <MobileSettingsSheet
         open={settingsSheetOpen}
         onOpenChange={setSettingsSheetOpen}
+        // Location selection
+        locations={locations}
+        selectedLocationId={selectedLocationId}
+        onLocationChange={handleLocationChange}
+        // View settings
         viewMode={viewMode}
         onViewModeChange={setViewMode}
+        // Technician settings
         technicians={technicians}
         selectedTechIds={selectedTechIds}
         onTechToggle={onTechToggle}
-        locations={locations}
+        // Appointment attributes
         showConfirmed={showConfirmed}
         onShowConfirmedChange={setShowConfirmed}
         showUnconfirmed={showUnconfirmed}
