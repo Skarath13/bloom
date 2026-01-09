@@ -229,9 +229,39 @@ export function ReturningClientCard({
         `,
       }}
     >
+      {/* Shimmer keyframes for webkit/safari compliance */}
+      <style jsx>{`
+        @-webkit-keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        .phone-input-shimmer {
+          background: linear-gradient(
+            135deg,
+            #f8fafc 0%,
+            #f1f5f9 25%,
+            #fdf2f2 50%,
+            #f1f5f9 75%,
+            #f8fafc 100%
+          );
+          background-size: 200% 100%;
+          -webkit-animation: shimmer 5s ease-in-out infinite;
+          animation: shimmer 5s ease-in-out infinite;
+        }
+        .phone-input-shimmer:focus {
+          -webkit-animation: none;
+          animation: none;
+          background: white;
+        }
+      `}</style>
+
       {/* Header - centered */}
       <div className="flex-1 flex items-center justify-center">
-        <p className="text-base font-semibold text-slate-800">Quick Login</p>
+        <p className="text-[18px] font-semibold text-slate-800">Quick Login</p>
       </div>
 
       {/* Phone input - compact */}
@@ -244,18 +274,19 @@ export function ReturningClientCard({
             name="phone"
             id="phone"
             autoComplete="tel"
-            placeholder="Enter Phone Number"
+            placeholder="(555) 555-5555"
             value={phone}
             onChange={handlePhoneChange}
             disabled={isSending}
             className={cn(
-              "w-full h-10 px-3 rounded-xl text-center",
-              "bg-slate-50",
-              "border border-transparent",
-              "text-xs text-slate-700 placeholder:text-slate-400 placeholder:text-xs",
-              "focus:outline-none focus:bg-white focus:border-[#8B687A]/40 focus:ring-2 focus:ring-[#8B687A]/10",
-              "transition-all duration-150",
-              "disabled:opacity-50"
+              "w-full h-11 px-4 rounded-xl text-center",
+              "border border-slate-200/60",
+              "text-[15px] font-medium text-slate-700",
+              "placeholder:text-[14px] placeholder:text-slate-400/80 placeholder:font-normal placeholder:tracking-wide",
+              "focus:outline-none focus:bg-white focus:border-[#8B687A]/50 focus:ring-2 focus:ring-[#8B687A]/15",
+              "transition-all duration-200",
+              "disabled:opacity-50",
+              !phone && !isSending && "phone-input-shimmer"
             )}
           />
         </div>
@@ -264,8 +295,8 @@ export function ReturningClientCard({
           onClick={handleSendCode}
           disabled={!isPhoneValid || isSending}
           className={cn(
-            "w-full h-10 rounded-xl",
-            "text-[13px] font-medium",
+            "w-full h-11 rounded-xl",
+            "text-[14px] font-medium",
             "flex items-center justify-center gap-1.5",
             "transition-all duration-150",
             "disabled:cursor-not-allowed",
@@ -275,11 +306,11 @@ export function ReturningClientCard({
           )}
         >
           {isSending ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
+            <Loader2 className="w-[17px] h-[17px] animate-spin" />
           ) : (
             <>
               <span>Send Code</span>
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-[17px] h-[17px]" />
             </>
           )}
         </button>
