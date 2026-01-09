@@ -38,11 +38,9 @@ export function GridLocationSelector({ locations }: GridLocationSelectorProps) {
   const [otpState, setOtpState] = useState<OtpState | null>(null);
   const [verifiedClient, setVerifiedClient] = useState<{ firstName: string; id: string } | null>(null);
 
-  // Scroll to top when returning from OTP screen
+  // Scroll to top on mount and when returning from OTP screen
   useEffect(() => {
-    if (otpState === null) {
-      window.scrollTo({ top: 0, behavior: "instant" });
-    }
+    window.scrollTo({ top: 0, behavior: "instant" });
   }, [otpState]);
 
   const handleLocationClick = (location: Location) => {

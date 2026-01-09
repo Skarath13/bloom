@@ -2,7 +2,7 @@
 
 import { ReactNode, useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { RotateCcw } from "lucide-react";
 import { BookingSteps } from "./booking-steps";
 import { useBooking } from "./booking-context";
@@ -30,12 +30,13 @@ export function BookingLayoutWrapper({
 }: BookingLayoutWrapperProps) {
   const { resetBooking } = useBooking();
   const router = useRouter();
+  const pathname = usePathname();
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
-  // Scroll to top when step changes
+  // Scroll to top on any route change within booking flow
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
-  }, [currentStep]);
+  }, [pathname]);
 
   const handleStartOver = () => {
     resetBooking();
