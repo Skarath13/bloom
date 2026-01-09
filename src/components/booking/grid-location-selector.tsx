@@ -38,6 +38,13 @@ export function GridLocationSelector({ locations }: GridLocationSelectorProps) {
   const [otpState, setOtpState] = useState<OtpState | null>(null);
   const [verifiedClient, setVerifiedClient] = useState<{ firstName: string; id: string } | null>(null);
 
+  // Disable browser's automatic scroll restoration (Safari especially)
+  useEffect(() => {
+    if ("scrollRestoration" in history) {
+      history.scrollRestoration = "manual";
+    }
+  }, []);
+
   // Scroll to top on mount and when returning from OTP screen
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });

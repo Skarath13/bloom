@@ -33,6 +33,14 @@ export function BookingLayoutWrapper({
   const pathname = usePathname();
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
+  // Disable browser's automatic scroll restoration (Safari especially)
+  // This ensures our manual scroll-to-top works correctly
+  useEffect(() => {
+    if ("scrollRestoration" in history) {
+      history.scrollRestoration = "manual";
+    }
+  }, []);
+
   // Scroll to top on any route change within booking flow
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
