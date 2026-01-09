@@ -19,14 +19,6 @@ import {
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useMobileNav } from "@/contexts/mobile-nav-context";
@@ -495,72 +487,6 @@ export function MobileAppointmentDetailSheet({
           </div>
         </div>
 
-        {/* ACTION BUTTONS - Under header */}
-        {appointment && !isLoading && viewState === 'view' && !isTerminal && (
-          <div className="flex-shrink-0 px-4 py-2 bg-white border-b border-gray-200 flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setViewState('confirm-cancel')}
-              className="flex-1 h-9"
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setViewState('confirm-noshow')}
-              className="flex-1 h-9"
-            >
-              No-Show
-            </Button>
-            {onBookNext && appointment.client && (
-              <Button
-                size="sm"
-                onClick={handleBookNext}
-                className="flex-1 h-9 bg-dusty-rose hover:bg-dusty-rose/90"
-              >
-                <CalendarPlus className="h-4 w-4 mr-1" />
-                Book Next
-              </Button>
-            )}
-          </div>
-        )}
-
-        {/* CONFIRM CANCEL - Under header */}
-        {appointment && viewState === 'confirm-cancel' && (
-          <div className="flex-shrink-0 px-4 py-3 bg-red-50 border-b border-red-100">
-            <p className="text-center text-sm text-gray-700 mb-2">
-              Cancel appointment for {appointment.client?.firstName}?
-            </p>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setViewState('view')} className="flex-1 h-9">
-                Keep
-              </Button>
-              <Button variant="destructive" size="sm" onClick={handleCancel} disabled={isSaving} className="flex-1 h-9">
-                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Cancel It"}
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* CONFIRM NO-SHOW - Under header */}
-        {appointment && viewState === 'confirm-noshow' && (
-          <div className="flex-shrink-0 px-4 py-3 bg-red-50 border-b border-red-100">
-            <p className="text-center text-sm text-gray-700 mb-2">
-              Mark {appointment.client?.firstName} as no-show?
-            </p>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setViewState('view')} className="flex-1 h-9">
-                Go Back
-              </Button>
-              <Button variant="destructive" size="sm" onClick={handleNoShow} disabled={isSaving} className="flex-1 h-9">
-                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Mark No-Show"}
-              </Button>
-            </div>
-          </div>
-        )}
-
         {/* CONTENT */}
         <div className="flex-1 overflow-y-auto bg-gray-50">
           {isLoading ? (
@@ -642,44 +568,42 @@ export function MobileAppointmentDetailSheet({
               <div className="bg-white rounded-xl p-4 space-y-3">
                 {viewState === 'edit' ? (
                   <>
+                    {/* Date picker - native for mobile Safari */}
                     <div className="flex items-center gap-3">
                       <Calendar className="h-5 w-5 text-gray-400 flex-shrink-0" />
-                      <Input
+                      <input
                         type="date"
                         value={editDate}
                         onChange={(e) => setEditDate(e.target.value)}
-                        className="flex-1"
+                        className="flex-1 h-11 px-3 rounded-lg border border-gray-200 bg-white text-base focus:outline-none focus:ring-2 focus:ring-dusty-rose focus:border-transparent"
                       />
                     </div>
+                    {/* Time picker - native for mobile Safari */}
                     <div className="flex items-center gap-3">
                       <div className="w-5" />
-                      <Input
+                      <input
                         type="time"
                         value={editTime}
                         onChange={(e) => setEditTime(e.target.value)}
-                        className="flex-1"
+                        className="flex-1 h-11 px-3 rounded-lg border border-gray-200 bg-white text-base focus:outline-none focus:ring-2 focus:ring-dusty-rose focus:border-transparent"
                       />
                     </div>
+                    {/* Technician - native select for mobile Safari */}
                     <div className="flex items-center gap-3">
                       <User className="h-5 w-5 text-gray-400 flex-shrink-0" />
-                      <Select value={editTechId} onValueChange={setEditTechId}>
-                        <SelectTrigger className="flex-1">
-                          <SelectValue placeholder="Select technician" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableTechs.map((tech) => (
-                            <SelectItem key={tech.id} value={tech.id}>
-                              <div className="flex items-center gap-2">
-                                <div
-                                  className="w-3 h-3 rounded-full"
-                                  style={{ backgroundColor: tech.color }}
-                                />
-                                {tech.firstName} {tech.lastName}
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <select
+                        value={editTechId}
+                        onChange={(e) => setEditTechId(e.target.value)}
+                        className="flex-1 h-11 px-3 rounded-lg border border-gray-200 bg-white text-base focus:outline-none focus:ring-2 focus:ring-dusty-rose focus:border-transparent appearance-none"
+                        style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`, backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.5em 1.5em', paddingRight: '2.5rem' }}
+                      >
+                        <option value="">Select technician</option>
+                        {availableTechs.map((tech) => (
+                          <option key={tech.id} value={tech.id}>
+                            {tech.firstName} {tech.lastName}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </>
                 ) : (
@@ -712,6 +636,60 @@ export function MobileAppointmentDetailSheet({
                   </div>
                 )}
               </div>
+
+              {/* Action Buttons - Cancel/No-Show */}
+              {viewState === 'view' && !isTerminal && (
+                <div className="grid grid-cols-2 gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => setViewState('confirm-cancel')}
+                    className="h-11"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setViewState('confirm-noshow')}
+                    className="h-11"
+                  >
+                    No-Show
+                  </Button>
+                </div>
+              )}
+
+              {/* Confirm Cancel */}
+              {viewState === 'confirm-cancel' && (
+                <div className="bg-red-50 rounded-xl p-4">
+                  <p className="text-center text-sm text-gray-700 mb-3">
+                    Cancel appointment for {appointment.client?.firstName}?
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button variant="outline" onClick={() => setViewState('view')} className="h-11">
+                      Keep
+                    </Button>
+                    <Button variant="destructive" onClick={handleCancel} disabled={isSaving} className="h-11">
+                      {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Cancel It"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Confirm No-Show */}
+              {viewState === 'confirm-noshow' && (
+                <div className="bg-red-50 rounded-xl p-4">
+                  <p className="text-center text-sm text-gray-700 mb-3">
+                    Mark {appointment.client?.firstName} as no-show?
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button variant="outline" onClick={() => setViewState('view')} className="h-11">
+                      Go Back
+                    </Button>
+                    <Button variant="destructive" onClick={handleNoShow} disabled={isSaving} className="h-11">
+                      {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Mark No-Show"}
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               {/* Services */}
               <div className="bg-white rounded-xl p-4">
