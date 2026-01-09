@@ -819,7 +819,7 @@ export function ResourceCalendar({
             if (isSelecting) handleSelectionEnd();
           }}
         >
-          <div>
+          <div className="overflow-hidden">
             {/* Sticky header row - Tech names */}
             <div className="sticky top-0 z-30 flex bg-white border-b border-gray-200 isolate shadow-[0_1px_0_0_rgb(229,231,235)]">
               {/* Empty spacer for time column */}
@@ -1031,7 +1031,7 @@ export function ResourceCalendar({
                               }}
                               overlapPosition={overlapPosition}
                               onClick={() => onBlockClick?.(block)}
-                              draggable={!!onMoveBlock && !isBeingDragged && !isMoving && !pendingBlockMove}
+                              draggable={!config.isMobile && !!onMoveBlock && !isBeingDragged && !isMoving && !pendingBlockMove}
                               isBeingDragged={isBeingDragged || hasPendingBlockMove}
                             />
                           );
@@ -1061,7 +1061,7 @@ export function ResourceCalendar({
                               technicianId={tech.id}
                               height={height}
                               overlapPosition={overlapPosition}
-                              draggable={!!onMoveAppointment && !isMoving && !pendingMove}
+                              draggable={!config.isMobile && !!onMoveAppointment && !isMoving && !pendingMove}
                               className={cn("pointer-events-auto", hasPendingMove && "pointer-events-none")}
                               style={{
                                 top: `${top}px`,
