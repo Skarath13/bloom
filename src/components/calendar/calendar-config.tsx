@@ -37,12 +37,12 @@ const DESKTOP_CONFIG: Omit<CalendarConfig, "isMobile"> = {
 };
 
 // Mobile configuration - compact for iPhone 14 Pro Max (430px)
-// Time column: 36px leaves 394px for tech columns
+// Time column: 38px leaves 392px for tech columns
 // With 6 techs: 65px each | With 8 techs: 49px each
 const MOBILE_CONFIG: Omit<CalendarConfig, "isMobile"> = {
   PIXELS_PER_HOUR: 72, // Slightly zoomed in to show appointments better
   PIXELS_PER_15_MIN: 18, // Proportional (72/4)
-  TIME_COLUMN_WIDTH: 36, // Save 20px horizontal space
+  TIME_COLUMN_WIDTH: 38, // Compact width, whitespace-nowrap prevents wrapping
   HEADER_HEIGHT: 30, // Smaller header
   showSparkles: false, // Remove decorative icons
   CALENDAR_START_HOUR: 0,

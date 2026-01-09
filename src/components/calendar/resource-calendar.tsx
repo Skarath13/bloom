@@ -113,6 +113,8 @@ interface ResourceCalendarProps {
     newStartTime: Date,
     newEndTime: Date
   ) => Promise<void>;
+  // Hide the built-in header (used when wrapped in MobileCalendarLayout)
+  hideHeader?: boolean;
 }
 
 // Static calendar constants (same for mobile/desktop)
@@ -250,6 +252,7 @@ export function ResourceCalendar({
   onMultiLocationModeChange,
   onMoveAppointment,
   onMoveBlock,
+  hideHeader = false,
 }: ResourceCalendarProps) {
   const [selectedDate, setSelectedDate] = useState<Date>(initialDate || new Date());
   const [internalSettingsOpen, setInternalSettingsOpen] = useState(false);
@@ -291,14 +294,17 @@ export function ResourceCalendar({
   const gridRef = useRef<HTMLDivElement>(null);
 
   // DnD sensors - require movement to start drag (prevents accidental drags on click)
-  // Mobile uses larger distance (12px) to prevent conflicts with scroll gestures
+  // Disabled on mobile - tap to create is sufficient, drag conflicts with scroll
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: config.isMobile ? 12 : 5,
+        distance: 5,
       },
     })
   );
+
+  // Disable DnD entirely on mobile
+  const activeSensors = config.isMobile ? [] : sensors;
 
   // Sync internal date state with prop (for when parent restores from localStorage)
   useEffect(() => {
@@ -708,7 +714,8 @@ export function ResourceCalendar({
 
       {/* Main Calendar Area */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Header Bar with Mobile Staff Button */}
+        {/* Header Bar with Mobile Staff Button - hidden when using MobileCalendarLayout */}
+        {!hideHeader && (
         <div className="flex items-center border-b border-gray-200 bg-white">
           <CalendarHeader
             selectedDate={selectedDate}
@@ -787,10 +794,11 @@ export function ResourceCalendar({
             </Sheet>
           )}
         </div>
+        )}
 
         {/* Calendar Grid */}
         <DndContext
-          sensors={sensors}
+          sensors={activeSensors}
           onDragStart={handleDragStart}
           onDragMove={handleDragMove}
           onDragEnd={handleDragEnd}
@@ -813,7 +821,7 @@ export function ResourceCalendar({
         >
           <div>
             {/* Sticky header row - Tech names */}
-            <div className="sticky top-0 z-10 flex bg-white border-b border-gray-200">
+            <div className="sticky top-0 z-30 flex bg-white border-b border-gray-200">
               {/* Empty spacer for time column */}
               <div
                 className="flex-shrink-0 border-r border-gray-200"
@@ -884,7 +892,7 @@ export function ResourceCalendar({
                   {/* Time label */}
                   <div
                     className={cn(
-                      "flex-shrink-0 border-r border-gray-200 text-gray-500 text-right pt-0",
+                      "flex-shrink-0 border-r border-gray-200 text-gray-500 text-right pt-0 whitespace-nowrap",
                       config.isMobile ? "px-1 text-[10px]" : "px-2 text-xs"
                     )}
                     style={{ width: config.TIME_COLUMN_WIDTH }}

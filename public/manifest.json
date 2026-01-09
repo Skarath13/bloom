@@ -1,0 +1,29 @@
+{
+  "name": "Bloom Admin",
+  "short_name": "Bloom",
+  "description": "Elegant Lashes Booking Admin",
+  "start_url": "/admin/calendar",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#1A1A1A",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["business", "productivity"]
+}
