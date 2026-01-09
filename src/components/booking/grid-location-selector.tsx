@@ -9,6 +9,63 @@ import { NearestLocationFinder } from "./nearest-location-finder";
 import { OtpVerificationScreen } from "./otp-verification-screen";
 import { ClientData } from "@/hooks/use-phone-verification";
 
+// localStorage key for persisted login
+const VERIFIED_CLIENT_KEY = "bloom_verified_client";
+// Login expires after 1 year (365 days)
+const LOGIN_EXPIRY_DAYS = 365;
+
+interface StoredClient {
+  id: string;
+  firstName: string;
+  phone: string;
+  sessionToken: string;
+  expiresAt: number;
+}
+
+function saveClientToStorage(client: { id: string; firstName: string }, phone: string, sessionToken: string) {
+  const expiresAt = Date.now() + LOGIN_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+  const data: StoredClient = {
+    id: client.id,
+    firstName: client.firstName,
+    phone,
+    sessionToken,
+    expiresAt,
+  };
+  localStorage.setItem(VERIFIED_CLIENT_KEY, JSON.stringify(data));
+}
+
+// Export for use in other pages (like profile)
+export function getStoredClient(): StoredClient | null {
+  return loadClientFromStorage();
+}
+
+export function clearStoredClient() {
+  clearClientFromStorage();
+}
+
+function loadClientFromStorage(): StoredClient | null {
+  try {
+    const stored = localStorage.getItem(VERIFIED_CLIENT_KEY);
+    if (!stored) return null;
+
+    const data: StoredClient = JSON.parse(stored);
+
+    // Check if expired
+    if (Date.now() > data.expiresAt) {
+      localStorage.removeItem(VERIFIED_CLIENT_KEY);
+      return null;
+    }
+
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function clearClientFromStorage() {
+  localStorage.removeItem(VERIFIED_CLIENT_KEY);
+}
+
 interface Location {
   id: string;
   name: string;
@@ -36,12 +93,24 @@ export function GridLocationSelector({ locations }: GridLocationSelectorProps) {
 
   // OTP mode state (not persisted - resets on refresh)
   const [otpState, setOtpState] = useState<OtpState | null>(null);
-  const [verifiedClient, setVerifiedClient] = useState<{ firstName: string; id: string } | null>(null);
+  const [verifiedClient, setVerifiedClient] = useState<{ firstName: string; id: string; phone?: string } | null>(null);
 
   // Disable browser's automatic scroll restoration (Safari especially)
   useEffect(() => {
     if ("scrollRestoration" in history) {
       history.scrollRestoration = "manual";
+    }
+  }, []);
+
+  // Load saved client from localStorage on mount
+  useEffect(() => {
+    const stored = loadClientFromStorage();
+    if (stored) {
+      setVerifiedClient({
+        id: stored.id,
+        firstName: stored.firstName,
+        phone: stored.phone,
+      });
     }
   }, []);
 
@@ -66,11 +135,23 @@ export function GridLocationSelector({ locations }: GridLocationSelectorProps) {
   }, []);
 
   // Handle successful verification
-  const handleVerified = useCallback((clientData: ClientData | null) => {
+  const handleVerified = useCallback((clientData: ClientData | null, phone: string, sessionToken: string | null) => {
     if (clientData) {
-      setVerifiedClient({ firstName: clientData.firstName, id: clientData.id });
+      const client = { firstName: clientData.firstName, id: clientData.id, phone };
+      setVerifiedClient(client);
+      // Save to localStorage for persistent login (120 days)
+      if (sessionToken) {
+        saveClientToStorage(client, phone, sessionToken);
+      }
     }
     // Stay on OTP screen - it will show the verified state with history
+  }, []);
+
+  // Handle logout
+  const handleLogout = useCallback(() => {
+    setVerifiedClient(null);
+    setOtpState(null);
+    clearClientFromStorage();
   }, []);
 
   // If in OTP mode, show full-screen OTP verification

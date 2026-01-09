@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Loader2, ArrowRight, CheckCircle2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useBooking } from "./booking-context";
 import { cn } from "@/lib/utils";
@@ -29,6 +29,7 @@ interface ReturningClientCardProps {
   verifiedClient?: {
     firstName: string;
     id: string;
+    phone?: string;
   } | null;
 }
 
@@ -172,10 +173,11 @@ export function ReturningClientCard({
             </p>
           </div>
           <button
-            onClick={handleReset}
-            className="text-[10px] text-slate-400 hover:text-slate-600"
+            onClick={() => router.push("/profile")}
+            className="inline-flex items-center gap-0.5 text-[10px] text-[#8B687A] hover:text-[#6B4F5A]"
           >
-            Switch
+            <User className="w-2.5 h-2.5" />
+            Profile
           </button>
         </div>
 
@@ -203,7 +205,7 @@ export function ReturningClientCard({
             </div>
           ) : (
             <p className="text-[11px] text-slate-500 text-center">
-              Select a location below
+              Select Location To Book
             </p>
           )}
         </div>

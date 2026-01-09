@@ -35,6 +35,7 @@ export interface UsePhoneVerificationReturn {
   error: string | null;
   errorCode: string | null;
   clientData: ClientData | null;
+  sessionToken: string | null;
   sendCode: (phone: string) => Promise<boolean>;
   verifyCode: (phone: string, code: string) => Promise<boolean>;
   reset: () => void;
@@ -51,6 +52,7 @@ export function usePhoneVerification(): UsePhoneVerificationReturn {
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [clientData, setClientData] = useState<ClientData | null>(null);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [resendCountdown, setResendCountdown] = useState(0);
   const [attemptsRemaining, setAttemptsRemaining] = useState<number | null>(null);
   const [sendAttempts, setSendAttempts] = useState(0);
@@ -191,9 +193,10 @@ export function usePhoneVerification(): UsePhoneVerificationReturn {
           return false;
         }
 
-        // Success - store client data if returned
+        // Success - store client data and session token if returned
         setStatus("verified");
         setClientData(data.client || null);
+        setSessionToken(data.sessionToken || null);
         setError(null);
         setErrorCode(null);
 
@@ -219,6 +222,7 @@ export function usePhoneVerification(): UsePhoneVerificationReturn {
     setError(null);
     setErrorCode(null);
     setClientData(null);
+    setSessionToken(null);
     setResendCountdown(0);
     setAttemptsRemaining(null);
     setSendAttempts(0);
@@ -233,6 +237,7 @@ export function usePhoneVerification(): UsePhoneVerificationReturn {
     error,
     errorCode,
     clientData,
+    sessionToken,
     sendCode,
     verifyCode,
     reset,

@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { PhoneVerificationInput } from "@/components/booking/phone-verification-input";
 import { ClientData } from "@/hooks/use-phone-verification";
+import { getStoredClient, clearStoredClient } from "@/components/booking/grid-location-selector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +20,8 @@ import {
   Loader2,
   ExternalLink,
   ChevronRight,
+  LogOut,
+  ArrowLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -87,6 +91,14 @@ function formatExpiry(month: number, year: number) {
   return `${month.toString().padStart(2, "0")}/${year.toString().slice(-2)}`;
 }
 
+function formatPhoneDisplay(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  return phone;
+}
+
 // Status badge colors
 const statusColors: Record<string, string> = {
   CONFIRMED: "bg-green-100 text-green-800",
@@ -97,12 +109,14 @@ const statusColors: Record<string, string> = {
 };
 
 export default function ProfilePage() {
+  const router = useRouter();
   const [phone, setPhone] = useState("");
   const [isVerified, setIsVerified] = useState(false);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // Start true to check localStorage first
   const [error, setError] = useState<string | null>(null);
+  const [checkingStoredLogin, setCheckingStoredLogin] = useState(true);
 
   // Edit states
   const [isEditingInfo, setIsEditingInfo] = useState(false);
@@ -115,7 +129,7 @@ export default function ProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
 
-  // Fetch profile data after verification
+  // Fetch profile data
   const fetchProfile = useCallback(async (token: string) => {
     setIsLoading(true);
     setError(null);
@@ -129,6 +143,15 @@ export default function ProfilePage() {
 
       if (!response.ok) {
         const data = await response.json();
+        // If unauthorized, clear stored login and reset
+        if (response.status === 401) {
+          clearStoredClient();
+          setIsVerified(false);
+          setSessionToken(null);
+          setIsLoading(false);
+          setCheckingStoredLogin(false);
+          return;
+        }
         throw new Error(data.error || "Failed to fetch profile");
       }
 
@@ -146,6 +169,32 @@ export default function ProfilePage() {
       setIsLoading(false);
     }
   }, []);
+
+  // Disable Safari scroll restoration and scroll to top on mount
+  useEffect(() => {
+    if ("scrollRestoration" in history) {
+      history.scrollRestoration = "manual";
+    }
+    // Use requestAnimationFrame to ensure DOM is ready
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "instant" });
+    });
+  }, []);
+
+  // Check for stored login on mount (skip SMS verification if already logged in)
+  useEffect(() => {
+    const storedClient = getStoredClient();
+    if (storedClient && storedClient.sessionToken) {
+      // Valid stored login exists - auto-login
+      setIsVerified(true);
+      setSessionToken(storedClient.sessionToken);
+      setPhone(storedClient.phone);
+      fetchProfile(storedClient.sessionToken);
+    } else {
+      setIsLoading(false);
+    }
+    setCheckingStoredLogin(false);
+  }, [fetchProfile]);
 
   // Handle phone verification
   const handleVerified = useCallback(
@@ -268,6 +317,16 @@ export default function ProfilePage() {
     setIsEditingInfo(false);
   };
 
+  // Logout handler
+  const handleLogout = () => {
+    clearStoredClient();
+    setIsVerified(false);
+    setSessionToken(null);
+    setProfileData(null);
+    setPhone("");
+    router.push("/book");
+  };
+
   // Separate upcoming and past appointments
   const now = new Date();
   const upcomingAppointments =
@@ -279,11 +338,32 @@ export default function ProfilePage() {
       (apt) => new Date(apt.startTime) < now || apt.status === "CANCELLED"
     ) || [];
 
+  // Show loading while checking stored login
+  if (checkingStoredLogin) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
+          <p className="mt-2 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   // Phone verification gate
   if (!isVerified) {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-md mx-auto px-4 py-12">
+          {/* Back button */}
+          <button
+            onClick={() => router.push("/book")}
+            className="flex items-center text-sm text-slate-500 hover:text-slate-700 mb-6"
+          >
+            <ArrowLeft className="w-4 h-4 mr-1" />
+            Back to booking
+          </button>
+
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold text-gray-900">Your Profile</h1>
             <p className="text-gray-600 mt-2">
@@ -335,9 +415,29 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-2xl mx-auto px-4 py-8">
+        {/* Back Navigation */}
+        <div className="flex items-center justify-between mb-6">
+          <button
+            onClick={() => router.push("/book")}
+            className="flex items-center text-sm text-slate-500 hover:text-slate-700"
+          >
+            <ArrowLeft className="w-4 h-4 mr-1" />
+            Back to booking
+          </button>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-600"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            Log out
+          </button>
+        </div>
+
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Your Profile</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Welcome back{profileData?.client.firstName ? `, ${profileData.client.firstName}` : ""}!
+          </h1>
           <p className="text-gray-600">
             Manage your information and payment methods
           </p>
@@ -458,7 +558,7 @@ export default function ProfilePage() {
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-gray-500">Phone</dt>
-                  <dd className="font-medium">{profileData?.client.phone}</dd>
+                  <dd className="font-medium">{formatPhoneDisplay(profileData?.client.phone || "")}</dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-gray-500">Email</dt>
