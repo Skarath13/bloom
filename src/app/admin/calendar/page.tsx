@@ -9,6 +9,7 @@ import { MobileCalendarLayout } from "@/components/calendar/mobile";
 import { MobileAppointmentDetailSheet } from "@/components/calendar/mobile/mobile-appointment-detail-sheet";
 import { MobileCreateAppointmentSheet } from "@/components/calendar/mobile/mobile-create-appointment-sheet";
 import { MobileCreatePersonalEventSheet } from "@/components/calendar/mobile/mobile-create-personal-event-sheet";
+import { MobileEventTypeSheet } from "@/components/calendar/mobile/mobile-event-type-sheet";
 import { MobilePersonalEventDetailSheet } from "@/components/calendar/mobile/mobile-personal-event-detail-sheet";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -148,6 +149,16 @@ function CalendarContent() {
     technicianId: string;
     technicianName: string;
     locationId: string;
+    time: Date;
+  } | null>(null);
+  // Mobile event type selection sheet (shown on slot tap)
+  const [mobileEventTypeSheet, setMobileEventTypeSheet] = useState<{
+    open: boolean;
+    technicianId: string;
+    technicianName: string;
+    technicianColor: string;
+    locationId: string;
+    locationName: string;
     time: Date;
   } | null>(null);
 
@@ -536,11 +547,11 @@ function CalendarContent() {
 
   const handleSlotClick = (technicianId: string, time: Date) => {
     if (isMobile) {
-      // On mobile, open the mobile create appointment sheet
+      // On mobile, show event type selection sheet first
       const tech = technicians.find(t => t.id === technicianId);
       if (!tech) return;
       const location = locations.find(l => l.id === tech.locationId);
-      setMobileCreateAppointment({
+      setMobileEventTypeSheet({
         open: true,
         technicianId,
         technicianName: `${tech.firstName} ${tech.lastName}`,
@@ -552,6 +563,34 @@ function CalendarContent() {
     } else {
       // On desktop, use the desktop dialog
       setNewAppointmentSlot({ technicianId, time });
+    }
+  };
+
+  // Handle event type selection from mobile sheet
+  const handleMobileEventTypeSelect = (type: "appointment" | "personal_event") => {
+    if (!mobileEventTypeSheet) return;
+
+    // Close the selection sheet
+    setMobileEventTypeSheet(null);
+
+    if (type === "appointment") {
+      setMobileCreateAppointment({
+        open: true,
+        technicianId: mobileEventTypeSheet.technicianId,
+        technicianName: mobileEventTypeSheet.technicianName,
+        technicianColor: mobileEventTypeSheet.technicianColor,
+        locationId: mobileEventTypeSheet.locationId,
+        locationName: mobileEventTypeSheet.locationName,
+        time: mobileEventTypeSheet.time,
+      });
+    } else {
+      setMobileCreatePersonalEvent({
+        open: true,
+        technicianId: mobileEventTypeSheet.technicianId,
+        technicianName: mobileEventTypeSheet.technicianName,
+        locationId: mobileEventTypeSheet.locationId,
+        time: mobileEventTypeSheet.time,
+      });
     }
   };
 
@@ -962,6 +1001,19 @@ function CalendarContent() {
             refreshCalendarData();
             setSelectedBlock(null);
           }}
+        />
+      )}
+
+      {/* Mobile Event Type Selection Sheet */}
+      {mobileEventTypeSheet && (
+        <MobileEventTypeSheet
+          open={mobileEventTypeSheet.open}
+          onOpenChange={(open) => {
+            if (!open) setMobileEventTypeSheet(null);
+          }}
+          technicianName={mobileEventTypeSheet.technicianName}
+          time={mobileEventTypeSheet.time}
+          onSelect={handleMobileEventTypeSelect}
         />
       )}
 

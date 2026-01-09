@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { addDays, subDays, startOfDay, setHours, setMinutes, isSameDay, format } from "date-fns";
+import { addDays, subDays, startOfDay, setHours, setMinutes, addMinutes, isSameDay, format } from "date-fns";
 import { Sparkles, Users } from "lucide-react";
 import {
   DndContext,
@@ -821,10 +821,10 @@ export function ResourceCalendar({
         >
           <div>
             {/* Sticky header row - Tech names */}
-            <div className="sticky top-0 z-30 flex bg-white border-b border-gray-200">
+            <div className="sticky top-0 z-30 flex bg-white border-b border-gray-200 isolate shadow-[0_1px_0_0_rgb(229,231,235)]">
               {/* Empty spacer for time column */}
               <div
-                className="flex-shrink-0 border-r border-gray-200"
+                className="flex-shrink-0 border-r border-gray-200 bg-white"
                 style={{ width: config.TIME_COLUMN_WIDTH }}
               />
 
@@ -833,7 +833,7 @@ export function ResourceCalendar({
                 <div
                   key={tech.id}
                   className={cn(
-                    "border-r border-gray-200 flex items-center justify-center min-w-0 flex-1 overflow-hidden",
+                    "border-r border-gray-200 flex items-center justify-center min-w-0 flex-1 overflow-hidden bg-white",
                     config.isMobile ? "gap-0.5 py-1.5 px-0.5" : "gap-1 py-2"
                   )}
                 >
@@ -851,7 +851,7 @@ export function ResourceCalendar({
             </div>
 
             {/* Time grid with appointments */}
-            <div className="relative" style={{ height: totalGridHeight }}>
+            <div className="relative z-10" style={{ height: totalGridHeight }}>
               {/* Hour lines that extend full width (including time axis) */}
               {timeSlots.map((slot, index) => (
                 <div
@@ -905,7 +905,15 @@ export function ResourceCalendar({
                     <div
                       key={tech.id}
                       className="border-r border-gray-200 cursor-pointer relative min-w-0 flex-1"
-                      onClick={() => onSlotClick?.(tech.id, slot)}
+                      onClick={(e) => {
+                        // Calculate 15-minute slot based on click position within the hour row
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const relativeY = e.clientY - rect.top;
+                        const quarterIndex = Math.floor((relativeY / config.PIXELS_PER_HOUR) * 4);
+                        const minuteOffset = Math.min(quarterIndex, 3) * 15; // 0, 15, 30, or 45
+                        const clickTime = addMinutes(slot, minuteOffset);
+                        onSlotClick?.(tech.id, clickTime);
+                      }}
                       onMouseDown={(e) => {
                         // Only start selection on primary mouse button
                         // Disable drag-to-select on mobile (conflicts with scroll)
@@ -993,7 +1001,7 @@ export function ResourceCalendar({
 
               {/* Unified events overlay (appointments + blocks with shared overlap calculation) */}
               <div
-                className="absolute top-0 bottom-0 pointer-events-none"
+                className="absolute top-0 bottom-0 pointer-events-none z-20"
                 style={{ left: config.TIME_COLUMN_WIDTH, right: 0 }}
               >
                 <div className="flex h-full">

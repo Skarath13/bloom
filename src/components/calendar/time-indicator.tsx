@@ -64,9 +64,9 @@ export function TimeIndicator({
         zIndex: 50,
       }}
     >
-      {/* Red line extending across tech columns (rendered first, below pill) */}
+      {/* Red line - desktop: starts after time column */}
       <div
-        className="absolute h-[2px] bg-red-500 -translate-y-1/2"
+        className="absolute h-[2px] bg-red-500 -translate-y-1/2 hidden sm:block"
         style={{
           left: `${leftOffset - 8}px`,
           right: 0,
@@ -74,10 +74,20 @@ export function TimeIndicator({
           zIndex: 1,
         }}
       />
-
-      {/* Time badge - contained within time column, centered on line (above the line) */}
+      {/* Red line - mobile: full width */}
       <div
-        className="absolute flex items-center justify-center -translate-y-1/2 overflow-hidden"
+        className="absolute h-[2px] bg-red-500 -translate-y-1/2 sm:hidden"
+        style={{
+          left: 0,
+          right: 0,
+          top: 0,
+          zIndex: 1,
+        }}
+      />
+
+      {/* Time badge - hidden on mobile, shown on desktop */}
+      <div
+        className="absolute hidden sm:flex items-center justify-center -translate-y-1/2 overflow-hidden"
         style={{
           left: 2,
           width: `${leftOffset - 4}px`,
