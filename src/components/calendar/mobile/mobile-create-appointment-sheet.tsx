@@ -48,6 +48,7 @@ interface MobileCreateAppointmentSheetProps {
   locationName: string;
   time: Date;
   onSuccess: () => void;
+  preloadedClient?: Client | null;
 }
 
 type Step = 1 | 2 | 3;
@@ -69,6 +70,7 @@ export function MobileCreateAppointmentSheet({
   locationName,
   time,
   onSuccess,
+  preloadedClient,
 }: MobileCreateAppointmentSheetProps) {
   const [step, setStep] = useState<Step>(1);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -87,15 +89,22 @@ export function MobileCreateAppointmentSheet({
     return () => showNav();
   }, [open, hideNav, showNav]);
 
-  // Reset state when sheet opens
+  // Initialize state when sheet opens - handles both fresh open and preloaded client
   useEffect(() => {
     if (open) {
-      setStep(1);
-      setSelectedClient(null);
       setSelectedServices([]);
       setNotes("");
+
+      // If we have a preloaded client, use it and skip to step 2
+      if (preloadedClient) {
+        setSelectedClient(preloadedClient);
+        setStep(2);
+      } else {
+        setSelectedClient(null);
+        setStep(1);
+      }
     }
-  }, [open]);
+  }, [open, preloadedClient]);
 
   const handleClose = () => {
     onOpenChange(false);

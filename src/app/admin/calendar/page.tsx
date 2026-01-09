@@ -143,6 +143,13 @@ function CalendarContent() {
     locationId: string;
     locationName: string;
     time: Date;
+    preloadedClient?: {
+      id: string;
+      firstName: string;
+      lastName: string;
+      phone: string;
+      email?: string;
+    } | null;
   } | null>(null);
   const [mobileCreatePersonalEvent, setMobileCreatePersonalEvent] = useState<{
     open: boolean;
@@ -161,7 +168,6 @@ function CalendarContent() {
     locationName: string;
     time: Date;
   } | null>(null);
-
   // Initialize from localStorage (client-side only)
   const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>(() => {
     if (typeof window === "undefined") return [];
@@ -820,10 +826,24 @@ function CalendarContent() {
           onOpenChange={(open) => {
             if (!open) handleCloseAppointment();
           }}
-          onStatusChange={() => {
-            fetchAppointments();
+          onBookNext={(client) => {
+            // Close the details sheet and open create with preloaded client
+            handleCloseAppointment();
+            // Use the appointment's technician/location/current time for the new booking
+            if (selectedAppointment?.technician && selectedAppointment?.location) {
+              setMobileCreateAppointment({
+                open: true,
+                technicianId: selectedAppointment.technician.id,
+                technicianName: `${selectedAppointment.technician.firstName} ${selectedAppointment.technician.lastName}`,
+                technicianColor: selectedAppointment.technician.color,
+                locationId: selectedAppointment.location.id,
+                locationName: selectedAppointment.location.name,
+                time: new Date(), // Use current time as starting point
+                preloadedClient: client,
+              });
+            }
           }}
-          onRefresh={() => {
+          onStatusChange={() => {
             fetchAppointments();
           }}
         />
@@ -1034,6 +1054,7 @@ function CalendarContent() {
             refreshCalendarData();
             setMobileCreateAppointment(null);
           }}
+          preloadedClient={mobileCreateAppointment.preloadedClient}
         />
       )}
 
