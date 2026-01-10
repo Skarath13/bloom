@@ -58,6 +58,7 @@ export interface Database {
           cancelledAt: string | null;
           cancellationReason: string | null;
           recurringAppointmentId: string | null;
+          bookedAnyAvailable: boolean;
         };
         Insert: Omit<Database["appointments"]["Tables"]["bloom_appointments"]["Row"], "id" | "createdAt" | "updatedAt">;
         Update: Partial<Database["appointments"]["Tables"]["bloom_appointments"]["Insert"]>;

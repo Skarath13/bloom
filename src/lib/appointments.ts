@@ -300,6 +300,7 @@ export async function createAppointmentWithCheck({
   bookedBy,
   depositAmount = 0,
   inspoImageUrl,
+  bookedAnyAvailable = false,
 }: {
   clientId: string;
   technicianId: string;
@@ -313,6 +314,7 @@ export async function createAppointmentWithCheck({
   bookedBy?: string;
   depositAmount?: number;
   inspoImageUrl?: string | null;
+  bookedAnyAvailable?: boolean;
 }) {
   // Step 1: Check for conflicts
   const conflict = await checkAppointmentConflict({
@@ -365,6 +367,7 @@ export async function createAppointmentWithCheck({
       cancelledAt: null,
       cancellationReason: null,
       recurringAppointmentId: null,
+      bookedAnyAvailable,
       createdAt: now,
       updatedAt: now,
     })

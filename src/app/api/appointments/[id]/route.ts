@@ -144,6 +144,18 @@ export async function PATCH(
       originalAppointment = data;
     }
 
+    // Handle bookedAnyAvailable update if provided (simple field, no conflict check needed)
+    if (body.bookedAnyAvailable !== undefined) {
+      await supabase
+        .from(tables.appointments)
+        // @ts-expect-error - Supabase types don't resolve dynamic table names correctly
+        .update({
+          bookedAnyAvailable: body.bookedAnyAvailable,
+          updatedAt: new Date().toISOString(),
+        })
+        .eq("id", id);
+    }
+
     // Use the safe update function with conflict checking
     // skipConflictCheck allows overlapping appointments (for drag-and-drop moves)
     const appointment = await updateAppointmentWithCheck({

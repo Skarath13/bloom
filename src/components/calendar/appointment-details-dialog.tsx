@@ -48,6 +48,8 @@ interface Appointment {
   bookedBy?: string;
   smsConfirmedAt?: Date;
   smsConfirmedBy?: string;
+  isNewClient?: boolean;
+  bookedAnyAvailable?: boolean;
   client?: {
     id: string;
     firstName: string;
@@ -199,6 +201,7 @@ export function AppointmentDetailsDialog({
   const [recurringSettings, setRecurringSettings] = useState<RecurringSettings | null>(null);
   const [showRecurringModal, setShowRecurringModal] = useState(false);
   const [savingRecurring, setSavingRecurring] = useState(false);
+  const [savingAnyAvailable, setSavingAnyAvailable] = useState(false);
 
   useEffect(() => {
     if (appointment) {
@@ -415,6 +418,26 @@ export function AppointmentDetailsDialog({
       console.error("Failed to cancel recurring:", error);
     } finally {
       setSavingRecurring(false);
+    }
+  };
+
+  const handleTurnOffAnyAvailable = async () => {
+    if (!appointment?.id) return;
+    setSavingAnyAvailable(true);
+    try {
+      const response = await fetch(`/api/appointments/${appointment.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookedAnyAvailable: false }),
+      });
+      if (response.ok) {
+        // Trigger a refresh by calling onSave with current values
+        await onSave({ status: editingStatus, notes: editingNotes });
+      }
+    } catch (error) {
+      console.error("Failed to turn off any available:", error);
+    } finally {
+      setSavingAnyAvailable(false);
     }
   };
 
@@ -672,6 +695,28 @@ export function AppointmentDetailsDialog({
                     >
                       {recurringSettings ? "Edit" : "Set up repeat"}
                     </button>
+                  </div>
+                </div>
+                {/* Any Available */}
+                <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] lg:grid-cols-[200px_1fr]">
+                  <div className="px-4 py-2 sm:py-3 bg-gray-100 text-sm font-medium text-gray-700 border-b border-gray-300">
+                    Any Available
+                  </div>
+                  <div className="px-4 py-2 sm:py-3 text-sm text-gray-900 flex items-center justify-between border-b border-gray-300">
+                    {appointment.bookedAnyAvailable ? (
+                      <span className="text-blue-600">Yes — client booked &quot;any available&quot;</span>
+                    ) : (
+                      <span className="text-gray-400">No</span>
+                    )}
+                    {appointment.bookedAnyAvailable && (
+                      <button
+                        onClick={handleTurnOffAnyAvailable}
+                        disabled={savingAnyAvailable}
+                        className="text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 active:bg-blue-100 px-2 py-1 -mx-2 rounded transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        {savingAnyAvailable ? <Loader2 className="h-4 w-4 animate-spin" /> : "Turn off"}
+                      </button>
+                    )}
                   </div>
                 </div>
                 {/* Appointment notes */}
