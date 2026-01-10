@@ -26,7 +26,8 @@ export function useRealtimeAppointments({
 
     const setupSubscription = async () => {
       channel = supabase
-        .channel(`appointments-${locationId}`)
+        .channel(`calendar-${locationId}`)
+        // Appointments
         .on(
           "postgres_changes",
           {
@@ -59,6 +60,43 @@ export function useRealtimeAppointments({
             event: "DELETE",
             schema: "appointments",
             table: tables.appointments,
+          },
+          () => {
+            onDelete?.();
+            onChange?.();
+          }
+        )
+        // Technician blocks (personal events)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "appointments",
+            table: tables.technicianBlocks,
+          },
+          () => {
+            onInsert?.();
+            onChange?.();
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "appointments",
+            table: tables.technicianBlocks,
+          },
+          () => {
+            onUpdate?.();
+            onChange?.();
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "DELETE",
+            schema: "appointments",
+            table: tables.technicianBlocks,
           },
           () => {
             onDelete?.();

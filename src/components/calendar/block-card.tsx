@@ -4,6 +4,7 @@ import { useDraggable } from "@dnd-kit/core";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { OverlapPosition } from "./overlap-utils";
+import { useCalendarConfig } from "./calendar-config";
 
 interface TechnicianBlock {
   id: string;
@@ -34,6 +35,7 @@ export function BlockCard({
   draggable = true,
   isBeingDragged = false,
 }: BlockCardProps) {
+  const config = useCalendarConfig();
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `block-${block.id}`,
     data: { block, type: "block" },
@@ -48,13 +50,14 @@ export function BlockCard({
   const width = overlapPosition?.width ?? 100;
   const zIndex = overlapPosition?.zIndex ?? 10;
 
+  // Standard layout (mobile and desktop)
   return (
     <div
       ref={setNodeRef}
       {...(draggable ? listeners : {})}
       {...(draggable ? attributes : {})}
       className={cn(
-        "absolute rounded px-1.5 py-1 overflow-hidden cursor-pointer pointer-events-auto",
+        "absolute rounded px-1.5 py-0.5 overflow-hidden cursor-pointer pointer-events-auto",
         shouldHide && "opacity-0 pointer-events-none",
         draggable && "touch-none"
       )}
@@ -64,15 +67,21 @@ export function BlockCard({
         left: `calc(${left}% + 2px)`,
         width: `calc(${width}% - ${width < 100 ? 4 : 4}px)`,
         zIndex,
-        backgroundColor: "#9E9E9E",
+        backgroundColor: "#C8C8C8",
         opacity: shouldHide ? 0 : 1,
       }}
       onClick={onClick}
     >
-      <div className="text-xs font-medium text-white">
-        {format(block.startTime, "h:mm a")}
+      <div className={cn(
+        "font-medium text-gray-700",
+        config.isMobile ? "text-[10px]" : "text-xs"
+      )}>
+        {format(block.startTime, config.isMobile ? "h:mm" : "h:mm a")}
       </div>
-      <div className="text-xs text-white font-medium">
+      <div className={cn(
+        "text-gray-700 font-medium",
+        config.isMobile ? "text-[10px]" : "text-xs"
+      )}>
         {block.title}
       </div>
     </div>

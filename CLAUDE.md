@@ -227,6 +227,13 @@ All required tables have been populated:
 - Swipe week strip left/right to navigate weeks
 - Tap date to select, appointments load on selection
 
+**Mobile Calendar Cards**
+- Appointment cards show 5 lines: time (no AM/PM), first name (4 chars), last name (4 chars), service word 1, service word 2
+- Service names use shorthand mapping in `appointment-card.tsx` (e.g., "Natural Set" → "Nat Set")
+- Block cards (personal events) use light gray (#C8C8C8) with dark gray text
+- Card gaps: Both appointments and blocks use `height - 2` in `resource-calendar.tsx` for consistent 2px gaps
+- **Important**: Do NOT add minimum height to block cards - mobile uses 72 PIXELS_PER_HOUR, so 15-min slots are only 18px. A minimum height would cause blocks to overflow their time slots and eliminate the gap
+
 ### PWA Configuration
 
 **Manifest**: `public/manifest.json`

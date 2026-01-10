@@ -538,7 +538,7 @@ export function ResourceCalendar({
 
     const pixelsPerMinute = config.PIXELS_PER_HOUR / 60;
     const top = startMinutesFromMidnight * pixelsPerMinute;
-    const height = Math.max(durationMinutes * pixelsPerMinute, 20);
+    const height = durationMinutes * pixelsPerMinute;
 
     return { top, height, spansNextDay: blockSpansNextDay };
   };
@@ -1027,7 +1027,7 @@ export function ResourceCalendar({
                               block={block}
                               style={{
                                 top: `${top}px`,
-                                height: `${height}px`,
+                                height: `${height - 2}px`,
                               }}
                               overlapPosition={overlapPosition}
                               onClick={() => onBlockClick?.(block)}

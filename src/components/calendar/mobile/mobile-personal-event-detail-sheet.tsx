@@ -94,7 +94,7 @@ export function MobilePersonalEventDetailSheet({
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showScopeModal, setShowScopeModal] = useState<"save" | "delete" | null>(null);
-  const [selectedScope, setSelectedScope] = useState<EditScope>("all");
+  const [pendingDeleteBlock, setPendingDeleteBlock] = useState<TechnicianBlock | null>(null);
   const { hideNav, showNav } = useMobileNav();
 
   // Hide/show bottom nav when sheet opens/closes
@@ -127,7 +127,7 @@ export function MobilePersonalEventDetailSheet({
     if (!block) return;
 
     // If recurring and no scope selected, show scope modal
-    if (block.isRecurring && !scope) {
+    if ((block.isRecurring || block.recurrenceRule) && !scope) {
       setShowScopeModal("save");
       return;
     }
@@ -177,21 +177,16 @@ export function MobilePersonalEventDetailSheet({
   };
 
   const handleDelete = async (scope?: EditScope) => {
-    if (!block) return;
-
-    // If recurring and no scope selected, show scope modal
-    if (block.isRecurring && !scope) {
-      setShowScopeModal("delete");
-      return;
-    }
+    const targetBlock = pendingDeleteBlock || block;
+    if (!targetBlock) return;
 
     setIsDeleting(true);
     try {
-      const url = new URL(`/api/technician-blocks/${block.id}`, window.location.origin);
+      const url = new URL(`/api/technician-blocks/${targetBlock.id}`, window.location.origin);
       if (scope) {
         url.searchParams.set("scope", scope);
-        if (block.instanceDate) {
-          url.searchParams.set("instanceDate", block.instanceDate);
+        if (targetBlock.instanceDate) {
+          url.searchParams.set("instanceDate", targetBlock.instanceDate);
         }
       }
 
@@ -205,8 +200,8 @@ export function MobilePersonalEventDetailSheet({
       toast.success("Event deleted");
       setShowDeleteConfirm(false);
       setShowScopeModal(null);
+      setPendingDeleteBlock(null);
       onDelete();
-      handleClose();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete");
     } finally {
@@ -214,10 +209,12 @@ export function MobilePersonalEventDetailSheet({
     }
   };
 
-  if (!block) return null;
+  // Get the block to use for dialogs (either current or pending delete)
+  const dialogBlock = pendingDeleteBlock || block;
 
   return (
     <>
+      {block && (
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent
           side="bottom"
@@ -379,10 +376,13 @@ export function MobilePersonalEventDetailSheet({
                 variant="destructive"
                 className="w-full"
                 onClick={() => {
-                  if (block.isRecurring) {
-                    setShowScopeModal("delete");
+                  // Store block data before closing sheet
+                  setPendingDeleteBlock(block);
+                  onOpenChange(false);
+                  if (block.isRecurring || block.recurrenceRule) {
+                    setTimeout(() => setShowScopeModal("delete"), 150);
                   } else {
-                    setShowDeleteConfirm(true);
+                    setTimeout(() => setShowDeleteConfirm(true), 150);
                   }
                 }}
                 disabled={isDeleting}
@@ -398,14 +398,18 @@ export function MobilePersonalEventDetailSheet({
           </div>
         </SheetContent>
       </Sheet>
+      )}
 
       {/* Delete Confirmation (non-recurring) */}
-      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+      <AlertDialog open={showDeleteConfirm} onOpenChange={(open) => {
+        setShowDeleteConfirm(open);
+        if (!open) setPendingDeleteBlock(null);
+      }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Event?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete "{block.title}". This action cannot be undone.
+              This will permanently delete "{dialogBlock?.title}". This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -421,80 +425,78 @@ export function MobilePersonalEventDetailSheet({
       </AlertDialog>
 
       {/* Scope Selection Modal (for recurring events) */}
-      {showScopeModal && (
-        <div className="fixed inset-0 z-[60] bg-black/50 flex items-end">
-          <div className="w-full bg-white rounded-t-2xl p-4 space-y-4 animate-in slide-in-from-bottom">
-            <h3 className="text-lg font-semibold text-center">
+      <AlertDialog open={!!showScopeModal} onOpenChange={(open) => {
+        if (!open) {
+          setShowScopeModal(null);
+          setPendingDeleteBlock(null);
+        }
+      }}>
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
               {showScopeModal === "delete" ? "Delete Recurring Event" : "Edit Recurring Event"}
-            </h3>
-            <p className="text-gray-600 text-center text-sm">
+            </AlertDialogTitle>
+            <AlertDialogDescription>
               This is a recurring event. Which events would you like to{" "}
               {showScopeModal === "delete" ? "delete" : "update"}?
-            </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
 
-            <div className="space-y-2">
-              <button
-                onClick={() => {
-                  setSelectedScope("this_only");
-                  if (showScopeModal === "delete") {
-                    handleDelete("this_only");
-                  } else {
-                    handleSave("this_only");
-                  }
-                }}
-                className="w-full p-4 text-left rounded-lg bg-gray-50 active:bg-gray-100"
-              >
-                <div className="font-medium">This event only</div>
-                <div className="text-sm text-gray-500">
-                  Only {showScopeModal === "delete" ? "delete" : "update"} this occurrence
-                </div>
-              </button>
-
-              <button
-                onClick={() => {
-                  setSelectedScope("this_and_future");
-                  if (showScopeModal === "delete") {
-                    handleDelete("this_and_future");
-                  } else {
-                    handleSave("this_and_future");
-                  }
-                }}
-                className="w-full p-4 text-left rounded-lg bg-gray-50 active:bg-gray-100"
-              >
-                <div className="font-medium">This and future events</div>
-                <div className="text-sm text-gray-500">
-                  {showScopeModal === "delete" ? "Delete" : "Update"} this and all future occurrences
-                </div>
-              </button>
-
-              <button
-                onClick={() => {
-                  setSelectedScope("all");
-                  if (showScopeModal === "delete") {
-                    handleDelete("all");
-                  } else {
-                    handleSave("all");
-                  }
-                }}
-                className="w-full p-4 text-left rounded-lg bg-gray-50 active:bg-gray-100"
-              >
-                <div className="font-medium">All events</div>
-                <div className="text-sm text-gray-500">
-                  {showScopeModal === "delete" ? "Delete" : "Update"} all occurrences
-                </div>
-              </button>
-            </div>
-
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => setShowScopeModal(null)}
+          <div className="space-y-2 py-2">
+            <button
+              onClick={() => {
+                if (showScopeModal === "delete") {
+                  handleDelete("this_only");
+                } else {
+                  handleSave("this_only");
+                }
+              }}
+              className="w-full p-3 text-left rounded-lg bg-gray-50 active:bg-gray-100"
             >
-              Cancel
-            </Button>
+              <div className="font-medium">This event only</div>
+              <div className="text-sm text-gray-500">
+                Only {showScopeModal === "delete" ? "delete" : "update"} this occurrence
+              </div>
+            </button>
+
+            <button
+              onClick={() => {
+                if (showScopeModal === "delete") {
+                  handleDelete("this_and_future");
+                } else {
+                  handleSave("this_and_future");
+                }
+              }}
+              className="w-full p-3 text-left rounded-lg bg-gray-50 active:bg-gray-100"
+            >
+              <div className="font-medium">This and future events</div>
+              <div className="text-sm text-gray-500">
+                {showScopeModal === "delete" ? "Delete" : "Update"} this and all future occurrences
+              </div>
+            </button>
+
+            <button
+              onClick={() => {
+                if (showScopeModal === "delete") {
+                  handleDelete("all");
+                } else {
+                  handleSave("all");
+                }
+              }}
+              className="w-full p-3 text-left rounded-lg bg-gray-50 active:bg-gray-100"
+            >
+              <div className="font-medium">All events</div>
+              <div className="text-sm text-gray-500">
+                {showScopeModal === "delete" ? "Delete" : "Update"} all occurrences
+              </div>
+            </button>
           </div>
-        </div>
-      )}
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

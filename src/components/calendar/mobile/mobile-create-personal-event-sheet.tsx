@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { format, addHours, setHours, setMinutes } from "date-fns";
+import { format, addMinutes, setHours, setMinutes } from "date-fns";
 import { X, Loader2, Check, ChevronRight, Repeat } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -83,7 +83,7 @@ export function MobileCreatePersonalEventSheet({
   const [title, setTitle] = useState("");
   const [eventDate, setEventDate] = useState<Date>(time);
   const [startTime, setStartTime] = useState(format(time, "HH:mm"));
-  const [endTime, setEndTime] = useState(format(addHours(time, 1), "HH:mm"));
+  const [endTime, setEndTime] = useState(format(addMinutes(time, 15), "HH:mm"));
   const [isCreating, setIsCreating] = useState(false);
   const [showRepeatOptions, setShowRepeatOptions] = useState(false);
   const [repetition, setRepetition] = useState<RepetitionSettings>({
@@ -110,7 +110,7 @@ export function MobileCreatePersonalEventSheet({
       setTitle("");
       setEventDate(time);
       setStartTime(format(time, "HH:mm"));
-      setEndTime(format(addHours(time, 1), "HH:mm"));
+      setEndTime(format(addMinutes(time, 15), "HH:mm"));
       setRepetition({
         enabled: false,
         interval: 1,
