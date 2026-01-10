@@ -661,8 +661,6 @@
     /* Hide scrollbar but keep scroll functionality */
     -ms-overflow-style: none;
     scrollbar-width: none;
-    /* Padding for bottom nav bar */
-    padding-bottom: calc(56px + env(safe-area-inset-bottom));
     /* iOS momentum scrolling */
     -webkit-overflow-scrolling: touch;
     /* Prevent scroll chaining */
