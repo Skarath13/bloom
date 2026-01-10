@@ -50,9 +50,11 @@ interface LocationData {
 
 interface AppointmentWithRelations {
   id: string;
+  clientId: string;
   startTime: string;
   endTime: string;
   status: string;
+  bookedAnyAvailable: boolean;
   bloom_clients: ClientData | null;
   bloom_services: ServiceData | null;
   bloom_technicians: TechnicianData | null;
@@ -151,6 +153,57 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Compute linked appointments (same client, same day) for duplicate detection
+    // Group appointments by clientId + date
+    const appointmentsByClientDate: Record<string, AppointmentWithRelations[]> = {};
+    for (const apt of appointments || []) {
+      const dateKey = apt.startTime.slice(0, 10); // YYYY-MM-DD
+      const key = `${apt.clientId}-${dateKey}`;
+      if (!appointmentsByClientDate[key]) {
+        appointmentsByClientDate[key] = [];
+      }
+      appointmentsByClientDate[key].push(apt);
+    }
+
+    // For each appointment, check for earlier/later same-day appointments
+    const linkedAppointmentFlags: Record<string, { hasEarlier: boolean; hasLater: boolean }> = {};
+    for (const [, apts] of Object.entries(appointmentsByClientDate)) {
+      if (apts.length > 1) {
+        // Sort by start time
+        const sorted = apts.sort((a, b) => a.startTime.localeCompare(b.startTime));
+        for (let i = 0; i < sorted.length; i++) {
+          linkedAppointmentFlags[sorted[i].id] = {
+            hasEarlier: i > 0,
+            hasLater: i < sorted.length - 1,
+          };
+        }
+      }
+    }
+
+    // Compute isNewClient for each appointment
+    // A client is "new" if this appointment is their first valid (non-cancelled, non-no-show) appointment
+    const clientIds = [...new Set(appointments?.map((apt) => apt.clientId).filter(Boolean) || [])];
+    const earliestValidAppointmentByClient: Record<string, string> = {};
+
+    if (clientIds.length > 0) {
+      // For each client, find their earliest valid appointment
+      const { data: earliestAppointments } = await supabase
+        .from(tables.appointments)
+        .select("id, clientId, startTime, status")
+        .in("clientId", clientIds)
+        .not("status", "in", '("CANCELLED","NO_SHOW")')
+        .order("startTime", { ascending: true });
+
+      // Build map of clientId -> earliest valid appointment ID
+      if (earliestAppointments) {
+        for (const apt of earliestAppointments) {
+          if (!earliestValidAppointmentByClient[apt.clientId]) {
+            earliestValidAppointmentByClient[apt.clientId] = apt.id;
+          }
+        }
+      }
+    }
+
     // Transform the response to match the expected format
     const transformedAppointments = appointments?.map((apt) => ({
       ...apt,
@@ -163,6 +216,13 @@ export async function GET(request: NextRequest) {
       service: apt.bloom_services || null,
       technician: apt.bloom_technicians || null,
       location: apt.bloom_locations || null,
+      // Computed field: is this the client's first valid appointment?
+      isNewClient: earliestValidAppointmentByClient[apt.clientId] === apt.id,
+      // Transform snake_case DB field to camelCase
+      bookedAnyAvailable: (apt as unknown as { booked_any_available?: boolean }).booked_any_available ?? false,
+      // Linked appointment flags (same client, same day)
+      hasEarlierAppointment: linkedAppointmentFlags[apt.id]?.hasEarlier ?? false,
+      hasLaterAppointment: linkedAppointmentFlags[apt.id]?.hasLater ?? false,
       // Remove the raw relation fields
       bloom_clients: undefined,
       bloom_services: undefined,
@@ -199,6 +259,7 @@ export async function POST(request: NextRequest) {
       notes,
       noShowProtected = false,
       bookedBy,
+      bookedAnyAvailable = false,
     } = body;
 
     // Validate required fields
@@ -241,6 +302,7 @@ export async function POST(request: NextRequest) {
       noShowProtected,
       bookedBy: bookedBy || "Admin",
       depositAmount: service.depositAmount,
+      bookedAnyAvailable,
     });
 
     // If within 6 hours, update to auto-confirm (skip SMS confirmation flow)

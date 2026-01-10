@@ -56,6 +56,7 @@ interface Appointment {
   endTime: Date;
   status: string;
   notes?: string;
+  bookedBy?: string;
   client?: {
     id: string;
     firstName: string;
@@ -85,7 +86,9 @@ interface Appointment {
 interface AppointmentHistory {
   id: string;
   serviceName: string;
+  technicianName: string;
   technicianColor: string;
+  locationName: string;
   startTime: Date;
   status: string;
 }
@@ -138,15 +141,19 @@ export function MobileAppointmentDetailSheet({
   const [appointment, setAppointment] = useState<Appointment | null>(null);
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [history, setHistory] = useState<AppointmentHistory[]>([]);
+  const [historyLimit, setHistoryLimit] = useState(5);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const { hideNav, showNav } = useMobileNav();
+
 
   // Edit state
   const [editDate, setEditDate] = useState("");
   const [editTime, setEditTime] = useState("");
   const [editTechId, setEditTechId] = useState("");
   const [editServices, setEditServices] = useState<Service[]>([]);
+  const [editApptNotes, setEditApptNotes] = useState("");
+  const [editClientNotes, setEditClientNotes] = useState("");
   const [availableServices, setAvailableServices] = useState<Service[]>([]);
   const [availableTechs, setAvailableTechs] = useState<Technician[]>([]);
 
@@ -160,6 +167,7 @@ export function MobileAppointmentDetailSheet({
       setAppointment(null);
       setLineItems([]);
       setHistory([]);
+      setHistoryLimit(5);
       setEditServices([]);
     }
     return () => showNav();
@@ -209,17 +217,34 @@ export function MobileAppointmentDetailSheet({
 
   const fetchHistory = async (clientId: string) => {
     try {
-      const res = await fetch(`/api/clients/${clientId}/appointments?limit=10`);
+      const res = await fetch(`/api/clients/${clientId}/appointments?limit=20`);
       if (res.ok) {
         const data = await res.json();
-        setHistory(
-          (data.appointments || [])
-            .filter((a: any) => a.id !== appointmentId)
-            .map((a: any) => ({
-              ...a,
-              startTime: new Date(a.startTime),
-            }))
-        );
+        const now = new Date();
+        const appointments = (data.appointments || [])
+          .filter((a: any) => a.id !== appointmentId)
+          .map((a: any) => ({
+            id: a.id,
+            serviceName: a.serviceName,
+            technicianName: a.technicianName,
+            technicianColor: a.technicianColor,
+            locationName: a.locationName,
+            startTime: new Date(a.startTime),
+            status: a.status,
+          }));
+
+        // Sort: upcoming first (by date asc), then past (by date desc)
+        appointments.sort((a: AppointmentHistory, b: AppointmentHistory) => {
+          const aIsUpcoming = a.startTime > now && !["CANCELLED", "NO_SHOW", "COMPLETED"].includes(a.status);
+          const bIsUpcoming = b.startTime > now && !["CANCELLED", "NO_SHOW", "COMPLETED"].includes(b.status);
+
+          if (aIsUpcoming && !bIsUpcoming) return -1;
+          if (!aIsUpcoming && bIsUpcoming) return 1;
+          if (aIsUpcoming && bIsUpcoming) return a.startTime.getTime() - b.startTime.getTime();
+          return b.startTime.getTime() - a.startTime.getTime();
+        });
+
+        setHistory(appointments);
       }
     } catch (error) {
       console.error("Failed to fetch history:", error);
@@ -282,6 +307,8 @@ export function MobileAppointmentDetailSheet({
     }
 
     setEditServices(services);
+    setEditApptNotes(appointment.notes || "");
+    setEditClientNotes(appointment.client?.notes || "");
     fetchServicesAndTechs();
     setViewState('edit');
   };
@@ -296,6 +323,7 @@ export function MobileAppointmentDetailSheet({
       const totalDuration = editServices.reduce((sum, s) => sum + s.durationMinutes, 0);
       const newEnd = addMinutes(newStart, totalDuration);
 
+      // Update appointment (including notes)
       const res = await fetch(`/api/appointments/${appointment.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -303,6 +331,7 @@ export function MobileAppointmentDetailSheet({
           startTime: newStart.toISOString(),
           endTime: newEnd.toISOString(),
           technicianId: editTechId,
+          notes: editApptNotes || null,
           lineItems: editServices.map((s) => ({
             itemType: "service",
             serviceId: s.id,
@@ -317,6 +346,15 @@ export function MobileAppointmentDetailSheet({
 
       if (!res.ok) throw new Error("Failed to update");
 
+      // Update client notes if changed
+      if (appointment.client?.id && editClientNotes !== (appointment.client.notes || "")) {
+        await fetch(`/api/clients/${appointment.client.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ notes: editClientNotes || null }),
+        });
+      }
+
       // Update local state
       const selectedTech = availableTechs.find((t) => t.id === editTechId);
       setAppointment((prev) =>
@@ -326,6 +364,8 @@ export function MobileAppointmentDetailSheet({
               startTime: newStart,
               endTime: newEnd,
               technician: selectedTech || prev.technician,
+              notes: editApptNotes || undefined,
+              client: prev.client ? { ...prev.client, notes: editClientNotes || undefined } : undefined,
             }
           : null
       );
@@ -446,7 +486,7 @@ export function MobileAppointmentDetailSheet({
     switch (viewState) {
       case 'edit': return 'Edit';
       case 'picking-service': return 'Add Service';
-      default: return 'Appointment';
+      default: return 'Appointment Details';
     }
   };
 
@@ -526,46 +566,29 @@ export function MobileAppointmentDetailSheet({
           ) : (
             // VIEW / EDIT / CONFIRM STATES
             <div className="p-4 space-y-3">
-              {/* Status */}
-              <div className="flex items-center justify-between p-3 bg-white rounded-xl">
-                <span className="text-sm text-gray-500">Status</span>
-                <Badge className={cn("font-medium", statusColors[appointment.status])}>
-                  {statusLabels[appointment.status]}
-                </Badge>
-              </div>
-
-              {/* Client */}
+              {/* Client - simplified without avatar */}
               <div className="bg-white rounded-xl p-4">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-medium"
-                    style={{ backgroundColor: appointment.technician?.color || "#6B7280" }}
-                  >
-                    {appointment.client?.firstName?.[0]}
-                    {appointment.client?.lastName?.[0]}
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold">
-                      {appointment.client?.firstName} {appointment.client?.lastName}
-                    </h3>
-                    <a
-                      href={`tel:${appointment.client?.phone}`}
-                      className="flex items-center gap-1.5 text-blue-600 text-sm"
-                    >
-                      <Phone className="h-3.5 w-3.5" />
-                      {appointment.client?.phone ? formatPhone(appointment.client.phone) : ""}
-                    </a>
-                  </div>
-                </div>
-                {appointment.client?.notes && (
-                  <div className="mt-3 text-sm text-gray-600 bg-gray-50 p-2 rounded-lg">
-                    {appointment.client.notes}
-                  </div>
-                )}
+                <h3 className="font-semibold text-lg">
+                  {appointment.client?.firstName} {appointment.client?.lastName}
+                </h3>
+                <a
+                  href={`tel:${appointment.client?.phone}`}
+                  className="flex items-center gap-1.5 text-blue-600 text-sm mt-1"
+                >
+                  <Phone className="h-3.5 w-3.5" />
+                  {appointment.client?.phone ? formatPhone(appointment.client.phone) : ""}
+                </a>
               </div>
 
-              {/* Date/Time/Tech/Location */}
+              {/* Appointment Details - consolidated section */}
               <div className="bg-white rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-medium text-gray-500">Appointment Details</h4>
+                  <Badge className={cn("font-medium", statusColors[appointment.status])}>
+                    {statusLabels[appointment.status]}
+                  </Badge>
+                </div>
+
                 {viewState === 'edit' ? (
                   <>
                     {/* Date picker - native for mobile Safari */}
@@ -605,9 +628,68 @@ export function MobileAppointmentDetailSheet({
                         ))}
                       </select>
                     </div>
+
+                    {/* Services in edit mode */}
+                    <div className="border-t pt-3 mt-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm text-gray-500">Services</span>
+                        <button
+                          onClick={() => setViewState('picking-service')}
+                          className="flex items-center gap-1 text-sm text-dusty-rose font-medium"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Add
+                        </button>
+                      </div>
+                      <div className="space-y-2">
+                        {editServices.map((s) => (
+                          <div key={s.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                            <div>
+                              <span className="font-medium">{s.name}</span>
+                              <span className="text-gray-500 text-sm ml-2">({formatDuration(s.durationMinutes)})</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm">${s.price}</span>
+                              {editServices.length > 1 && (
+                                <button onClick={() => removeService(s.id)} className="p-1 text-gray-400">
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="border-t mt-3 pt-3 flex justify-between font-semibold">
+                        <span>Total</span>
+                        <span>${calculateEditTotal()}</span>
+                      </div>
+                    </div>
+
+                    {/* Notes in edit mode */}
+                    <div className="border-t pt-3 mt-3 space-y-3">
+                      <div>
+                        <label className="text-sm text-gray-500 mb-1 block">Appointment Notes</label>
+                        <textarea
+                          value={editApptNotes}
+                          onChange={(e) => setEditApptNotes(e.target.value)}
+                          placeholder="Notes for this appointment..."
+                          className="w-full h-20 px-3 py-2 rounded-lg border border-gray-200 bg-white text-base resize-none focus:outline-none focus:ring-2 focus:ring-dusty-rose focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm text-gray-500 mb-1 block">Client Notes</label>
+                        <textarea
+                          value={editClientNotes}
+                          onChange={(e) => setEditClientNotes(e.target.value)}
+                          placeholder="Notes about this client..."
+                          className="w-full h-20 px-3 py-2 rounded-lg border border-gray-200 bg-white text-base resize-none focus:outline-none focus:ring-2 focus:ring-dusty-rose focus:border-transparent"
+                        />
+                      </div>
+                    </div>
                   </>
                 ) : (
                   <>
+                    {/* Date & Time */}
                     <div className="flex items-center gap-3">
                       <Calendar className="h-5 w-5 text-gray-400" />
                       <div>
@@ -617,6 +699,8 @@ export function MobileAppointmentDetailSheet({
                         </div>
                       </div>
                     </div>
+
+                    {/* Technician */}
                     <div className="flex items-center gap-3">
                       <User className="h-5 w-5 text-gray-400" />
                       <div className="flex items-center gap-2">
@@ -627,35 +711,76 @@ export function MobileAppointmentDetailSheet({
                         <span>{appointment.technician?.firstName} {appointment.technician?.lastName}</span>
                       </div>
                     </div>
+
+                    {/* Location */}
+                    {appointment.location && (
+                      <div className="flex items-center gap-3">
+                        <MapPin className="h-5 w-5 text-gray-400" />
+                        <span>{appointment.location.name}</span>
+                      </div>
+                    )}
+
+                    {/* Services */}
+                    <div className="border-t pt-3 mt-1">
+                      <div className="text-sm text-gray-500 mb-2">Services</div>
+                      <div className="space-y-2">
+                        {lineItems.length > 0 ? (
+                          lineItems.map((li) => (
+                            <div key={li.id} className="flex justify-between">
+                              <span className="font-medium">{li.name}</span>
+                              <span>${li.totalAmount}</span>
+                            </div>
+                          ))
+                        ) : appointment.service ? (
+                          <div className="flex justify-between">
+                            <div>
+                              <span className="font-medium">{appointment.service.name}</span>
+                              <span className="text-gray-500 text-sm ml-2">
+                                ({formatDuration(appointment.service.durationMinutes)})
+                              </span>
+                            </div>
+                            <span>${appointment.service.price}</span>
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="border-t mt-3 pt-3 flex justify-between font-semibold">
+                        <span>Total</span>
+                        <span>
+                          ${lineItems.length > 0 ? calculateTotal() : appointment.service?.price || 0}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Booked By */}
+                    {appointment.bookedBy && (
+                      <div className="border-t pt-3 mt-1 flex justify-between text-sm">
+                        <span className="text-gray-500">Booked by</span>
+                        <span className="text-gray-700">{appointment.bookedBy}</span>
+                      </div>
+                    )}
+
+                    {/* Action Buttons - Cancel/No-Show */}
+                    {!isTerminal && (
+                      <div className="grid grid-cols-2 gap-3 pt-3 mt-1 border-t">
+                        <Button
+                          variant="outline"
+                          onClick={() => setViewState('confirm-cancel')}
+                          className="h-11"
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => setViewState('confirm-noshow')}
+                          className="h-11"
+                        >
+                          No-Show
+                        </Button>
+                      </div>
+                    )}
                   </>
                 )}
-                {appointment.location && (
-                  <div className="flex items-center gap-3">
-                    <MapPin className="h-5 w-5 text-gray-400" />
-                    <span>{appointment.location.name}</span>
-                  </div>
-                )}
               </div>
-
-              {/* Action Buttons - Cancel/No-Show */}
-              {viewState === 'view' && !isTerminal && (
-                <div className="grid grid-cols-2 gap-3">
-                  <Button
-                    variant="outline"
-                    onClick={() => setViewState('confirm-cancel')}
-                    className="h-11"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setViewState('confirm-noshow')}
-                    className="h-11"
-                  >
-                    No-Show
-                  </Button>
-                </div>
-              )}
 
               {/* Confirm Cancel */}
               {viewState === 'confirm-cancel' && (
@@ -691,96 +816,74 @@ export function MobileAppointmentDetailSheet({
                 </div>
               )}
 
-              {/* Services */}
-              <div className="bg-white rounded-xl p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-sm font-medium text-gray-500">Services</h4>
-                  {viewState === 'edit' && (
-                    <button
-                      onClick={() => setViewState('picking-service')}
-                      className="flex items-center gap-1 text-sm text-dusty-rose font-medium"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Add
-                    </button>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  {viewState === 'edit' ? (
-                    editServices.map((s) => (
-                      <div key={s.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                        <div>
-                          <span className="font-medium">{s.name}</span>
-                          <span className="text-gray-500 text-sm ml-2">({formatDuration(s.durationMinutes)})</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm">${s.price}</span>
-                          {editServices.length > 1 && (
-                            <button onClick={() => removeService(s.id)} className="p-1 text-gray-400">
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  ) : lineItems.length > 0 ? (
-                    lineItems.map((li) => (
-                      <div key={li.id} className="flex justify-between">
-                        <span className="font-medium">{li.name}</span>
-                        <span>${li.totalAmount}</span>
-                      </div>
-                    ))
-                  ) : appointment.service ? (
-                    <div className="flex justify-between">
-                      <div>
-                        <span className="font-medium">{appointment.service.name}</span>
-                        <span className="text-gray-500 text-sm ml-2">
-                          ({formatDuration(appointment.service.durationMinutes)})
-                        </span>
-                      </div>
-                      <span>${appointment.service.price}</span>
-                    </div>
-                  ) : null}
-                </div>
-                <div className="border-t mt-3 pt-3 flex justify-between font-semibold">
-                  <span>Total</span>
-                  <span>
-                    ${viewState === 'edit' ? calculateEditTotal() : lineItems.length > 0 ? calculateTotal() : appointment.service?.price || 0}
-                  </span>
-                </div>
-              </div>
+              {/* Notes Section - always visible, all admin-only */}
+              {viewState === 'view' && (
+                <div className="bg-white rounded-xl p-4 space-y-4">
+                  <h4 className="text-sm font-medium text-gray-500">Notes</h4>
 
-              {/* Notes */}
-              {appointment.notes && (
-                <div className="bg-white rounded-xl p-4">
-                  <h4 className="text-sm font-medium text-gray-500 mb-2">Notes</h4>
-                  <p className="text-gray-700">{appointment.notes}</p>
+                  {/* Appointment Notes - from booking step 5 */}
+                  <div>
+                    <div className="text-sm font-medium text-gray-700 mb-1">Appointment Notes</div>
+                    <p className="text-gray-600 text-sm">
+                      {appointment.notes || <span className="text-gray-400 italic">No appointment notes</span>}
+                    </p>
+                  </div>
+
+                  {/* Client Notes - persistent across appointments */}
+                  <div>
+                    <div className="text-sm font-medium text-gray-700 mb-1">Client Notes</div>
+                    <p className="text-gray-600 text-sm">
+                      {appointment.client?.notes || <span className="text-gray-400 italic">No client notes</span>}
+                    </p>
+                  </div>
                 </div>
               )}
 
-              {/* Past Appointments */}
+              {/* Past Appointments with show more */}
               {history.length > 0 && viewState !== 'edit' && (
                 <div className="bg-white rounded-xl p-4">
                   <h4 className="text-sm font-medium text-gray-500 mb-3">
-                    Past Appointments ({history.length})
+                    Appointment History ({history.length})
                   </h4>
                   <div className="space-y-2">
-                    {history.map((h) => (
-                      <div key={h.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg text-sm">
-                        <div
-                          className="w-2 h-2 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: h.technicianColor }}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium truncate">{h.serviceName}</div>
-                          <div className="text-gray-500">{format(h.startTime, "MMM d, yyyy")}</div>
+                    {history.slice(0, historyLimit).map((h) => {
+                      const isUpcoming = h.startTime > new Date() && !["CANCELLED", "NO_SHOW", "COMPLETED"].includes(h.status);
+                      return (
+                        <div key={h.id} className="p-2 bg-gray-50 rounded-lg text-sm">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-2 h-2 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: h.technicianColor }}
+                            />
+                            <span className="font-medium truncate flex-1">{h.serviceName}</span>
+                            {isUpcoming && (
+                              <Badge className="text-xs flex-shrink-0 bg-green-100 text-green-700">
+                                Upcoming
+                              </Badge>
+                            )}
+                            {(h.status === "CANCELLED" || h.status === "NO_SHOW") && (
+                              <Badge className={cn("text-xs flex-shrink-0", statusColors[h.status])}>
+                                {statusLabels[h.status]}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-gray-500 mt-1 ml-4 space-y-0.5">
+                            <div>{format(h.startTime, "MMM d, yyyy")}</div>
+                            <div>{h.technicianName} · {h.locationName}</div>
+                          </div>
                         </div>
-                        <Badge variant="secondary" className={cn("text-xs flex-shrink-0", statusColors[h.status])}>
-                          {statusLabels[h.status]}
-                        </Badge>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
+                  {/* Show more button */}
+                  {history.length > historyLimit && (
+                    <button
+                      onClick={() => setHistoryLimit((l) => l + 5)}
+                      className="w-full mt-3 pt-3 border-t text-sm text-dusty-rose font-medium min-h-[44px]"
+                    >
+                      Show more ({history.length - historyLimit} remaining)
+                    </button>
+                  )}
                 </div>
               )}
 

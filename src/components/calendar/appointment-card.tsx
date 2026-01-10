@@ -1,7 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
-import { Check, CheckCheck, Sparkles, User, Play, X } from "lucide-react";
+import { Check, Sparkles, Star, Shuffle, ArrowUp, ArrowDown } from "lucide-react";
 import { useDraggable } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
 import { useCalendarConfig } from "./calendar-config";
@@ -99,6 +99,10 @@ interface AppointmentCardProps {
   draggable?: boolean; // Enable drag and drop
   technicianId?: string; // Required for drag data
   overlapPosition?: OverlapPosition; // For unified overlap handling
+  isNewClient?: boolean; // Show star icon for first-time clients
+  bookedAnyAvailable?: boolean; // Show shuffle icon for "any available" bookings
+  hasEarlierAppointment?: boolean; // Show arrow up for earlier same-day appointment
+  hasLaterAppointment?: boolean; // Show arrow down for later same-day appointment
 }
 
 export function AppointmentCard({
@@ -117,6 +121,10 @@ export function AppointmentCard({
   draggable = false,
   technicianId,
   overlapPosition,
+  isNewClient,
+  bookedAnyAvailable,
+  hasEarlierAppointment,
+  hasLaterAppointment,
 }: AppointmentCardProps) {
   const config = useCalendarConfig();
 
@@ -148,16 +156,43 @@ export function AppointmentCard({
   // Ghost appearance for cancelled/no-show (reduced opacity)
   const isGhost = status === "CANCELLED" || status === "NO_SHOW";
 
-  // Status indicator config - all use card's bgColor for cohesive look
+  // Status indicator config - only show for PENDING and CONFIRMED
   const statusIndicator = {
     PENDING: "?",
     CONFIRMED: "check",
-    CHECKED_IN: "user",
-    IN_PROGRESS: "play",
-    COMPLETED: "checkcheck",
-    CANCELLED: "x",
-    NO_SHOW: "x",
   }[status] as string | undefined;
+
+  // Determine indicator positions dynamically
+  // Layout fills around status (bottom-right anchor): left → top → diagonal
+  // Priority for left: anyAvail > newClient > duplicate
+  // When all 4 exist, duplicate goes to top-left (diagonal)
+  const hasStatus = !!statusIndicator;
+  const hasDuplicate = hasEarlierAppointment || hasLaterAppointment;
+  const hasNewClient = !!isNewClient;
+  const hasAnyAvail = !!bookedAnyAvailable;
+
+  type IndicatorType = 'duplicate' | 'newClient' | 'anyAvail';
+  let leftIndicator: IndicatorType | null = null;
+  let topIndicator: IndicatorType | null = null;
+  let diagonalIndicator: IndicatorType | null = null;
+
+  // Special case: all 4 exist - duplicate goes to top-left (diagonal)
+  if (hasDuplicate && hasNewClient && hasAnyAvail && hasStatus) {
+    diagonalIndicator = 'duplicate';
+    leftIndicator = 'anyAvail';
+    topIndicator = 'newClient';
+  } else {
+    // Fill positions based on priority: anyAvail > newClient > duplicate
+    const available: IndicatorType[] = [];
+    if (hasAnyAvail) available.push('anyAvail');
+    if (hasNewClient) available.push('newClient');
+    if (hasDuplicate) available.push('duplicate');
+
+    // Fill left first, then top, then diagonal
+    if (available.length > 0) leftIndicator = available[0];
+    if (available.length > 1) topIndicator = available[1];
+    if (available.length > 2) diagonalIndicator = available[2];
+  }
 
   // Determine what content to show based on card height (smaller thresholds on mobile)
   const showServiceName = height > (config.isMobile ? 32 : 40);
@@ -184,30 +219,82 @@ export function AppointmentCard({
         }}
         onClick={onClick}
       >
-        {/* Status indicator - bottom right */}
-        {statusIndicator && (
-          <div className="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 rounded bg-white flex items-center justify-center">
-            {statusIndicator === "?" && (
-              <span
-                className="text-[10px] leading-none"
-                style={{ color: bgColor, fontWeight: 900, WebkitTextStroke: `0.5px ${bgColor}` }}
-              >?</span>
+        {/* Indicator squares - dynamic layout around status (bottom-right anchor)
+            Full grid:  [Diagonal] [Top]
+                        [Left]     [Status]
+            Priority for left: anyAvail > newClient > duplicate
+        */}
+        {(hasStatus || leftIndicator || topIndicator || diagonalIndicator) && (
+          <div className="absolute bottom-0.5 right-0.5 flex flex-col items-end gap-0.5">
+            {/* Top row: [Diagonal] [Top] */}
+            {(diagonalIndicator || topIndicator) && (
+              <div className="flex gap-0.5">
+                {diagonalIndicator && (
+                  <div className="w-3.5 h-3.5 rounded bg-white flex items-center justify-center">
+                    {diagonalIndicator === 'duplicate' && (hasEarlierAppointment && hasLaterAppointment ? (
+                      <div className="flex flex-col -space-y-1">
+                        <ArrowUp className="h-2 w-2.5" style={{ color: bgColor }} strokeWidth={3} />
+                        <ArrowDown className="h-2 w-2.5" style={{ color: bgColor }} strokeWidth={3} />
+                      </div>
+                    ) : hasEarlierAppointment ? (
+                      <ArrowUp className="h-2.5 w-2.5" style={{ color: bgColor }} strokeWidth={3} />
+                    ) : (
+                      <ArrowDown className="h-2.5 w-2.5" style={{ color: bgColor }} strokeWidth={3} />
+                    ))}
+                    {diagonalIndicator === 'newClient' && <Star className="h-2.5 w-2.5" style={{ color: bgColor }} strokeWidth={3} fill="none" />}
+                    {diagonalIndicator === 'anyAvail' && <Shuffle className="h-2.5 w-2.5" style={{ color: bgColor }} strokeWidth={3} />}
+                  </div>
+                )}
+                {topIndicator && (
+                  <div className="w-3.5 h-3.5 rounded bg-white flex items-center justify-center">
+                    {topIndicator === 'duplicate' && (hasEarlierAppointment && hasLaterAppointment ? (
+                      <div className="flex flex-col -space-y-1">
+                        <ArrowUp className="h-2 w-2.5" style={{ color: bgColor }} strokeWidth={3} />
+                        <ArrowDown className="h-2 w-2.5" style={{ color: bgColor }} strokeWidth={3} />
+                      </div>
+                    ) : hasEarlierAppointment ? (
+                      <ArrowUp className="h-2.5 w-2.5" style={{ color: bgColor }} strokeWidth={3} />
+                    ) : (
+                      <ArrowDown className="h-2.5 w-2.5" style={{ color: bgColor }} strokeWidth={3} />
+                    ))}
+                    {topIndicator === 'newClient' && <Star className="h-2.5 w-2.5" style={{ color: bgColor }} strokeWidth={3} fill="none" />}
+                    {topIndicator === 'anyAvail' && <Shuffle className="h-2.5 w-2.5" style={{ color: bgColor }} strokeWidth={3} />}
+                  </div>
+                )}
+              </div>
             )}
-            {statusIndicator === "check" && (
-              <Check className="h-2.5 w-2.5" style={{ color: bgColor }} strokeWidth={4.5} fill="none" />
-            )}
-            {statusIndicator === "checkcheck" && (
-              <CheckCheck className="h-2.5 w-2.5" style={{ color: bgColor }} strokeWidth={4} fill="none" />
-            )}
-            {statusIndicator === "user" && (
-              <User className="h-2.5 w-2.5" style={{ color: bgColor }} strokeWidth={4} fill="none" />
-            )}
-            {statusIndicator === "play" && (
-              <Play className="h-2 w-2" style={{ color: bgColor }} strokeWidth={4} fill="none" />
-            )}
-            {statusIndicator === "x" && (
-              <X className="h-2.5 w-2.5" style={{ color: bgColor }} strokeWidth={4} fill="none" />
-            )}
+            {/* Bottom row: [Left] [Status] */}
+            <div className="flex gap-0.5">
+              {leftIndicator && (
+                <div className="w-3.5 h-3.5 rounded bg-white flex items-center justify-center">
+                  {leftIndicator === 'duplicate' && (hasEarlierAppointment && hasLaterAppointment ? (
+                    <div className="flex flex-col -space-y-1">
+                      <ArrowUp className="h-2 w-2.5" style={{ color: bgColor }} strokeWidth={3} />
+                      <ArrowDown className="h-2 w-2.5" style={{ color: bgColor }} strokeWidth={3} />
+                    </div>
+                  ) : hasEarlierAppointment ? (
+                    <ArrowUp className="h-2.5 w-2.5" style={{ color: bgColor }} strokeWidth={3} />
+                  ) : (
+                    <ArrowDown className="h-2.5 w-2.5" style={{ color: bgColor }} strokeWidth={3} />
+                  ))}
+                  {leftIndicator === 'newClient' && <Star className="h-2.5 w-2.5" style={{ color: bgColor }} strokeWidth={3} fill="none" />}
+                  {leftIndicator === 'anyAvail' && <Shuffle className="h-2.5 w-2.5" style={{ color: bgColor }} strokeWidth={3} />}
+                </div>
+              )}
+              {hasStatus && (
+                <div className="w-3.5 h-3.5 rounded bg-white flex items-center justify-center">
+                  {statusIndicator === "?" && (
+                    <span
+                      className="text-[10px] leading-none"
+                      style={{ color: bgColor, fontWeight: 900, WebkitTextStroke: `0.5px ${bgColor}` }}
+                    >?</span>
+                  )}
+                  {statusIndicator === "check" && (
+                    <Check className="h-2.5 w-2.5" style={{ color: bgColor }} strokeWidth={4.5} fill="none" />
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -265,30 +352,82 @@ export function AppointmentCard({
       }}
       onClick={onClick}
     >
-      {/* Status indicator - white box with icon matching card color */}
-      {statusIndicator && (
-        <div className="absolute top-1 right-1 w-4 h-4 rounded bg-white flex items-center justify-center">
-          {statusIndicator === "?" && (
-            <span
-              className="text-[12px] leading-none"
-              style={{ color: bgColor, fontWeight: 900, WebkitTextStroke: `0.5px ${bgColor}` }}
-            >?</span>
+      {/* Indicator squares - dynamic layout around status (top-right anchor)
+          Full grid:  [Diagonal] [Top]
+                      [Left]     [Status]
+          Priority for left: anyAvail > newClient > duplicate
+      */}
+      {(hasStatus || leftIndicator || topIndicator || diagonalIndicator) && (
+        <div className="absolute top-1 right-1 flex flex-col items-end gap-0.5">
+          {/* Top row: [Diagonal] [Top] */}
+          {(diagonalIndicator || topIndicator) && (
+            <div className="flex gap-0.5">
+              {diagonalIndicator && (
+                <div className="w-4 h-4 rounded bg-white flex items-center justify-center">
+                  {diagonalIndicator === 'duplicate' && (hasEarlierAppointment && hasLaterAppointment ? (
+                    <div className="flex flex-col -space-y-1">
+                      <ArrowUp className="h-2 w-3" style={{ color: bgColor }} strokeWidth={3} />
+                      <ArrowDown className="h-2 w-3" style={{ color: bgColor }} strokeWidth={3} />
+                    </div>
+                  ) : hasEarlierAppointment ? (
+                    <ArrowUp className="h-3 w-3" style={{ color: bgColor }} strokeWidth={3} />
+                  ) : (
+                    <ArrowDown className="h-3 w-3" style={{ color: bgColor }} strokeWidth={3} />
+                  ))}
+                  {diagonalIndicator === 'newClient' && <Star className="h-3 w-3" style={{ color: bgColor }} strokeWidth={3} fill="none" />}
+                  {diagonalIndicator === 'anyAvail' && <Shuffle className="h-3 w-3" style={{ color: bgColor }} strokeWidth={3} />}
+                </div>
+              )}
+              {topIndicator && (
+                <div className="w-4 h-4 rounded bg-white flex items-center justify-center">
+                  {topIndicator === 'duplicate' && (hasEarlierAppointment && hasLaterAppointment ? (
+                    <div className="flex flex-col -space-y-1">
+                      <ArrowUp className="h-2 w-3" style={{ color: bgColor }} strokeWidth={3} />
+                      <ArrowDown className="h-2 w-3" style={{ color: bgColor }} strokeWidth={3} />
+                    </div>
+                  ) : hasEarlierAppointment ? (
+                    <ArrowUp className="h-3 w-3" style={{ color: bgColor }} strokeWidth={3} />
+                  ) : (
+                    <ArrowDown className="h-3 w-3" style={{ color: bgColor }} strokeWidth={3} />
+                  ))}
+                  {topIndicator === 'newClient' && <Star className="h-3 w-3" style={{ color: bgColor }} strokeWidth={3} fill="none" />}
+                  {topIndicator === 'anyAvail' && <Shuffle className="h-3 w-3" style={{ color: bgColor }} strokeWidth={3} />}
+                </div>
+              )}
+            </div>
           )}
-          {statusIndicator === "check" && (
-            <Check className="h-3 w-3" style={{ color: bgColor }} strokeWidth={4.5} fill="none" />
-          )}
-          {statusIndicator === "checkcheck" && (
-            <CheckCheck className="h-3 w-3" style={{ color: bgColor }} strokeWidth={4} fill="none" />
-          )}
-          {statusIndicator === "user" && (
-            <User className="h-3 w-3" style={{ color: bgColor }} strokeWidth={4} fill="none" />
-          )}
-          {statusIndicator === "play" && (
-            <Play className="h-2.5 w-2.5" style={{ color: bgColor }} strokeWidth={4} fill="none" />
-          )}
-          {statusIndicator === "x" && (
-            <X className="h-3 w-3" style={{ color: bgColor }} strokeWidth={4} fill="none" />
-          )}
+          {/* Bottom row: [Left] [Status] */}
+          <div className="flex gap-0.5">
+            {leftIndicator && (
+              <div className="w-4 h-4 rounded bg-white flex items-center justify-center">
+                {leftIndicator === 'duplicate' && (hasEarlierAppointment && hasLaterAppointment ? (
+                  <div className="flex flex-col -space-y-1">
+                    <ArrowUp className="h-2 w-3" style={{ color: bgColor }} strokeWidth={3} />
+                    <ArrowDown className="h-2 w-3" style={{ color: bgColor }} strokeWidth={3} />
+                  </div>
+                ) : hasEarlierAppointment ? (
+                  <ArrowUp className="h-3 w-3" style={{ color: bgColor }} strokeWidth={3} />
+                ) : (
+                  <ArrowDown className="h-3 w-3" style={{ color: bgColor }} strokeWidth={3} />
+                ))}
+                {leftIndicator === 'newClient' && <Star className="h-3 w-3" style={{ color: bgColor }} strokeWidth={3} fill="none" />}
+                {leftIndicator === 'anyAvail' && <Shuffle className="h-3 w-3" style={{ color: bgColor }} strokeWidth={3} />}
+              </div>
+            )}
+            {hasStatus && (
+              <div className="w-4 h-4 rounded bg-white flex items-center justify-center">
+                {statusIndicator === "?" && (
+                  <span
+                    className="text-[12px] leading-none"
+                    style={{ color: bgColor, fontWeight: 900, WebkitTextStroke: `0.5px ${bgColor}` }}
+                  >?</span>
+                )}
+                {statusIndicator === "check" && (
+                  <Check className="h-3 w-3" style={{ color: bgColor }} strokeWidth={4.5} fill="none" />
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

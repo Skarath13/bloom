@@ -69,6 +69,10 @@ interface Appointment {
   noShowChargedAt?: Date;
   createdAt?: Date;
   bookedBy?: string;
+  isNewClient?: boolean;
+  bookedAnyAvailable?: boolean;
+  hasEarlierAppointment?: boolean;
+  hasLaterAppointment?: boolean;
   client?: {
     id: string;
     firstName: string;
@@ -382,6 +386,10 @@ function CalendarContent() {
             noShowChargedAt: apt.noShowChargedAt ? new Date(apt.noShowChargedAt as string) : undefined,
             createdAt: apt.createdAt ? new Date(apt.createdAt as string) : undefined,
             bookedBy: apt.bookedBy as string | undefined,
+            isNewClient: apt.isNewClient as boolean | undefined,
+            bookedAnyAvailable: apt.bookedAnyAvailable as boolean | undefined,
+            hasEarlierAppointment: apt.hasEarlierAppointment as boolean | undefined,
+            hasLaterAppointment: apt.hasLaterAppointment as boolean | undefined,
             client: apt.client,
             service: apt.service,
             technician: apt.technician,
@@ -462,6 +470,10 @@ function CalendarContent() {
             noShowChargedAt: apt.noShowChargedAt ? new Date(apt.noShowChargedAt) : undefined,
             createdAt: apt.createdAt ? new Date(apt.createdAt) : undefined,
             bookedBy: apt.bookedBy,
+            isNewClient: apt.isNewClient,
+            bookedAnyAvailable: apt.bookedAnyAvailable,
+            hasEarlierAppointment: apt.hasEarlierAppointment,
+            hasLaterAppointment: apt.hasLaterAppointment,
             client: {
               ...apt.client,
               paymentMethods: apt.client?.paymentMethods || [],

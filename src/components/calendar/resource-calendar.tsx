@@ -68,6 +68,10 @@ interface Appointment {
   serviceCategory?: string;
   technicianId: string;
   status: string;
+  isNewClient?: boolean;
+  bookedAnyAvailable?: boolean;
+  hasEarlierAppointment?: boolean;
+  hasLaterAppointment?: boolean;
 }
 
 interface TechnicianBlock {
@@ -1057,6 +1061,10 @@ export function ResourceCalendar({
                               serviceName={apt.serviceName}
                               serviceCategory={apt.serviceCategory}
                               status={apt.status}
+                              isNewClient={apt.isNewClient}
+                              bookedAnyAvailable={apt.bookedAnyAvailable}
+                              hasEarlierAppointment={apt.hasEarlierAppointment}
+                              hasLaterAppointment={apt.hasLaterAppointment}
                               techColor={tech.color}
                               technicianId={tech.id}
                               height={height}
