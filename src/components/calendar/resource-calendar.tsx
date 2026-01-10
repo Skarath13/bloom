@@ -819,7 +819,7 @@ export function ResourceCalendar({
             if (isSelecting) handleSelectionEnd();
           }}
         >
-          <div className="overflow-hidden">
+          <div>
             {/* Sticky header row - Tech names */}
             <div className="sticky top-0 z-30 flex bg-white border-b border-gray-200 isolate shadow-[0_1px_0_0_rgb(229,231,235)]">
               {/* Empty spacer for time column */}
